@@ -241,6 +241,8 @@ const state = {
   shadowingUnknownExpanded: false,
   shadowingRecordingUrl: "",
   shadowingRecordingMimeType: "",
+  shadowingRecordingBlob: null,
+  shadowingRecordingItemId: "",
   shadowingPendingAudioSource: "",
   shadowingPendingAudioName: "",
   selectedShadowingId: "",
@@ -2959,16 +2961,29 @@ function recordingAudioDescriptor(recording = getLatestShadowingRecording(state.
   };
 }
 
+function revokeShadowingRecordingObjectUrl() {
+  if (state.shadowingRecordingBlob && state.shadowingRecordingUrl?.startsWith("blob:")) {
+    URL.revokeObjectURL(state.shadowingRecordingUrl);
+  }
+}
+
 async function applyShadowingRecordingForItem(itemId) {
   const recording = getLatestShadowingRecording(itemId);
   const descriptor = recordingAudioDescriptor(recording);
   if (!descriptor) {
+    if (state.shadowingRecordingBlob && state.shadowingRecordingItemId === itemId) return;
+    revokeShadowingRecordingObjectUrl();
     state.shadowingRecordingUrl = "";
     state.shadowingRecordingMimeType = "";
+    state.shadowingRecordingBlob = null;
+    state.shadowingRecordingItemId = "";
     return;
   }
+  revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = await signedShadowingAudioUrl(descriptor.bucket, descriptor.path);
   state.shadowingRecordingMimeType = descriptor.mimeType;
+  state.shadowingRecordingBlob = null;
+  state.shadowingRecordingItemId = itemId;
   shadowingRecordingAudio.src = state.shadowingRecordingUrl;
 }
 
@@ -3009,8 +3024,11 @@ function resetShadowingForm() {
   if (els.shadowingAudioFileInput) els.shadowingAudioFileInput.value = "";
   if (els.shadowingCategoryInput) els.shadowingCategoryInput.value = "";
   if (els.shadowingLevelInput) els.shadowingLevelInput.value = "1";
+  revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = "";
   state.shadowingRecordingMimeType = "";
+  state.shadowingRecordingBlob = null;
+  state.shadowingRecordingItemId = "";
   state.shadowingPendingAudioSource = "";
   state.shadowingPendingAudioName = "";
   state.shadowingFlowStep = "paste";
@@ -3037,8 +3055,11 @@ function populateShadowingForm(item) {
   els.shadowingAudioFileInput.value = "";
   els.shadowingCategoryInput.value = item.category || "Ungrouped";
   els.shadowingLevelInput.value = String(normalizeShadowingLevel(item.level));
+  revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = "";
   state.shadowingRecordingMimeType = "";
+  state.shadowingRecordingBlob = null;
+  state.shadowingRecordingItemId = "";
   state.shadowingPendingAudioSource = "";
   state.shadowingPendingAudioName = "";
   state.shadowingFlowStep = item.swedish ? "preview" : "paste";
@@ -3120,7 +3141,7 @@ function renderShadowingFlow() {
 
   if (els.shadowingContinueBtn) {
     els.shadowingContinueBtn.textContent = "Starta shadowing";
-    els.shadowingContinueBtn.disabled = !hasText;
+    els.shadowingContinueBtn.disabled = false;
   }
   if (els.shadowingPreviewPanel) els.shadowingPreviewPanel.hidden = !previewActive;
   if (els.shadowingUnknownWordsPanel) els.shadowingUnknownWordsPanel.hidden = !unknownPanelActive;
@@ -3177,8 +3198,10 @@ async function continueShadowingFlow() {
   state.shadowingFlowText = text;
   state.shadowingFlowSelectedUnknownWords = collectShadowingUnknownWords(text).map((item) => item.value);
   renderShadowingFlow();
-  await saveShadowingItemFromForm();
+  const savedItem = await saveShadowingItemFromForm();
+  if (!savedItem) return;
   renderShadowingFlow();
+  await generateStandardShadowingAudio();
 }
 
 async function addSelectedShadowingWordsToVocabulary() {
@@ -3233,7 +3256,7 @@ function currentShadowingAudioSource(item = getSelectedShadowingItem()) {
 function updateShadowingPlaybackUI() {
   const item = getSelectedShadowingItem();
   const hasStandardAudio = Boolean(standardAudioDescriptor(item));
-  const hasRecording = Boolean(recordingAudioDescriptor());
+  const hasRecording = Boolean(recordingAudioDescriptor() || (state.shadowingRecordingBlob && state.shadowingRecordingItemId === item?.id && state.shadowingRecordingUrl));
   if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.textContent = "Spela";
   if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.disabled = !item || !hasStandardAudio;
   if (els.shadowingPauseBtn) els.shadowingPauseBtn.disabled = !item || !hasStandardAudio;
@@ -3419,7 +3442,7 @@ async function saveShadowingItemFromForm() {
   const category = clean(els.shadowingCategoryInput?.value) || "Ungrouped";
   if (!swedish) {
     alert("Skriv svensk text innan du sparar.");
-    return;
+    return null;
   }
   const items = getShadowingItems();
   const existing = items.find((item) => item.id === els.shadowingItemId.value);
@@ -3467,10 +3490,16 @@ async function saveShadowingItemFromForm() {
   state.shadowingFlowReadTimeText = formatShadowingReadingTime(state.shadowingFlowWordCount);
   state.shadowingFlowUnknownWords = collectShadowingUnknownWords(swedish);
   state.shadowingFlowSelectedUnknownWords = state.shadowingFlowUnknownWords.map((entry) => entry.value);
-  await refreshShadowingState();
-  state.selectedShadowingId = nextItem.id;
-  populateShadowingForm(nextItem);
+  const savedItem = remoteResult?.item ? shadowingStore.normalizeShadowingItem(remoteResult.item) : nextItem;
+  if (remoteResult?.item) {
+    await refreshShadowingState();
+  } else {
+    state.shadowing = mergeShadowingItemsForApp([savedItem], state.shadowing);
+  }
+  state.selectedShadowingId = savedItem.id;
+  populateShadowingForm(savedItem);
   renderShadowing();
+  return savedItem;
 }
 
 async function generateStandardShadowingAudio() {
@@ -3551,14 +3580,34 @@ async function downloadStorageAudio(descriptor, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function downloadBlob(blob, filename) {
+  if (!blob) {
+    alert("Ingen ljudfil finns att ladda ner.");
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || "shadowing-audio";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 async function downloadStandardShadowingAudio() {
   const item = getSelectedShadowingItem();
   await downloadStorageAudio(standardAudioDescriptor(item), `${clean(item?.title || item?.swedish || "standard")}.mp3`);
 }
 
 async function downloadShadowingRecording() {
+  const item = getSelectedShadowingItem();
+  if (state.shadowingRecordingBlob && state.shadowingRecordingItemId === item?.id) {
+    downloadBlob(state.shadowingRecordingBlob, `${clean(item?.title || "recording")}.webm`);
+    return;
+  }
   const recording = getLatestShadowingRecording(state.selectedShadowingId);
-  await downloadStorageAudio(recordingAudioDescriptor(recording), `${clean(getSelectedShadowingItem()?.title || "recording")}.webm`);
+  await downloadStorageAudio(recordingAudioDescriptor(recording), `${clean(item?.title || "recording")}.webm`);
 }
 
 async function deleteShadowingItem(itemId) {
@@ -3731,16 +3780,19 @@ async function startShadowingRecording() {
     const blob = new Blob(shadowingRecordChunks, { type: mime });
     const selectedItem = getSelectedShadowingItem();
     const durationMs = shadowingRecordingStartedAt ? Math.max(0, Date.now() - shadowingRecordingStartedAt) : 0;
+    revokeShadowingRecordingObjectUrl();
     state.shadowingRecordingMimeType = mime;
-    state.shadowingRecordingUrl = "";
-    shadowingRecordingAudio.src = "";
-    updateShadowingPlaybackUI();
-    renderShadowingPlayer();
+    state.shadowingRecordingBlob = blob;
+    state.shadowingRecordingItemId = selectedItem?.id || "";
+    state.shadowingRecordingUrl = URL.createObjectURL(blob);
+    shadowingRecordingAudio.src = state.shadowingRecordingUrl;
     shadowingRecordStream?.getTracks?.().forEach((track) => track.stop());
     shadowingRecordStream = null;
     shadowingRecorder = null;
     shadowingRecordChunks = [];
     shadowingRecordingStartedAt = 0;
+    updateShadowingPlaybackUI();
+    renderShadowingPlayer();
     if (selectedItem?.id) {
       const timestamp = Date.now();
       remoteDb.getCurrentAccountId()
@@ -3799,11 +3851,11 @@ function stopShadowingRecording() {
 }
 
 function clearShadowingRecording() {
-  if (state.shadowingRecordingUrl) {
-    URL.revokeObjectURL(state.shadowingRecordingUrl);
-  }
+  revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = "";
   state.shadowingRecordingMimeType = "";
+  state.shadowingRecordingBlob = null;
+  state.shadowingRecordingItemId = "";
   shadowingRecordingAudio.pause();
   shadowingRecordingAudio.src = "";
   updateShadowingPlaybackUI();
