@@ -28,7 +28,7 @@ const STUDY_SCOPE_ALL = "all";
 const STUDY_SCOPE_FAVORITES = "favorites";
 const STUDY_SCOPE_LEARNED = "learned";
 const DAILY_NEW_WORD_LIMIT = 10;
-const STARTUP_LOADING_TIMEOUT_MS = 2000;
+const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
 const APP_BOOT_VERSION = "stable-start-20260526-5";
@@ -7063,9 +7063,9 @@ async function bootstrapApp() {
   startupLoadingTimeoutId = window.setTimeout(() => {
     if (startupLoadingTimedOut) return;
     if (state.words.length > 0) return;
+    if (lastWordLoadDebug.remoteReadOk && lastWordLoadDebug.remoteLength > 0) return;
     startupLoadingTimedOut = true;
-    alert("Ordlistan laddas långsamt. Du skickas tillbaka till Startsida.");
-    forceHomeView({ resetScroll: true });
+    console.warn("[Min Ordbok] Vocabulary startup is still loading; keeping the current view open.");
   }, STARTUP_LOADING_TIMEOUT_MS);
 
   try {
