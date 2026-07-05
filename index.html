@@ -291,12 +291,13 @@
                   <p class="section-kicker">Shadowing</p>
                   <h2>Shadowing</h2>
                 </div>
-                <div class="practice-actions shadowing-top-actions">
-                  <button class="secondary-button" id="shadowingToggleSubtitlesBtn" type="button">字幕</button>
-                  <button class="secondary-button" id="shadowingToggleContinuousBtn" type="button">连续播放</button>
-                </div>
               </div>
-              <p class="shadowing-intro">Klistra in svensk text, granska okända ord, lägg till dem i ordlistan och kör sedan standardljud, inspelning och nedladdning.</p>
+              <div class="shadowing-mode-tabs" aria-label="Shadowing-läge">
+                <button class="shadowing-mode-tab active" type="button">💬 Dialog</button>
+                <button class="shadowing-mode-tab" type="button" disabled>📰 Nyheter <span>Snart</span></button>
+                <button class="shadowing-mode-tab" type="button" disabled>📖 Läsning <span>Snart</span></button>
+                <button class="shadowing-mode-tab" type="button" disabled>📝 Prov <span>Snart</span></button>
+              </div>
               <div class="shadowing-stage-bar" id="shadowingStageBar">
                 <div id="shadowingLevelButtons" class="shadowing-stage-buttons" aria-label="Shadowing levels"></div>
                 <span class="shadowing-level-badge" id="shadowingLevelBadge">Level 1 Listen</span>
@@ -306,24 +307,21 @@
             <section class="panel shadowing-editor">
               <div class="toolbar">
                 <div>
-                  <p class="section-kicker">Paste Text</p>
-                  <h2>Förbered Shadowing</h2>
-                </div>
-                <div class="practice-actions">
-                  <button class="secondary-button" id="newShadowingBtn" type="button">Nytt kort</button>
-                  <button class="primary-button" id="saveShadowingBtn" type="button">Spara</button>
+                  <p class="section-kicker">Shadowing</p>
+                  <h2>Klistra in text</h2>
                 </div>
               </div>
               <input type="hidden" id="shadowingItemId" />
               <label class="field-label">
-                Paste Text
-                <textarea id="shadowingSwedishInput" rows="7" placeholder="Klistra in svensk text här."></textarea>
+                Text
+                <textarea id="shadowingSwedishInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
               </label>
-              <div class="practice-actions shadowing-flow-actions">
-                <button class="primary-button" id="shadowingContinueBtn" type="button">Continue</button>
-                <button class="secondary-button" id="shadowingAddUnknownBtn" type="button">Add to Master Vocabulary</button>
+              <button class="shadowing-assist-toggle" id="newShadowingBtn" type="button">+ Ny ord</button>
+              <div class="practice-actions shadowing-module-actions">
+                <button class="primary-button" id="shadowingContinueBtn" type="button">Starta shadowing</button>
               </div>
-              <section class="shadowing-preview-panel" id="shadowingPreviewPanel" hidden>
+              <button class="primary-button visually-hidden" id="saveShadowingBtn" type="button">Spara</button>
+              <section class="shadowing-preview-panel visually-hidden" id="shadowingPreviewPanel" hidden>
                 <div class="shadowing-preview-metrics">
                   <article>
                     <span>Word count</span>
@@ -337,74 +335,51 @@
                 <p class="shadowing-preview-text" id="shadowingPreviewText"></p>
               </section>
               <section class="shadowing-unknown-panel" id="shadowingUnknownWordsPanel" hidden>
-                <div class="toolbar">
-                  <div>
-                    <p class="section-kicker">Unknown Words</p>
-                    <h3>Okända ord</h3>
-                  </div>
-                </div>
                 <p class="shadowing-unknown-hint" id="shadowingUnknownWordsHint">Välj de ord du vill lägga till i din ordlista.</p>
                 <div class="shadowing-unknown-list" id="shadowingUnknownWordsList"></div>
+                <button class="secondary-button" id="shadowingAddUnknownBtn" type="button">Lägg till valda ord</button>
               </section>
-              <div class="practice-actions">
-                <button class="primary-button" id="generateShadowingAudioBtn" type="button">Generate Standard Audio</button>
-                <button class="secondary-button" id="downloadShadowingStandardBtn" type="button">Download Standard Audio</button>
-                <button class="secondary-button" id="downloadShadowingRecordingBtn" type="button">Download My Recording</button>
-              </div>
-              <div class="compact-grid">
-                <label class="field-label">
-                  Titel
-                  <input id="shadowingTitleInput" type="text" placeholder="Kort titel för kortet" />
-                </label>
-                <label class="field-label">
-                  中文翻译
-                  <textarea id="shadowingChineseInput" rows="4" placeholder="输入中文翻译。"></textarea>
-                </label>
-              </div>
-              <div class="compact-grid">
-                <label class="field-label">
-                  分类
-                  <input id="shadowingCategoryInput" type="text" placeholder="Vardag, jobb, resor..." />
-                </label>
-                <label class="field-label">
-                  Stage
-                  <select id="shadowingLevelInput">
-                    <option value="1">Level 1 Listen</option>
-                    <option value="2">Level 2 Repeat</option>
-                    <option value="3">Level 3 Assisted Shadowing</option>
-                    <option value="4">Level 4 Real Shadowing</option>
-                    <option value="5">Level 5 Blind Shadowing</option>
-                  </select>
-                </label>
-              </div>
-              <p class="shadowing-hint" id="shadowingAudioHint"></p>
+              <input class="visually-hidden" id="shadowingTitleInput" type="text" />
+              <textarea class="visually-hidden" id="shadowingChineseInput" rows="1"></textarea>
+              <input class="visually-hidden" id="shadowingCategoryInput" type="text" />
+              <input class="visually-hidden" id="shadowingAudioUrlInput" type="text" />
+              <input class="visually-hidden" id="shadowingAudioFileInput" type="file" accept="audio/*" />
+              <select class="visually-hidden" id="shadowingLevelInput">
+                <option value="1">Level 1 Listen</option>
+                <option value="2">Level 2 Repeat</option>
+                <option value="3">Level 3 Assisted Shadowing</option>
+                <option value="4">Level 4 Real Shadowing</option>
+                <option value="5">Level 5 Blind Shadowing</option>
+              </select>
             </section>
 
             <section class="panel shadowing-player">
               <div class="toolbar">
                 <div>
-                  <p class="section-kicker">Träning</p>
-                  <h2 id="shadowingTitle">Shadowing</h2>
-                </div>
-                <div class="practice-actions">
-                  <button class="secondary-button" id="shadowingToggleLoopBtn" type="button">A-B Loop</button>
-                  <button class="secondary-button" id="shadowingToggleAutoPauseBtn" type="button">Auto paus</button>
+                  <p class="section-kicker">Starta shadowing</p>
+                  <h2>Öva</h2>
+                  <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
               </div>
               <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
               <div class="shadowing-controls">
-                <button class="primary-button" id="shadowingPlayPauseBtn" type="button">Play</button>
-                <button class="secondary-button" id="shadowingStopBtn" type="button">Stop</button>
-                <button class="secondary-button" id="shadowingSetABtn" type="button">Set A</button>
-                <button class="secondary-button" id="shadowingSetBBtn" type="button">Set B</button>
-                <button class="secondary-button" id="shadowingRecordBtn" type="button">Record</button>
-                <button class="secondary-button" id="shadowingStopRecordBtn" type="button">Stop record</button>
-                <button class="secondary-button" id="shadowingPlayRecordingBtn" type="button">Play recording</button>
-                <button class="primary-button" id="shadowingCompareBtn" type="button">Compare</button>
+                <button class="primary-button" id="shadowingPlayPauseBtn" type="button">Spela</button>
+                <button class="secondary-button" id="shadowingPauseBtn" type="button">Pausa</button>
+                <button class="secondary-button" id="shadowingRecordBtn" type="button">Spela in</button>
+                <button class="secondary-button" id="shadowingStopRecordBtn" type="button">Stoppa</button>
+                <button class="secondary-button wide" id="shadowingPlayRecordingBtn" type="button">Lyssna på mig</button>
               </div>
+              <button class="secondary-button visually-hidden" id="shadowingStopBtn" type="button">Stoppa</button>
+              <button class="secondary-button visually-hidden" id="shadowingSetABtn" type="button">Set A</button>
+              <button class="secondary-button visually-hidden" id="shadowingSetBBtn" type="button">Set B</button>
+              <button class="secondary-button visually-hidden" id="shadowingToggleLoopBtn" type="button">A-B Loop</button>
+              <button class="secondary-button visually-hidden" id="shadowingToggleAutoPauseBtn" type="button">Auto paus</button>
+              <button class="secondary-button visually-hidden" id="shadowingToggleSubtitlesBtn" type="button">字幕</button>
+              <button class="secondary-button visually-hidden" id="shadowingToggleContinuousBtn" type="button">连续播放</button>
+              <button class="primary-button visually-hidden" id="shadowingCompareBtn" type="button">Compare</button>
               <div class="shadowing-progress">
                 <span id="shadowingTime">0:00 / 0:00</span>
-                <span id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
+                <span class="visually-hidden" id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
               </div>
               <section class="shadowing-recording-panel" id="shadowingRecordingPanel" hidden>
                 <div class="toolbar">
@@ -415,9 +390,40 @@
                   <span id="shadowingRecordingStatus">尚未录音</span>
                 </div>
                 <div class="practice-actions">
-                  <button class="secondary-button" id="shadowingClearRecordingBtn" type="button">Clear</button>
+                  <button class="secondary-button" id="shadowingClearRecordingBtn" type="button">Rensa</button>
                 </div>
               </section>
+            </section>
+
+            <section class="panel shadowing-export">
+              <div class="toolbar">
+                <div>
+                  <p class="section-kicker">Shadowing</p>
+                  <h2>Exportera ljud</h2>
+                </div>
+              </div>
+              <div class="shadowing-export-grid">
+                <article class="shadowing-export-row">
+                  <div>
+                    <strong>Standardljud</strong>
+                    <span id="shadowingAudioHint"></span>
+                  </div>
+                  <div class="practice-actions">
+                    <button class="secondary-button visually-hidden" id="generateShadowingAudioBtn" type="button">Skapa</button>
+                    <button class="secondary-button" id="shadowingExportStandardPlayBtn" type="button">Spela</button>
+                    <button class="secondary-button" id="downloadShadowingStandardBtn" type="button">Ladda ner</button>
+                  </div>
+                </article>
+                <article class="shadowing-export-row">
+                  <div>
+                    <strong>Min inspelning</strong>
+                  </div>
+                  <div class="practice-actions">
+                    <button class="secondary-button" id="shadowingExportRecordingPlayBtn" type="button">Spela</button>
+                    <button class="secondary-button" id="downloadShadowingRecordingBtn" type="button">Ladda ner</button>
+                  </div>
+                </article>
+              </div>
             </section>
           </div>
           <section class="shadowing-scroll-area">

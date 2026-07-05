@@ -238,6 +238,7 @@ const state = {
   shadowingFlowReadTimeText: "",
   shadowingFlowUnknownWords: [],
   shadowingFlowSelectedUnknownWords: null,
+  shadowingUnknownExpanded: false,
   shadowingRecordingUrl: "",
   shadowingRecordingMimeType: "",
   shadowingPendingAudioSource: "",
@@ -373,6 +374,7 @@ const els = {
   shadowingAudioHint: document.querySelector("#shadowingAudioHint"),
   shadowingStageBar: document.querySelector("#shadowingStageBar"),
   shadowingPlayPauseBtn: document.querySelector("#shadowingPlayPauseBtn"),
+  shadowingPauseBtn: document.querySelector("#shadowingPauseBtn"),
   shadowingStopBtn: document.querySelector("#shadowingStopBtn"),
   shadowingSetABtn: document.querySelector("#shadowingSetABtn"),
   shadowingSetBBtn: document.querySelector("#shadowingSetBBtn"),
@@ -383,6 +385,8 @@ const els = {
   shadowingRecordBtn: document.querySelector("#shadowingRecordBtn"),
   shadowingStopRecordBtn: document.querySelector("#shadowingStopRecordBtn"),
   shadowingPlayRecordingBtn: document.querySelector("#shadowingPlayRecordingBtn"),
+  shadowingExportStandardPlayBtn: document.querySelector("#shadowingExportStandardPlayBtn"),
+  shadowingExportRecordingPlayBtn: document.querySelector("#shadowingExportRecordingPlayBtn"),
   shadowingCompareBtn: document.querySelector("#shadowingCompareBtn"),
   shadowingClearRecordingBtn: document.querySelector("#shadowingClearRecordingBtn"),
   shadowingLevelButtons: document.querySelector("#shadowingLevelButtons"),
@@ -3015,6 +3019,7 @@ function resetShadowingForm() {
   state.shadowingFlowReadTimeText = "";
   state.shadowingFlowUnknownWords = [];
   state.shadowingFlowSelectedUnknownWords = [];
+  state.shadowingUnknownExpanded = false;
   updateShadowingAudioHint("");
   renderShadowingFlow();
 }
@@ -3094,9 +3099,10 @@ function renderShadowingFlow() {
   const flowStep = state.shadowingFlowStep;
   const hasText = Boolean(text);
   const previewActive = flowStep === "preview" && hasText;
+  const unknownPanelActive = state.shadowingUnknownExpanded && hasText;
   const wordCount = hasText ? segmentShadowingWords(text).length : 0;
   const readTimeText = formatShadowingReadingTime(wordCount);
-  const unknownWords = previewActive ? collectShadowingUnknownWords(text) : [];
+  const unknownWords = unknownPanelActive ? collectShadowingUnknownWords(text) : [];
   const currentSelection = Array.isArray(state.shadowingFlowSelectedUnknownWords)
     ? state.shadowingFlowSelectedUnknownWords
     : null;
@@ -3110,33 +3116,33 @@ function renderShadowingFlow() {
   state.shadowingFlowWordCount = wordCount;
   state.shadowingFlowReadTimeText = readTimeText;
   state.shadowingFlowUnknownWords = unknownWords;
-  state.shadowingFlowSelectedUnknownWords = previewActive ? nextSelection : null;
+  state.shadowingFlowSelectedUnknownWords = unknownPanelActive ? nextSelection : null;
 
   if (els.shadowingContinueBtn) {
-    els.shadowingContinueBtn.textContent = previewActive ? "Update Preview" : "Continue";
+    els.shadowingContinueBtn.textContent = "Starta shadowing";
     els.shadowingContinueBtn.disabled = !hasText;
   }
   if (els.shadowingPreviewPanel) els.shadowingPreviewPanel.hidden = !previewActive;
-  if (els.shadowingUnknownWordsPanel) els.shadowingUnknownWordsPanel.hidden = !previewActive;
+  if (els.shadowingUnknownWordsPanel) els.shadowingUnknownWordsPanel.hidden = !unknownPanelActive;
   if (els.shadowingPreviewWordCount) els.shadowingPreviewWordCount.textContent = String(wordCount);
   if (els.shadowingPreviewReadTime) els.shadowingPreviewReadTime.textContent = readTimeText;
   if (els.shadowingPreviewText) els.shadowingPreviewText.textContent = text || "";
   if (els.shadowingUnknownWordsHint) {
     els.shadowingUnknownWordsHint.textContent = unknownWords.length
       ? `Välj de ord du vill lägga till. ${unknownWords.length} ord hittades.`
-      : "Inga okända ord hittades i texten.";
+      : hasText ? "Inga okända ord hittades i texten." : "Klistra in text först.";
   }
   if (els.shadowingAddUnknownBtn) {
     const selectedCount = (state.shadowingFlowSelectedUnknownWords || []).length;
-    els.shadowingAddUnknownBtn.disabled = !previewActive || unknownWords.length === 0 || selectedCount === 0;
-    els.shadowingAddUnknownBtn.textContent = selectedCount > 0 ? `Add to Master Vocabulary (${selectedCount})` : "Add to Master Vocabulary";
+    els.shadowingAddUnknownBtn.disabled = !unknownPanelActive || unknownWords.length === 0 || selectedCount === 0;
+    els.shadowingAddUnknownBtn.textContent = selectedCount > 0 ? `Lägg till valda ord (${selectedCount})` : "Lägg till valda ord";
   }
   if (els.shadowingPreviewPanel) {
     if (els.shadowingPreviewText) els.shadowingPreviewText.textContent = text || "";
   }
   if (els.shadowingUnknownWordsList) {
     els.shadowingUnknownWordsList.replaceChildren();
-    if (previewActive && unknownWords.length > 0) {
+    if (unknownPanelActive && unknownWords.length > 0) {
       const fragment = document.createDocumentFragment();
       unknownWords.forEach((item) => {
         const label = document.createElement("label");
@@ -3228,9 +3234,9 @@ function updateShadowingPlaybackUI() {
   const item = getSelectedShadowingItem();
   const hasStandardAudio = Boolean(standardAudioDescriptor(item));
   const hasRecording = Boolean(recordingAudioDescriptor());
-  const isPlaying = state.shadowingPlaybackState === "playing";
-  if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.textContent = isPlaying ? "Pause" : "Play";
+  if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.textContent = "Spela";
   if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.disabled = !item || !hasStandardAudio;
+  if (els.shadowingPauseBtn) els.shadowingPauseBtn.disabled = !item || !hasStandardAudio;
   if (els.shadowingStopBtn) els.shadowingStopBtn.disabled = !item;
   if (els.shadowingSetABtn) els.shadowingSetABtn.disabled = !item;
   if (els.shadowingSetBBtn) els.shadowingSetBBtn.disabled = !item;
@@ -3244,6 +3250,8 @@ function updateShadowingPlaybackUI() {
   if (els.shadowingToggleSubtitlesBtn) els.shadowingToggleSubtitlesBtn.classList.toggle("active", !state.shadowingShowSubtitles);
   if (els.shadowingRecordBtn) els.shadowingRecordBtn.disabled = !item || !navigator.mediaDevices?.getUserMedia || Boolean(shadowingRecorder);
   if (els.shadowingPlayRecordingBtn) els.shadowingPlayRecordingBtn.disabled = !item || !hasRecording;
+  if (els.shadowingExportStandardPlayBtn) els.shadowingExportStandardPlayBtn.disabled = !item || !hasStandardAudio;
+  if (els.shadowingExportRecordingPlayBtn) els.shadowingExportRecordingPlayBtn.disabled = !item || !hasRecording;
   if (els.shadowingCompareBtn) els.shadowingCompareBtn.disabled = !item || !hasRecording;
   if (els.shadowingStopRecordBtn) els.shadowingStopRecordBtn.disabled = !item || !shadowingRecorder;
   if (els.generateShadowingAudioBtn) els.generateShadowingAudioBtn.disabled = !item;
@@ -6412,11 +6420,12 @@ function bindEvents() {
   });
 
   els.newShadowingBtn?.addEventListener("click", () => {
-    resetShadowingForm();
-    state.shadowingPendingAudioSource = "";
-    state.shadowingPendingAudioName = "";
-    updateShadowingAudioHint("Skapa ett nytt träningskort.");
-    renderShadowingPlayer();
+    if (!clean(els.shadowingSwedishInput?.value)) {
+      els.shadowingSwedishInput?.focus();
+      return;
+    }
+    state.shadowingUnknownExpanded = !state.shadowingUnknownExpanded;
+    renderShadowingFlow();
   });
   els.saveShadowingBtn?.addEventListener("click", saveShadowingItemFromForm);
   els.shadowingContinueBtn?.addEventListener("click", () => {
@@ -6468,7 +6477,7 @@ function bindEvents() {
     state.shadowingPendingAudioName = "";
   });
   els.shadowingSwedishInput?.addEventListener("input", () => {
-    if (state.shadowingFlowStep === "preview") renderShadowingFlow();
+    if (state.shadowingFlowStep === "preview" || state.shadowingUnknownExpanded) renderShadowingFlow();
   });
   els.shadowingUnknownWordsList?.addEventListener("change", (event) => {
     const checkbox = event.target.closest('[data-shadowing-unknown-word]');
@@ -6491,13 +6500,8 @@ function bindEvents() {
   els.shadowingToggleLoopBtn?.addEventListener("click", toggleShadowingLoop);
   els.shadowingToggleAutoPauseBtn?.addEventListener("click", toggleShadowingAutoPause);
   els.shadowingToggleContinuousBtn?.addEventListener("click", toggleShadowingContinuous);
-  els.shadowingPlayPauseBtn?.addEventListener("click", async () => {
-    if (state.shadowingPlaybackState === "playing") {
-      pauseShadowingCurrentItem();
-      return;
-    }
-    await playShadowingCurrentItem();
-  });
+  els.shadowingPlayPauseBtn?.addEventListener("click", playShadowingCurrentItem);
+  els.shadowingPauseBtn?.addEventListener("click", pauseShadowingCurrentItem);
   els.shadowingStopBtn?.addEventListener("click", stopShadowingCurrentItem);
   els.shadowingSetABtn?.addEventListener("click", () => setShadowingLoopPoint("a"));
   els.shadowingSetBBtn?.addEventListener("click", () => setShadowingLoopPoint("b"));
@@ -6511,6 +6515,12 @@ function bindEvents() {
   });
   els.shadowingStopRecordBtn?.addEventListener("click", stopShadowingRecording);
   els.shadowingPlayRecordingBtn?.addEventListener("click", () => {
+    playShadowingRecording().catch((error) => {
+      console.error("[Shadowing] Recording playback failed", error);
+    });
+  });
+  els.shadowingExportStandardPlayBtn?.addEventListener("click", playShadowingCurrentItem);
+  els.shadowingExportRecordingPlayBtn?.addEventListener("click", () => {
     playShadowingRecording().catch((error) => {
       console.error("[Shadowing] Recording playback failed", error);
     });
