@@ -1,0 +1,14 @@
+{
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node server.mjs",
+    "preview": "node scripts/preview.mjs",
+    "validate:vocab": "node scripts/validate-vocab.mjs",
+    "icons:pwa": "node scripts/generate-pwa-icons.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0",
+    "dotenv": "^17.4.2"
+  }
+}

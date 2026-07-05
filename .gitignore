@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+
+# Keep only production icon assets in Git
+icons/*
+!icons/app-icon.png
+!icons/apple-touch-icon.png
+!icons/favicon.png
+!icons/favicon.ico
+!icons/pwa-192x192.png
+!icons/pwa-512x512.png
+!icons/maskable-icon.png
+!icons/enkel-symbol.png
+!icons/home-hero-illustration.png
+public/icons/*
+!public/icons/app-icon.png
+!public/icons/apple-touch-icon.png
+!public/icons/favicon.png
+!public/icons/favicon.ico
+!public/icons/pwa-192x192.png
+!public/icons/pwa-512x512.png
+!public/icons/maskable-icon.png
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# macOS and editor noise
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Temporary caches and scratch files
+tmp/
+temp/
+.tmp/
+.cache/
+*.tmp
+*.cache
+
+# Local platform state
+.vercel/
+.render/
+.render-cache/
+
+# Supabase local cache
+supabase/.temp/
+
+# Local backups
+backups/
+
+# ElevenLabs and Shadowing temporary audio/recordings
+audio/shadowing/*
+public/audio/shadowing/*
+*.webm
+*.wav
+*.m4a
+*.mp3
+*.ogg
+!audio/shadowing/.gitkeep
+!public/audio/shadowing/.gitkeep

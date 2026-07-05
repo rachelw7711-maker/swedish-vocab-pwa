@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f5f7" />
+    <meta name="description" content="Mobil PWA för svenska ord" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Åka" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="/manifest.webmanifest?v=22" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png?v=22" />
+    <link rel="shortcut icon" href="/icons/favicon.ico?v=22" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=22" />
+    <title>Åka</title>
+    <link rel="stylesheet" href="/styles.css?v=98" />
+  </head>
+  <body data-active-view="homeView" data-app-ready="loading">
+    <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
+      <div class="startup-splash-card">
+        <img src="/icons/app-icon.png?v=22" alt="" aria-hidden="true" class="startup-splash-icon" />
+        <strong>Åka</strong>
+        <span>Laddar ord och startsida</span>
+        <div class="startup-splash-spinner" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="app-shell">
+      <main>
+        <section id="homeView" class="view active home-page">
+          <button class="home-reset-button" id="resetDataBtn" type="button" title="Återställ data">↻</button>
+          <section class="home-hero" aria-label="Startsida">
+            <h2 id="homeGreeting">
+              <span>Hej!</span>
+              <span>Bra jobbat idag.</span>
+            </h2>
+          </section>
+
+          <section class="hero-illustration home-animation" aria-label="Dagens illustration">
+            <div class="animation-scene" aria-hidden="true">
+              <img class="mot-sverige-cutout" src="/icons/home-hero-illustration.png" alt="" />
+            </div>
+          </section>
+
+          <section class="search-panel home-search-panel" aria-label="Sök">
+            <div class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input
+                id="searchInput"
+                type="search"
+                enterkeyhint="search"
+                placeholder="Sök ord, betydelse, böjning, exempel"
+                autocomplete="off"
+                aria-label="Sök svenska ord"
+              />
+              <button class="search-button" id="searchBtn" type="button">Sök</button>
+            </div>
+          </section>
+
+          <section class="practice-panel home-practice-panel" aria-label="Studiepanel">
+            <div class="study-metrics" aria-label="Dagens studieöversikt">
+              <article>
+                <span>今日新词</span>
+                <strong id="studyNewCount">0</strong>
+              </article>
+              <article>
+                <span>今日复习</span>
+                <strong id="studyReviewCount">0</strong>
+              </article>
+              <article>
+                <span>连续天数</span>
+                <strong id="studyStreakCount">0</strong>
+              </article>
+              <article>
+                <span>累计掌握</span>
+                <strong id="studyMasteredCount">0</strong>
+              </article>
+            </div>
+            <label class="field-label">
+              Övningsurval
+              <select id="studyScopeSelect"></select>
+            </label>
+            <ol class="study-steps" id="studySteps" aria-label="Övningssteg">
+              <li data-step="listen">听单词</li>
+              <li data-step="explain">看解释</li>
+              <li data-step="detail">查看详情</li>
+              <li data-step="spell">Skriv ordet</li>
+              <li data-step="check">Kontrollera</li>
+            </ol>
+            <div class="study-entry-grid">
+              <article class="study-entry-card">
+                <div class="study-entry-copy">
+                  <div class="study-entry-heading">
+                    <p class="section-kicker">NYA ORD</p>
+                    <span class="study-entry-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z" />
+                        <path d="M5 5.5A2.5 2.5 0 0 1 7.5 8H19" />
+                        <path d="M15.5 4.5v4" />
+                        <path d="M13.5 6.5h4" />
+                      </svg>
+                    </span>
+                  </div>
+                  <h3>Lär dig nya ord</h3>
+                </div>
+                <strong id="entryNewCount">0 ord idag</strong>
+                <button class="primary-button" id="startNewStudyBtn" type="button">Börja lära</button>
+              </article>
+              <article class="study-entry-card">
+                <div class="study-entry-copy">
+                  <div class="study-entry-heading">
+                    <p class="section-kicker">REPETITION</p>
+                    <span class="study-entry-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M17.5 7.5A6 6 0 0 0 7.2 5.2L5.5 7" />
+                        <path d="M5.5 3.5V7h3.5" />
+                        <path d="M6.5 16.5a6 6 0 0 0 10.3 2.3l1.7-1.8" />
+                        <path d="M18.5 20.5V17H15" />
+                        <path d="M12 8.5V12l2.2 1.4" />
+                      </svg>
+                    </span>
+                  </div>
+                  <h3>Repetera ord</h3>
+                </div>
+                <strong id="entryReviewCount">0 ord idag</strong>
+                <button class="secondary-button" id="startReviewStudyBtn" type="button">Börja repetera</button>
+              </article>
+            </div>
+            <div class="practice-actions" hidden>
+              <button class="primary-button" id="startQuizBtn" type="button" hidden>Starta</button>
+              <button class="secondary-button" id="showAnswerBtn" type="button" hidden disabled>Visa svar</button>
+              <button class="secondary-button" id="viewStudyDetailBtn" type="button" hidden disabled>Orddetaljer</button>
+            </div>
+            <div class="answer-box" id="answerBox" hidden></div>
+            <label class="field-label" id="spellingWrap" hidden>
+              Skriv ordet på svenska
+              <input id="spellingInput" autocomplete="off" autocapitalize="none" spellcheck="false" />
+            </label>
+            <div class="practice-actions" id="spellingActions" hidden>
+              <button class="primary-button" id="checkSpellingBtn" type="button">Kontrollera</button>
+            </div>
+            <p id="spellingFeedback" aria-live="polite"></p>
+            <div class="review-actions" id="reviewActions" hidden>
+              <button type="button" class="secondary-button" data-result="again">Öva igen</button>
+              <button type="button" class="primary-button" data-result="known">Lärt mig</button>
+            </div>
+            <div class="study-complete" id="studyCompletePanel" hidden>
+              <p class="section-kicker">Bra jobbat</p>
+              <h3>Bra jobbat!</h3>
+              <p>Du har slutfört dagens pass.</p>
+              <div class="study-complete-grid">
+                <span id="completeTodayCount">0 klara idag</span>
+                <span id="completeMasteredCount">0 lärda ord</span>
+                <span id="completeStreakCount">0 dagar i rad</span>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="libraryView" class="view">
+          <section class="panel export-panel" aria-label="Exportera ordlista">
+            <div>
+              <h2>Exportera ordlista</h2>
+            </div>
+            <div class="export-controls">
+              <label class="field-label">
+                Ordklass
+                <select id="exportPosFilter">
+                  <option value="all">Alla</option>
+                  <option value="verb">Verb</option>
+                  <option value="noun">Substantiv</option>
+                  <option value="adjective">Adjektiv</option>
+                  <option value="adverb">Adverb</option>
+                  <option value="other-pos">Övrigt</option>
+                </select>
+              </label>
+              <button class="secondary-button" id="printLibraryBtn" type="button">Exportera PDF</button>
+            </div>
+          </section>
+
+          <section class="summary-grid" aria-label="Studieöversikt">
+            <article>
+              <strong id="totalCount">0</strong>
+              <span>Totalt</span>
+            </article>
+            <article>
+              <strong id="learnedCount">0</strong>
+              <span>Lärt mig</span>
+            </article>
+            <article>
+              <strong id="dueCount">0</strong>
+              <span>Repetition</span>
+            </article>
+          </section>
+
+          <section class="search-panel library-controls" aria-label="Sök och filtrera" hidden>
+            <div class="search-actions">
+              <button class="secondary-button" id="importDocumentTopBtn" type="button" hidden></button>
+              <button class="secondary-button" id="enrichSearchBtn" type="button">Komplettera sökresultat</button>
+              <button class="secondary-button" id="generateWordBtn" type="button">AI-generera ordkort</button>
+            </div>
+            <div class="filter-row" id="filterRow">
+              <button class="chip active" type="button" data-filter="all">Alla</button>
+              <button class="chip" type="button" data-filter="due">Repetition</button>
+              <button class="chip" type="button" data-filter="learned">Lärt mig</button>
+              <button class="chip" type="button" data-filter="verb">Verb</button>
+              <button class="chip" type="button" data-filter="noun">Substantiv</button>
+              <button class="chip" type="button" data-filter="adjective">Adjektiv</button>
+              <button class="chip" type="button" data-filter="adverb">Adverb</button>
+              <button class="chip" type="button" data-filter="other-pos">Övrigt</button>
+            </div>
+            <label class="favorite-category-filter" id="favoriteCategoryFilterWrap" hidden>
+              Bok
+              <select id="favoriteCategoryFilter"></select>
+            </label>
+          </section>
+
+          <section class="dictionary-panel" id="dictionaryPanel" hidden>
+            <div>
+              <p class="section-kicker">Dictionary</p>
+              <h2>Inbyggd ordbok</h2>
+              <p>Ord som inte finns i din ordlista visas här med böjning, exempel och fraser.</p>
+            </div>
+            <section class="word-list" id="dictionaryList" aria-live="polite"></section>
+            <button class="secondary-button" id="createFromSearchBtn" type="button" hidden>Skapa ord från sökning</button>
+          </section>
+
+          <section class="toolbar">
+            <h2>Ordlista</h2>
+            <div class="practice-actions">
+              <button class="primary-button" id="addWordBtn" type="button">Lägg till ord</button>
+              <button class="icon-button" id="closeLibraryBtn" type="button" title="Stäng ordlista">×</button>
+            </div>
+          </section>
+
+          <section class="word-list" id="wordList" aria-live="polite"></section>
+        </section>
+
+        <section id="notebookView" class="view">
+          <div class="notebook-top-fixed">
+            <section class="panel book-list-panel" id="pinnedBookPanel">
+              <p class="section-kicker">Fasta boklistor</p>
+              <h2>Snabbval</h2>
+              <section class="book-grid" id="notebookPinnedBookList" aria-label="Fasta boklistor"></section>
+            </section>
+            <section class="panel notebook-top-row" id="createNotebookPanel">
+              <div class="toolbar">
+                <div>
+                  <p class="section-kicker">Wordbook</p>
+                  <h2>Skapa bok</h2>
+                </div>
+                <button class="primary-button" id="createNotebookBtn" type="button">Skapa</button>
+              </div>
+            </section>
+            <section class="panel book-list-panel" id="bookListPanel">
+              <p class="section-kicker">Böcker</p>
+              <h2>Mina böcker</h2>
+            </section>
+          </div>
+          <section class="notebook-scroll-area">
+            <section class="book-grid" id="notebookBookList" aria-label="Alla böcker"></section>
+            <section class="panel notebook-detail-panel" id="notebookDetailPanel" hidden>
+              <div class="toolbar">
+                <div>
+                  <p class="section-kicker">Bok</p>
+                  <h2 id="notebookTitle">Bok</h2>
+                </div>
+                <button class="secondary-button" id="backToBooksBtn" type="button">Tillbaka</button>
+              </div>
+              <select id="notebookSelect" hidden></select>
+            </section>
+            <div class="book-action-menu" id="bookActionMenu" hidden>
+              <button type="button" data-book-action="rename">Byt namn</button>
+              <button type="button" data-book-action="delete">Ta bort</button>
+            </div>
+            <section class="word-list" id="notebookList" aria-live="polite"></section>
+          </section>
+        </section>
+
+        <nav class="tabbar" aria-label="Huvudfunktioner">
+          <button class="tab active" type="button" data-view="homeView">Startsida</button>
+          <button class="tab" type="button" data-view="notebookView">Böcker</button>
+          <button class="tab" type="button" data-view="historyView">Shadowing</button>
+        </nav>
+
+        <section id="historyView" class="view">
+          <div class="shadowing-top-fixed">
+            <section class="panel shadowing-summary">
+              <div class="toolbar">
+                <div>
+                  <p class="section-kicker">Shadowing</p>
+                  <h2>Shadowing</h2>
+                </div>
+                <div class="practice-actions shadowing-top-actions">
+                  <button class="secondary-button" id="shadowingToggleSubtitlesBtn" type="button">字幕</button>
+                  <button class="secondary-button" id="shadowingToggleContinuousBtn" type="button">连续播放</button>
+                </div>
+              </div>
+              <p class="shadowing-intro">Klistra in svensk text, granska okända ord, lägg till dem i ordlistan och kör sedan standardljud, inspelning och nedladdning.</p>
+              <div class="shadowing-stage-bar" id="shadowingStageBar">
+                <div id="shadowingLevelButtons" class="shadowing-stage-buttons" aria-label="Shadowing levels"></div>
+                <span class="shadowing-level-badge" id="shadowingLevelBadge">Level 1 Listen</span>
+              </div>
+            </section>
+
+            <section class="panel shadowing-editor">
+              <div class="toolbar">
+                <div>
+                  <p class="section-kicker">Paste Text</p>
+                  <h2>Förbered Shadowing</h2>
+                </div>
+                <div class="practice-actions">
+                  <button class="secondary-button" id="newShadowingBtn" type="button">Nytt kort</button>
+                  <button class="primary-button" id="saveShadowingBtn" type="button">Spara</button>
+                </div>
+              </div>
+              <input type="hidden" id="shadowingItemId" />
+              <label class="field-label">
+                Paste Text
+                <textarea id="shadowingSwedishInput" rows="7" placeholder="Klistra in svensk text här."></textarea>
+              </label>
+              <div class="practice-actions shadowing-flow-actions">
+                <button class="primary-button" id="shadowingContinueBtn" type="button">Continue</button>
+                <button class="secondary-button" id="shadowingAddUnknownBtn" type="button">Add to Master Vocabulary</button>
+              </div>
+              <section class="shadowing-preview-panel" id="shadowingPreviewPanel" hidden>
+                <div class="shadowing-preview-metrics">
+                  <article>
+                    <span>Word count</span>
+                    <strong id="shadowingPreviewWordCount">0</strong>
+                  </article>
+                  <article>
+                    <span>Estimated reading time</span>
+                    <strong id="shadowingPreviewReadTime">0 min</strong>
+                  </article>
+                </div>
+                <p class="shadowing-preview-text" id="shadowingPreviewText"></p>
+              </section>
+              <section class="shadowing-unknown-panel" id="shadowingUnknownWordsPanel" hidden>
+                <div class="toolbar">
+                  <div>
+                    <p class="section-kicker">Unknown Words</p>
+                    <h3>Okända ord</h3>
+                  </div>
+                </div>
+                <p class="shadowing-unknown-hint" id="shadowingUnknownWordsHint">Välj de ord du vill lägga till i din ordlista.</p>
+                <div class="shadowing-unknown-list" id="shadowingUnknownWordsList"></div>
+              </section>
+              <div class="practice-actions">
+                <button class="primary-button" id="generateShadowingAudioBtn" type="button">Generate Standard Audio</button>
+                <button class="secondary-button" id="downloadShadowingStandardBtn" type="button">Download Standard Audio</button>
+                <button class="secondary-button" id="downloadShadowingRecordingBtn" type="button">Download My Recording</button>
+              </div>
+              <div class="compact-grid">
+                <label class="field-label">
+                  Titel
+                  <input id="shadowingTitleInput" type="text" placeholder="Kort titel för kortet" />
+                </label>
+                <label class="field-label">
+                  中文翻译
+                  <textarea id="shadowingChineseInput" rows="4" placeholder="输入中文翻译。"></textarea>
+                </label>
+              </div>
+              <div class="compact-grid">
+                <label class="field-label">
+                  分类
+                  <input id="shadowingCategoryInput" type="text" placeholder="Vardag, jobb, resor..." />
+                </label>
+                <label class="field-label">
+                  Stage
+                  <select id="shadowingLevelInput">
+                    <option value="1">Level 1 Listen</option>
+                    <option value="2">Level 2 Repeat</option>
+                    <option value="3">Level 3 Assisted Shadowing</option>
+                    <option value="4">Level 4 Real Shadowing</option>
+                    <option value="5">Level 5 Blind Shadowing</option>
+                  </select>
+                </label>
+              </div>
+              <p class="shadowing-hint" id="shadowingAudioHint"></p>
+            </section>
+
+            <section class="panel shadowing-player">
+              <div class="toolbar">
+                <div>
+                  <p class="section-kicker">Träning</p>
+                  <h2 id="shadowingTitle">Shadowing</h2>
+                </div>
+                <div class="practice-actions">
+                  <button class="secondary-button" id="shadowingToggleLoopBtn" type="button">A-B Loop</button>
+                  <button class="secondary-button" id="shadowingToggleAutoPauseBtn" type="button">Auto paus</button>
+                </div>
+              </div>
+              <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
+              <div class="shadowing-controls">
+                <button class="primary-button" id="shadowingPlayPauseBtn" type="button">Play</button>
+                <button class="secondary-button" id="shadowingStopBtn" type="button">Stop</button>
+                <button class="secondary-button" id="shadowingSetABtn" type="button">Set A</button>
+                <button class="secondary-button" id="shadowingSetBBtn" type="button">Set B</button>
+                <button class="secondary-button" id="shadowingRecordBtn" type="button">Record</button>
+                <button class="secondary-button" id="shadowingStopRecordBtn" type="button">Stop record</button>
+                <button class="secondary-button" id="shadowingPlayRecordingBtn" type="button">Play recording</button>
+                <button class="primary-button" id="shadowingCompareBtn" type="button">Compare</button>
+              </div>
+              <div class="shadowing-progress">
+                <span id="shadowingTime">0:00 / 0:00</span>
+                <span id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
+              </div>
+              <section class="shadowing-recording-panel" id="shadowingRecordingPanel" hidden>
+                <div class="toolbar">
+                  <div>
+                    <p class="section-kicker">Inspelning</p>
+                    <h3>跟读录音</h3>
+                  </div>
+                  <span id="shadowingRecordingStatus">尚未录音</span>
+                </div>
+                <div class="practice-actions">
+                  <button class="secondary-button" id="shadowingClearRecordingBtn" type="button">Clear</button>
+                </div>
+              </section>
+            </section>
+          </div>
+          <section class="shadowing-scroll-area">
+            <section class="shadowing-list" id="shadowingList" aria-live="polite"></section>
+          </section>
+        </section>
+      </main>
+
+      <dialog id="wordDialog">
+        <form method="dialog" id="wordForm" class="word-form">
+          <header>
+            <h2 id="dialogTitle">Lägg till ord</h2>
+            <button class="icon-button" id="closeWordDialogBtn" type="button" title="Stäng">×</button>
+          </header>
+          <input type="hidden" id="wordId" />
+          <section class="paste-autofill-panel">
+            <label>
+              Klistra in ordinformation
+              <textarea id="pasteWordInfoInput" maxlength="4000" placeholder="Klistra in ordinformation från ChatGPT här"></textarea>
+            </label>
+            <button class="secondary-button" id="autofillWordBtn" type="button">Fyll i automatiskt</button>
+          </section>
+          <label>
+            Svenska
+            <input id="swedishInput" required maxlength="80" placeholder="t.ex. fika" />
+          </label>
+          <div class="compact-grid">
+            <label>
+              Ordklass
+              <select id="posInput">
+                <option value="verb">Verb</option>
+                <option value="noun">Substantiv</option>
+                <option value="adjective">Adjektiv</option>
+                <option value="adverb">Adverb</option>
+                <option value="pronoun">Pronomen</option>
+                <option value="preposition">Preposition</option>
+                <option value="phrase">Fras</option>
+                <option value="abbreviation">Förkortning</option>
+                <option value="other">Övrigt</option>
+              </select>
+            </label>
+            <label>
+              Detalj
+              <input id="posDetailInput" maxlength="40" placeholder="vt / vi / en / ett" />
+            </label>
+          </div>
+          <label>
+            Kinesisk betydelse
+            <textarea id="chineseInput" required maxlength="360" placeholder="t.ex. 咖啡休息；和朋友或同事喝咖啡聊天"></textarea>
+          </label>
+          <label>
+            Svensk förklaring
+            <textarea id="englishInput" maxlength="360" placeholder="t.ex. en kaffepaus som ofta är social och gärna har något sött till"></textarea>
+          </label>
+          <label>
+            Böjning
+            <textarea id="formsInput" maxlength="900" placeholder="En form per rad:&#10;imperativ: sök&#10;infinitiv: söka&#10;presens: söker&#10;preteritum: sökte&#10;supinum: sökt"></textarea>
+          </label>
+          <label>
+            Exempel
+            <textarea id="exampleInput" maxlength="420" placeholder="t.ex. Ska vi ta en fika efter jobbet?"></textarea>
+          </label>
+          <label>
+            Fraser
+            <textarea id="collocationsInput" maxlength="1200" placeholder="En fras + exempel per rad:&#10;ta en fika | Ska vi ta en fika efter jobbet?&#10;fika med någon | Jag fikar med en vän på lördag."></textarea>
+          </label>
+          <label>
+            Relaterade ord
+            <textarea id="relatedWordsInput" maxlength="900" placeholder="Ett ord per rad:&#10;förbättra | 改善、提高（动词）&#10;bättre | 更好&#10;utveckling | 发展、进步"></textarea>
+          </label>
+          <label>
+            Kommentar
+            <textarea id="noteInput" maxlength="1200" placeholder="Text som inte kunde tolkas automatiskt"></textarea>
+          </label>
+          <div class="compact-grid">
+            <label>
+              Kategori
+              <select id="notebookInput"></select>
+            </label>
+            <label hidden>
+              Etikett
+              <input id="tagInput" maxlength="40" placeholder="t.ex. vardag / jobb / talspråk" />
+            </label>
+          </div>
+          <menu>
+            <button class="secondary-button" id="cancelWordDialogBtn" type="button">Avbryt</button>
+            <button class="primary-button" id="saveWordBtn" value="default" type="submit">Spara</button>
+          </menu>
+        </form>
+      </dialog>
+
+      <dialog id="discardWordDialog" class="discard-word-dialog">
+        <section>
+          <h2>Vill du stänga utan att spara?</h2>
+          <menu>
+            <button class="secondary-button" id="continueEditingWordBtn" type="button">Fortsätt redigera</button>
+            <button class="primary-button" id="discardWordChangesBtn" type="button">Stäng utan att spara</button>
+          </menu>
+        </section>
+      </dialog>
+
+      <dialog id="detailDialog" class="detail-dialog">
+        <header class="detail-dialog-header">
+          <h2>Orddetaljer</h2>
+          <div class="detail-dialog-actions">
+            <button class="secondary-button detail-edit-button" id="detailEditBtn" type="button">Redigera</button>
+            <button class="icon-button" id="detailMoreBtn" type="button" title="Mer">⋯</button>
+            <button class="icon-button" id="closeDetailBtn" type="button" title="Stäng">×</button>
+            <div id="detailMoreMenu" class="detail-more-menu" hidden></div>
+          </div>
+        </header>
+        <section id="detailContent"></section>
+        <footer id="detailActionBar" class="detail-action-bar" hidden></footer>
+      </dialog>
+
+      <dialog id="saveSheetDialog" class="save-sheet-dialog">
+        <header class="detail-dialog-header">
+          <div>
+            <p class="section-kicker">Spara ord</p>
+            <h2>Spara</h2>
+          </div>
+          <button class="icon-button" id="closeSaveSheetBtn" type="button" title="Stäng">×</button>
+        </header>
+        <section class="save-sheet-body">
+          <div class="save-sheet-section">
+            <div class="save-sheet-section-header">
+              <strong>Ordlistor</strong>
+              <button class="text-button" id="saveSheetNewBookBtn" type="button">+ Ny bok</button>
+            </div>
+            <div id="saveSheetBooks" class="save-sheet-books" aria-live="polite"></div>
+          </div>
+          <div class="save-sheet-switches">
+            <label class="save-sheet-switch">
+              <input id="saveSheetLearnedToggle" type="checkbox" />
+              <span>Lärt mig</span>
+            </label>
+            <label class="save-sheet-switch">
+              <input id="saveSheetFavoriteToggle" type="checkbox" />
+              <span>收藏</span>
+            </label>
+          </div>
+        </section>
+      </dialog>
+
+      <dialog id="studySessionDialog" class="study-session-dialog">
+        <header class="detail-dialog-header">
+          <div>
+            <h2 id="studySessionTitle">Lär dig nya ord</h2>
+          </div>
+          <button class="icon-button" id="studySessionMoreBtn" type="button" title="Mer">⋯</button>
+          <button class="icon-button" id="closeStudySessionBtn" type="button" title="Stäng">×</button>
+          <div id="studySessionMoreMenu" class="study-session-more-menu" hidden>
+            <button type="button" data-session-menu-action="learned">Lärt mig</button>
+            <button type="button" data-session-menu-action="edit">Redigera</button>
+            <div class="study-session-save-menu">
+              <strong>Spara</strong>
+              <div id="studySessionSaveBooks" class="study-session-save-books"></div>
+            </div>
+          </div>
+        </header>
+        <section class="study-session-body learning-content">
+          <div id="studySessionProgress" class="meta-row"></div>
+          <article id="studySessionCard" class="answer-box"></article>
+          <label class="field-label" id="sessionWordInputWrap" hidden>
+            Skriv ordet på svenska
+            <input id="sessionWordInput" autocomplete="off" autocapitalize="none" spellcheck="false" />
+          </label>
+          <label class="field-label" id="sessionCollocationInputWrap" hidden>
+            Skriv fast fras
+            <input id="sessionCollocationInput" autocomplete="off" autocapitalize="none" spellcheck="false" />
+          </label>
+          <p id="studySessionFeedback" aria-live="polite"></p>
+          <div class="study-complete" id="sessionCompletePanel" hidden>
+            <p class="section-kicker">Klart</p>
+            <h3 id="sessionCompleteTitle">Bra jobbat!</h3>
+            <p id="sessionCompleteText">Du har slutfört dagens pass.</p>
+            <div class="study-complete-grid">
+              <span id="sessionCompleteCount">0 klara</span>
+              <span id="sessionCompleteMastered">0 lärda ord</span>
+            </div>
+            <div class="practice-actions">
+              <button class="primary-button" id="closeSessionCompleteBtn" type="button">Till startsidan</button>
+              <button class="secondary-button" id="startReviewFromCompleteBtn" type="button">Börja repetera</button>
+            </div>
+          </div>
+          <div class="practice-actions learning-actions" id="studySessionActions"></div>
+        </section>
+      </dialog>
+
+      <dialog id="exportPreviewDialog" class="export-preview-dialog">
+        <header class="detail-dialog-header">
+          <div>
+            <p class="section-kicker">Förhandsvisning</p>
+            <h2 id="exportPreviewTitle">Ordlista</h2>
+          </div>
+          <button class="icon-button" id="closeExportPreviewBtn" type="button" title="Stäng">×</button>
+        </header>
+        <section class="export-preview-body">
+          <div class="export-preview-actions">
+            <button class="secondary-button" id="shareExportPreviewBtn" type="button">分享</button>
+            <button class="primary-button" id="printExportPreviewBtn" type="button">打印</button>
+            <button class="secondary-button" id="closeExportPreviewActionBtn" type="button">关闭</button>
+          </div>
+          <section id="exportPreviewContent" class="export-preview-content" aria-live="polite"></section>
+        </section>
+      </dialog>
+
+      <dialog id="bookExportDialog" class="book-export-dialog">
+        <header class="detail-dialog-header">
+          <div>
+            <p class="section-kicker">Böcker</p>
+            <h2>Exportera ord</h2>
+          </div>
+          <button class="icon-button" id="closeBookExportBtn" type="button" title="Stäng">×</button>
+        </header>
+        <section class="book-export-body">
+          <div class="export-controls notebook-export-controls">
+            <label class="field-label">
+              Välj bok
+              <select id="exportNotebookSelect"></select>
+            </label>
+            <button class="secondary-button" id="printNotebookBtn" type="button">Exportera PDF</button>
+          </div>
+        </section>
+      </dialog>
+    </div>
+
+    <template id="wordCardTemplate">
+      <article class="word-card">
+        <div class="word-card-main">
+          <button class="star-button" type="button" title="Spara"></button>
+          <div>
+            <div class="title-row">
+              <h3></h3>
+              <span class="pos-badge"></span>
+            </div>
+            <p class="meaning"></p>
+            <p class="english"></p>
+            <dl class="detail-list"></dl>
+            <div class="meta-row"></div>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button type="button" data-action="listen">Lyssna</button>
+          <button type="button" data-action="enrich">Komplettera</button>
+          <button type="button" data-action="add-dictionary" hidden>Lägg till</button>
+          <button type="button" data-action="save-generated" hidden>Spara</button>
+          <button type="button" data-action="edit">Redigera</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
+    <script src="/app.js?v=106" type="module"></script>
+  </body>
+</html>
