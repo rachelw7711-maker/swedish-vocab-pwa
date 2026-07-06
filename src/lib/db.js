@@ -529,6 +529,35 @@ export async function syncRemoteNotebookNames() {
   return { enabled: true, notebooks: rows.length, archived: staleIds.length };
 }
 
+export async function ensureRemoteNotebookNames(names = []) {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false };
+  const normalized = unique(names);
+  if (normalized.length === 0) return { enabled: true, notebooks: 0 };
+  const { data: existing, error: readError } = await supabase
+    .from(TABLES.notebooks)
+    .select("id,name")
+    .eq("user_id", user.id);
+  if (readError) throw readError;
+
+  const existingByName = new Map((existing || []).map((row) => [clean(row.name).toLocaleLowerCase("sv-SE"), row]));
+  const rows = normalized.map((name, index) => {
+    const key = clean(name).toLocaleLowerCase("sv-SE");
+    const existingRow = existingByName.get(key);
+    return {
+      id: existingRow?.id,
+      user_id: user.id,
+      name,
+      sort_order: index,
+      archived: false,
+      deleted_at: null,
+      updated_at: new Date().toISOString(),
+    };
+  });
+  await upsertRows(TABLES.notebooks, rows);
+  return { enabled: true, notebooks: rows.length };
+}
+
 export async function deleteRemoteWord(wordId) {
   const id = clean(wordId);
   if (!id) return { enabled: true };

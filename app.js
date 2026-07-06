@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=112";
+import * as remoteDb from "./src/lib/db.js?v=114";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { supabase } from "./src/lib/supabase.js";
 
@@ -6,6 +6,7 @@ const DB_NAME = "swedish-vocab-pwa";
 const DEFAULT_NOTEBOOK = "Mina böcker";
 const LEARNED_NOTEBOOK = "Lärt mig";
 const FIXED_NOTEBOOKS = ["Nyttiga fraser", "Kraftverb", "Skatt-substantiv", "Superord"];
+const DEFAULT_BOOKSHELF_CATEGORIES = [LEARNED_NOTEBOOK, ...FIXED_NOTEBOOKS];
 const LOCAL_USER_BOOKS_KEY = "swedish-vocab-pwa.userBooks";
 const LEGACY_NOTEBOOKS_KEY = "swedish-vocab-pwa.notebooks";
 const LEGACY_PLAIN_USER_BOOKS_KEY = "userBooks";
@@ -527,6 +528,9 @@ let remotePhase4Snapshot = null;
 async function ensureRemoteLibrarySnapshot() {
   if (!remoteLibrarySnapshotLoaded) {
     remoteLibrarySnapshot = await remoteDb.loadRemoteLibrarySnapshot();
+    void remoteDb.ensureRemoteNotebookNames(DEFAULT_BOOKSHELF_CATEGORIES).catch((error) => {
+      console.warn("[Min Ordbok] Failed to ensure default bookshelf categories.", error);
+    });
     remoteLibrarySnapshotLoaded = true;
   }
   return remoteLibrarySnapshot;
@@ -2335,7 +2339,7 @@ function renderPinnedNotebookBooks() {
 
 function renderNotebookBooks() {
   const notebooks = [
-    LEARNED_NOTEBOOK,
+    ...DEFAULT_BOOKSHELF_CATEGORIES,
     ...getUserNotebooks().filter((notebook) => !isLearnedNotebook(notebook) && !isFixedNotebook(notebook)),
   ];
   els.notebookBookList.replaceChildren();
