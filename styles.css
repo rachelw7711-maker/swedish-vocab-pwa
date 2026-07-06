@@ -494,7 +494,7 @@ body[data-active-view="homeView"] .topbar {
 
 .shadowing-prepare-textarea {
   min-height: 96px;
-  max-height: 128px;
+  max-height: 100px;
   overflow: auto;
   resize: vertical;
 }
