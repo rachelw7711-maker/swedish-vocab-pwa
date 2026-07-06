@@ -14,7 +14,7 @@
     <link rel="shortcut icon" href="/icons/favicon.ico?v=22" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=22" />
     <title>Åka</title>
-    <link rel="stylesheet" href="/styles.css?v=98" />
+    <link rel="stylesheet" href="/styles.css?v=99" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -308,7 +308,8 @@
               <div class="toolbar">
                 <div>
                   <p class="section-kicker">Shadowing</p>
-                  <h2>Klistra in text</h2>
+                  <h2>Prepare</h2>
+                  <p class="shadowing-section-subtitle">Paste Swedish text and find new words</p>
                 </div>
               </div>
               <input type="hidden" id="shadowingItemId" />
@@ -316,8 +317,8 @@
                 Text
                 <textarea id="shadowingSwedishInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
               </label>
-              <button class="shadowing-assist-toggle" id="newShadowingBtn" type="button">+ Ny ord</button>
               <div class="practice-actions shadowing-module-actions">
+                <button class="secondary-button" id="newShadowingBtn" type="button">Nyheter / New Words</button>
                 <button class="primary-button" id="shadowingContinueBtn" type="button">Starta shadowing</button>
               </div>
               <button class="primary-button visually-hidden" id="saveShadowingBtn" type="button">Spara</button>
@@ -356,8 +357,8 @@
             <section class="panel shadowing-player">
               <div class="toolbar">
                 <div>
-                  <p class="section-kicker">Starta shadowing</p>
-                  <h2>Öva</h2>
+                  <p class="section-kicker">Shadowing</p>
+                  <h2>Practice</h2>
                   <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
               </div>
@@ -399,14 +400,17 @@
               <div class="toolbar">
                 <div>
                   <p class="section-kicker">Shadowing</p>
-                  <h2>Exportera ljud</h2>
+                  <h2>Export</h2>
                 </div>
               </div>
               <div class="shadowing-export-grid">
                 <article class="shadowing-export-row">
                   <div>
-                    <strong>Standardljud</strong>
-                    <span id="shadowingAudioHint"></span>
+                    <div class="shadowing-export-title-row">
+                      <strong>Standardljud</strong>
+                      <span class="shadowing-soon-tag">Coming soon</span>
+                    </div>
+                    <span id="shadowingAudioHint">AI voice is under development</span>
                   </div>
                   <div class="practice-actions">
                     <button class="secondary-button visually-hidden" id="generateShadowingAudioBtn" type="button">Skapa</button>
@@ -417,6 +421,7 @@
                 <article class="shadowing-export-row">
                   <div>
                     <strong>Min inspelning</strong>
+                    <span>Record, listen and download your own voice</span>
                   </div>
                   <div class="practice-actions">
                     <button class="secondary-button" id="shadowingExportRecordingPlayBtn" type="button">Spela</button>
@@ -677,6 +682,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=111" type="module"></script>
+    <script src="/app.js?v=112" type="module"></script>
   </body>
 </html>

@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=111";
+import * as remoteDb from "./src/lib/db.js?v=112";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { supabase } from "./src/lib/supabase.js";
 
@@ -3073,8 +3073,8 @@ function populateShadowingForm(item) {
   renderShadowingFlow();
 }
 
-function updateShadowingAudioHint(text) {
-  if (els.shadowingAudioHint) els.shadowingAudioHint.textContent = text;
+function updateShadowingAudioHint() {
+  if (els.shadowingAudioHint) els.shadowingAudioHint.textContent = "AI voice is under development";
 }
 
 function normalizeShadowingFlowText(text) {

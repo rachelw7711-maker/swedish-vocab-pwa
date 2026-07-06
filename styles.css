@@ -440,7 +440,20 @@ body[data-active-view="homeView"] .topbar {
 
 .shadowing-editor {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+}
+
+.shadowing-editor .toolbar,
+.shadowing-player .toolbar,
+.shadowing-export .toolbar {
+  margin-bottom: 0;
+}
+
+.shadowing-section-subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.45;
 }
 
 .shadowing-mode-tabs {
@@ -480,17 +493,18 @@ body[data-active-view="homeView"] .topbar {
 }
 
 .shadowing-prepare-textarea {
-  min-height: 220px;
+  min-height: 184px;
   resize: vertical;
 }
 
 .shadowing-module-actions {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.shadowing-module-actions .primary-button {
+.shadowing-module-actions .primary-button,
+.shadowing-module-actions .secondary-button {
   width: 100%;
 }
 
@@ -662,7 +676,8 @@ body[data-active-view="homeView"] .topbar {
 .shadowing-subtitle {
   display: grid;
   gap: 6px;
-  padding: 14px 16px;
+  min-height: 92px;
+  padding: 16px;
   border: 1px solid rgba(55, 65, 72, 0.08);
   border-radius: 16px;
   background: var(--surface-soft);
@@ -687,7 +702,7 @@ body[data-active-view="homeView"] .topbar {
 .shadowing-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .shadowing-controls .wide {
@@ -783,23 +798,43 @@ body[data-active-view="homeView"] .topbar {
 
 .shadowing-export {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .shadowing-export-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .shadowing-export-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid rgba(55, 65, 72, 0.08);
   border-radius: 14px;
   background: var(--surface-soft);
+}
+
+.shadowing-export-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.shadowing-soon-tag {
+  display: inline-flex !important;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong) !important;
+  font-size: 0.72rem !important;
+  font-weight: 800;
 }
 
 .shadowing-export-row strong {
