@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=107";
+import * as remoteDb from "./src/lib/db.js?v=108";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 
 const DB_NAME = "swedish-vocab-pwa";
@@ -3518,9 +3518,25 @@ async function generateStandardShadowingAudio() {
     els.generateShadowingAudioBtn.textContent = "Generating...";
   }
   try {
+    const authBefore = await remoteDb.getAuthDebugSnapshot();
+    console.info("[Shadowing] standard audio auth before token", authBefore);
     const token = await remoteDb.getCurrentAccessToken();
-    if (!token) throw new Error("Logga in för att generera standardljud.");
+    const authAfter = await remoteDb.getAuthDebugSnapshot();
+    console.info("[Shadowing] standard audio auth after token", {
+      ...authAfter,
+      hasAccessToken: Boolean(token),
+    });
+    if (!token) {
+      throw new Error(
+        `Standardljud auth saknas. session=${authAfter.hasSession ? "yes" : "no"}, user=${authAfter.hasUser ? "yes" : "no"}, storedToken=${authAfter.hasStoredAccessToken ? "yes" : "no"}.`,
+      );
+    }
     await remoteDb.upsertShadowingItem({ ...item, swedish: text });
+    console.info("[Shadowing] calling /api/shadowing/tts", {
+      hasAuthorization: true,
+      itemId: item.id,
+      textLength: text.length,
+    });
     const response = await fetch("/api/shadowing/tts", {
       method: "POST",
       headers: {
