@@ -1,5 +1,6 @@
-import * as remoteDb from "./src/lib/db.js?v=110";
+import * as remoteDb from "./src/lib/db.js?v=111";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
+import { supabase } from "./src/lib/supabase.js";
 
 const DB_NAME = "swedish-vocab-pwa";
 const DEFAULT_NOTEBOOK = "Mina böcker";
@@ -3518,7 +3519,9 @@ async function generateStandardShadowingAudio() {
     els.generateShadowingAudioBtn.textContent = "Generating...";
   }
   try {
-    const token = await remoteDb.getCurrentAccessToken();
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const token = sessionData?.session?.access_token || "";
     if (!token) throw new Error("Logga in för att generera standardljud.");
     await remoteDb.upsertShadowingItem({ ...item, swedish: text });
     const response = await fetch("/api/shadowing/tts", {
