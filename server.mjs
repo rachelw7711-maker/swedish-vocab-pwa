@@ -94,6 +94,16 @@ function bearerToken(req) {
   return match?.[1] || "";
 }
 
+function authDebugInfo(req) {
+  const header = req.headers.authorization || "";
+  const token = bearerToken(req);
+  return {
+    hasAuthorizationHeader: Boolean(header),
+    startsWithBearer: /^Bearer\s+/i.test(header),
+    tokenLength: token.length,
+  };
+}
+
 async function readAuthenticatedUser(req) {
   if (!supabaseAdmin) {
     const error = new Error("Supabase service role is not configured on the server.");
@@ -101,6 +111,7 @@ async function readAuthenticatedUser(req) {
     throw error;
   }
   const token = bearerToken(req);
+  console.info("[Shadowing TTS] Authorization", authDebugInfo(req));
   if (!token) {
     const error = new Error("Missing Supabase auth token.");
     error.status = 401;
@@ -108,10 +119,18 @@ async function readAuthenticatedUser(req) {
   }
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data?.user?.id) {
+    console.warn("[Shadowing TTS] Supabase getUser failed", {
+      success: false,
+      errorMessage: error?.message || "No Supabase user returned.",
+    });
     const authError = new Error("Invalid Supabase auth token.");
     authError.status = 401;
     throw authError;
   }
+  console.info("[Shadowing TTS] Supabase getUser succeeded", {
+    success: true,
+    userId: data.user.id,
+  });
   return data.user;
 }
 
@@ -227,6 +246,7 @@ async function markShadowingTtsFailed(client, userId, itemId, message, voiceId =
 }
 
 async function generateShadowingTts(req) {
+  console.info("[Shadowing TTS] /api/shadowing/tts called");
   if (!ELEVENLABS_API_KEY) {
     const error = new Error("ELEVENLABS_API_KEY saknas på servern.");
     error.status = 500;
@@ -276,6 +296,12 @@ async function generateShadowingTts(req) {
   if (statusError) throw statusError;
 
   try {
+    console.info("[Shadowing TTS] ElevenLabs call started", {
+      itemId: shadowingItemId,
+      textLength: swedishText.length,
+      voiceId: voice,
+      modelId: ELEVENLABS_MODEL_ID,
+    });
     const elevenResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}`, {
       method: "POST",
       headers: {
@@ -294,8 +320,16 @@ async function generateShadowingTts(req) {
         },
       }),
     });
+    console.info("[Shadowing TTS] ElevenLabs response", {
+      status: elevenResponse.status,
+      ok: elevenResponse.ok,
+    });
     if (!elevenResponse.ok) {
       const payload = await elevenResponse.text().catch(() => "");
+      console.warn("[Shadowing TTS] ElevenLabs error body", {
+        status: elevenResponse.status,
+        body: payload.slice(0, 1000),
+      });
       const error = new Error(payload || `ElevenLabs TTS failed with ${elevenResponse.status}.`);
       error.status = elevenResponse.status;
       throw error;
