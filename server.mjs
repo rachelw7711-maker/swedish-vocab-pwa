@@ -94,17 +94,6 @@ function bearerToken(req) {
   return match?.[1] || "";
 }
 
-function authHeaderDebug(req) {
-  const header = req.headers.authorization || "";
-  const token = bearerToken(req);
-  return {
-    hasAuthorizationHeader: Boolean(header),
-    authorizationScheme: header ? header.split(/\s+/)[0] || "" : "",
-    hasBearerToken: Boolean(token),
-    tokenLength: token.length,
-  };
-}
-
 async function readAuthenticatedUser(req) {
   if (!supabaseAdmin) {
     const error = new Error("Supabase service role is not configured on the server.");
@@ -112,7 +101,6 @@ async function readAuthenticatedUser(req) {
     throw error;
   }
   const token = bearerToken(req);
-  console.info("[Shadowing TTS] authorization received", authHeaderDebug(req));
   if (!token) {
     const error = new Error("Missing Supabase auth token.");
     error.status = 401;
@@ -120,15 +108,10 @@ async function readAuthenticatedUser(req) {
   }
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data?.user?.id) {
-    console.warn("[Shadowing TTS] Supabase token verification failed", {
-      hasUser: Boolean(data?.user?.id),
-      error: error?.message || "",
-    });
     const authError = new Error("Invalid Supabase auth token.");
     authError.status = 401;
     throw authError;
   }
-  console.info("[Shadowing TTS] Supabase token verified", { userId: data.user.id });
   return data.user;
 }
 
@@ -293,13 +276,6 @@ async function generateShadowingTts(req) {
   if (statusError) throw statusError;
 
   try {
-    console.info("[Shadowing TTS] calling ElevenLabs", {
-      itemId: shadowingItemId,
-      userId: user.id,
-      textLength: swedishText.length,
-      voiceId: voice,
-      modelId: ELEVENLABS_MODEL_ID,
-    });
     const elevenResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}`, {
       method: "POST",
       headers: {
@@ -320,15 +296,10 @@ async function generateShadowingTts(req) {
     });
     if (!elevenResponse.ok) {
       const payload = await elevenResponse.text().catch(() => "");
-      console.warn("[Shadowing TTS] ElevenLabs failed", {
-        status: elevenResponse.status,
-        body: payload.slice(0, 500),
-      });
       const error = new Error(payload || `ElevenLabs TTS failed with ${elevenResponse.status}.`);
       error.status = elevenResponse.status;
       throw error;
     }
-    console.info("[Shadowing TTS] ElevenLabs succeeded", { status: elevenResponse.status });
 
     const audioBuffer = Buffer.from(await elevenResponse.arrayBuffer());
     const storagePath = `${user.id}/${shadowingItemId}/standard.mp3`;

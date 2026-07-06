@@ -1,4 +1,4 @@
-import { supabase, supabaseAnonKey, supabaseUrl } from "./supabase.js";
+import { getAccessToken, getCurrentUser as getSharedAuthUser, supabase, supabaseAnonKey, supabaseUrl } from "./supabase.js";
 
 const TABLES = {
   words: "words",
@@ -16,7 +16,6 @@ const TABLES = {
 
 const PAGE_SIZE = 1000;
 const DEFAULT_PROFILE_ID = "default";
-const AUTH_SESSION_WAIT_MS = 5000;
 
 function clean(value) {
   return String(value || "").trim();
@@ -151,119 +150,11 @@ function sanitizeUserWordRows(userWordRows = [], sourceBookNames = new Set()) {
 
 async function readCurrentUser() {
   try {
-    if (!supabase?.auth) return null;
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) return null;
-    const { data, error } = await supabase.auth.getUser();
-    if (error) return null;
-    return data?.user || null;
+    return await getSharedAuthUser();
   } catch (error) {
     console.warn("[Min Ordbok] Failed to read auth session. Continuing without user state.", error);
     return null;
   }
-}
-
-function waitForAuthSession(timeoutMs = AUTH_SESSION_WAIT_MS) {
-  if (!supabase?.auth?.onAuthStateChange) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    let subscription = null;
-    const timeoutId = setTimeout(() => {
-      subscription?.unsubscribe();
-      resolve(null);
-    }, timeoutMs);
-    const finish = (session) => {
-      clearTimeout(timeoutId);
-      subscription?.unsubscribe();
-      resolve(session || null);
-    };
-    const result = supabase.auth.onAuthStateChange((event, session) => {
-      if (session || event === "INITIAL_SESSION") finish(session);
-    });
-    subscription = result?.data?.subscription || result?.subscription || null;
-  });
-}
-
-function supabaseProjectRef() {
-  try {
-    return new URL(supabaseUrl).hostname.split(".")[0] || "";
-  } catch {
-    return "";
-  }
-}
-
-function readAuthTokenFromStorageArea(storage, projectRef = supabaseProjectRef()) {
-  if (!storage) return null;
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index) || "";
-    const isProjectAuthKey = projectRef && key === `sb-${projectRef}-auth-token`;
-    const isSupabaseAuthKey = key.startsWith("sb-") && key.endsWith("-auth-token");
-    if (!isProjectAuthKey && !isSupabaseAuthKey) continue;
-    try {
-      const parsed = JSON.parse(storage.getItem(key) || "{}");
-      const session = parsed.currentSession || parsed;
-      const accessToken = clean(session.access_token);
-      if (!accessToken) continue;
-      const expiresAt = Number(session.expires_at || 0);
-      if (expiresAt && expiresAt * 1000 <= Date.now()) continue;
-      return {
-        key,
-        accessToken,
-        expiresAt: expiresAt || null,
-      };
-    } catch {
-      // Ignore malformed auth storage.
-    }
-  }
-  return null;
-}
-
-function readStoredAuthToken() {
-  return readAuthTokenFromStorageArea(globalThis.localStorage) || readAuthTokenFromStorageArea(globalThis.sessionStorage);
-}
-
-async function readCurrentSession({ waitForInitialSession = false } = {}) {
-  if (!supabase?.auth) return null;
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  if (data?.session || !waitForInitialSession) return data?.session || null;
-  return waitForAuthSession();
-}
-
-export async function getAuthDebugSnapshot() {
-  const projectRef = supabaseProjectRef();
-  let session = null;
-  let user = null;
-  let sessionError = "";
-  let userError = "";
-  try {
-    session = await readCurrentSession({ waitForInitialSession: true });
-  } catch (error) {
-    sessionError = error.message || String(error);
-  }
-  try {
-    if (supabase?.auth) {
-      const result = await supabase.auth.getUser();
-      user = result.data?.user || null;
-      if (result.error) userError = result.error.message || String(result.error);
-    }
-  } catch (error) {
-    userError = error.message || String(error);
-  }
-  const stored = readStoredAuthToken();
-  return {
-    projectRef,
-    hasSupabaseClient: Boolean(supabase?.auth),
-    hasSession: Boolean(session),
-    hasSessionAccessToken: Boolean(session?.access_token),
-    sessionUserId: session?.user?.id || "",
-    hasUser: Boolean(user?.id),
-    userId: user?.id || "",
-    hasStoredAccessToken: Boolean(stored?.accessToken),
-    storedAuthKey: stored?.key || "",
-    storedExpiresAt: stored?.expiresAt || null,
-    sessionError,
-    userError,
-  };
 }
 
 function dateToMillis(value) {
@@ -296,8 +187,7 @@ export async function getCurrentAccountId() {
 }
 
 export async function getCurrentAccessToken() {
-  const session = await readCurrentSession({ waitForInitialSession: true });
-  return session?.access_token || readStoredAuthToken()?.accessToken || "";
+  return getAccessToken();
 }
 
 export async function ensureProfile() {
