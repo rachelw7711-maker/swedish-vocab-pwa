@@ -91,6 +91,28 @@ export async function getCurrentUser({ refresh = false } = {}) {
 }
 
 export async function getAccessToken(options = {}) {
-  const { accessToken } = await getAuthState({ ...options, waitForAccessToken: true });
-  return accessToken || "";
+  const { timeoutMs = AUTH_READY_TIMEOUT_MS } = options;
+  await initializeAuth();
+
+  let { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+
+  if (!sessionData?.session?.access_token && currentUser) {
+    await waitForAuthUpdate(timeoutMs);
+    const retry = await supabase.auth.getSession();
+    if (retry.error) throw retry.error;
+    sessionData = retry.data;
+  }
+
+  const session = sessionData?.session || null;
+  setCurrentSession(session);
+  if (!session?.access_token) return "";
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData?.user?.id) {
+    currentUser = null;
+    return "";
+  }
+  currentUser = userData.user;
+  return session.access_token;
 }

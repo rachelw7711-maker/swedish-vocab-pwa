@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=109";
+import * as remoteDb from "./src/lib/db.js?v=110";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 
 const DB_NAME = "swedish-vocab-pwa";
