@@ -805,23 +805,36 @@ body[data-active-view="homeView"] .topbar {
 
 .shadowing-export {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .shadowing-export-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
 }
 
 .shadowing-export-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  padding: 14px;
+  grid-template-rows: 1fr auto;
+  gap: 16px;
+  min-height: 148px;
+  padding: 16px;
   border: 1px solid rgba(55, 65, 72, 0.08);
   border-radius: 14px;
   background: var(--surface-soft);
+}
+
+.shadowing-export-row .practice-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shadowing-export-row button {
+  width: 100%;
+  min-height: 42px;
 }
 
 .shadowing-export-title-row {
@@ -874,19 +887,14 @@ body[data-active-view="homeView"] .topbar {
     width: 100%;
   }
 
-  .shadowing-export-row {
-    grid-template-columns: 1fr;
-  }
-
-  .shadowing-export-row .practice-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .shadowing-export-grid {
+    grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
   }
 }
 
 @media (max-width: 380px) {
-  .shadowing-module-actions {
+  .shadowing-module-actions,
+  .shadowing-export-row .practice-actions {
     grid-template-columns: 1fr;
   }
 }
