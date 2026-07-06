@@ -459,20 +459,20 @@ body[data-active-view="homeView"] .topbar {
 .shadowing-mode-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .shadowing-mode-tab {
   display: grid;
   place-items: center;
-  min-height: 42px;
+  min-height: 36px;
   border: 1px solid rgba(55, 65, 72, 0.1);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.72);
   color: var(--ink);
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 780;
-  padding: 0 10px;
+  padding: 0 8px;
 }
 
 .shadowing-mode-tab.active {
@@ -488,24 +488,27 @@ body[data-active-view="homeView"] .topbar {
 
 .shadowing-mode-tab span {
   display: block;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 740;
 }
 
 .shadowing-prepare-textarea {
-  min-height: 184px;
+  min-height: 112px;
+  max-height: 150px;
+  overflow: auto;
   resize: vertical;
 }
 
 .shadowing-module-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .shadowing-module-actions .primary-button,
 .shadowing-module-actions .secondary-button {
   width: 100%;
+  min-height: 44px;
 }
 
 .shadowing-assist-toggle {
@@ -675,23 +678,23 @@ body[data-active-view="homeView"] .topbar {
 
 .shadowing-subtitle {
   display: grid;
-  gap: 6px;
-  min-height: 92px;
-  padding: 16px;
+  gap: 8px;
+  min-height: 138px;
+  padding: 18px;
   border: 1px solid rgba(55, 65, 72, 0.08);
   border-radius: 16px;
   background: var(--surface-soft);
 }
 
 .shadowing-subtitle strong {
-  font-size: 1rem;
-  line-height: 1.35;
+  font-size: 1.08rem;
+  line-height: 1.5;
 }
 
 .shadowing-subtitle span {
   color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.45;
+  font-size: 0.94rem;
+  line-height: 1.55;
 }
 
 .shadowing-subtitle.shadowing-subtitles-hidden strong,
@@ -703,6 +706,10 @@ body[data-active-view="homeView"] .topbar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.shadowing-controls button {
+  min-height: 44px;
 }
 
 .shadowing-controls .wide {
@@ -852,10 +859,9 @@ body[data-active-view="homeView"] .topbar {
 
 @media (max-width: 620px) {
   .shadowing-mode-tabs {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .shadowing-module-actions,
   .shadowing-controls {
     grid-template-columns: 1fr;
   }
@@ -876,6 +882,12 @@ body[data-active-view="homeView"] .topbar {
     display: grid;
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .shadowing-module-actions {
+    grid-template-columns: 1fr;
   }
 }
 
