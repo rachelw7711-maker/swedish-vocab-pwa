@@ -16,6 +16,7 @@ const TABLES = {
 
 const PAGE_SIZE = 1000;
 const DEFAULT_PROFILE_ID = "default";
+const AUTH_SESSION_WAIT_MS = 5000;
 
 function clean(value) {
   return String(value || "").trim();
@@ -162,6 +163,34 @@ async function readCurrentUser() {
   }
 }
 
+function waitForAuthSession(timeoutMs = AUTH_SESSION_WAIT_MS) {
+  if (!supabase?.auth?.onAuthStateChange) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let subscription = null;
+    const timeoutId = setTimeout(() => {
+      subscription?.unsubscribe();
+      resolve(null);
+    }, timeoutMs);
+    const finish = (session) => {
+      clearTimeout(timeoutId);
+      subscription?.unsubscribe();
+      resolve(session || null);
+    };
+    const result = supabase.auth.onAuthStateChange((event, session) => {
+      if (session || event === "INITIAL_SESSION") finish(session);
+    });
+    subscription = result?.data?.subscription || result?.subscription || null;
+  });
+}
+
+async function readCurrentSession({ waitForInitialSession = false } = {}) {
+  if (!supabase?.auth) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (data?.session || !waitForInitialSession) return data?.session || null;
+  return waitForAuthSession();
+}
+
 function dateToMillis(value) {
   if (!value) return 0;
   if (typeof value === "number") return value;
@@ -192,10 +221,8 @@ export async function getCurrentAccountId() {
 }
 
 export async function getCurrentAccessToken() {
-  if (!supabase?.auth) return "";
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  return data?.session?.access_token || "";
+  const session = await readCurrentSession({ waitForInitialSession: true });
+  return session?.access_token || "";
 }
 
 export async function ensureProfile() {

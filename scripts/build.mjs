@@ -51,7 +51,7 @@ const checks = [
   {
     file: "sw.js",
     mustInclude: [
-      'const CACHE_NAME = "ordbok-v33";',
+      'const CACHE_NAME = "ordbok-v34";',
       '"./node_modules/@supabase/supabase-js/dist/umd/supabase.js"',
       '"./icons/app-icon.png"',
       '"./icons/apple-touch-icon.png"',
