@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=116";
+import * as remoteDb from "./src/lib/db.js?v=118";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { supabase } from "./src/lib/supabase.js";
 
@@ -3134,8 +3134,10 @@ function populateShadowingForm(item) {
   renderShadowingFlow();
 }
 
-function updateShadowingAudioHint() {
-  if (els.shadowingAudioHint) els.shadowingAudioHint.textContent = "AI voice is under development";
+function updateShadowingAudioHint(message = "") {
+  if (els.shadowingAudioHint) {
+    els.shadowingAudioHint.textContent = clean(message) || "Generate Audio / Läs upp kräver inloggning och AI Voice.";
+  }
 }
 
 function normalizeShadowingFlowText(text) {
@@ -3263,7 +3265,10 @@ async function continueShadowingFlow() {
   const savedItem = await saveShadowingItemFromForm();
   if (!savedItem) return;
   renderShadowingFlow();
-  await generateStandardShadowingAudio();
+  if (!standardAudioDescriptor(savedItem)) {
+    updateShadowingAudioHint("Tips: generera standardljud först för bättre shadowing-träning.");
+    alert("Texten är redo för Practice. Generera gärna standardljud först för bättre shadowing-träning.");
+  }
 }
 
 async function addSelectedShadowingWordsToVocabulary() {
@@ -3317,6 +3322,7 @@ function currentShadowingAudioSource(item = getSelectedShadowingItem()) {
 
 function updateShadowingPlaybackUI() {
   const item = getSelectedShadowingItem();
+  const pendingText = normalizeShadowingFlowText(els.shadowingSwedishInput?.value || "");
   const hasStandardAudio = Boolean(standardAudioDescriptor(item));
   const hasRecording = Boolean(recordingAudioDescriptor() || (state.shadowingRecordingBlob && state.shadowingRecordingItemId === item?.id && state.shadowingRecordingUrl));
   if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.textContent = "Spela";
@@ -3339,7 +3345,7 @@ function updateShadowingPlaybackUI() {
   if (els.shadowingExportRecordingPlayBtn) els.shadowingExportRecordingPlayBtn.disabled = !item || !hasRecording;
   if (els.shadowingCompareBtn) els.shadowingCompareBtn.disabled = !item || !hasRecording;
   if (els.shadowingStopRecordBtn) els.shadowingStopRecordBtn.disabled = !item || !shadowingRecorder;
-  if (els.generateShadowingAudioBtn) els.generateShadowingAudioBtn.disabled = !item;
+  if (els.generateShadowingAudioBtn) els.generateShadowingAudioBtn.disabled = !item && !pendingText;
   if (els.downloadShadowingStandardBtn) els.downloadShadowingStandardBtn.disabled = !item || !hasStandardAudio;
   if (els.downloadShadowingRecordingBtn) els.downloadShadowingRecordingBtn.disabled = !item || !hasRecording;
 }
@@ -3564,13 +3570,40 @@ async function saveShadowingItemFromForm() {
   return savedItem;
 }
 
-async function generateStandardShadowingAudio() {
-  const item = ensureSelectedShadowingItem();
-  if (!item?.id) {
-    alert("Spara texten innan du genererar standardljud.");
-    return;
+async function guideShadowingLogin() {
+  const email = clean(prompt("Logga in för att generera standardljud. Ange din e-post så skickar vi en inloggningslänk."));
+  if (!email) {
+    alert("Du behöver logga in för att generera standardljud.");
+    return "";
   }
-  const text = clean(els.shadowingSwedishInput?.value) || clean(item.swedish);
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: window.location.href,
+    },
+  });
+  if (error) throw error;
+  alert("Vi har skickat en inloggningslänk till din e-post. Öppna länken och försök sedan generera standardljud igen.");
+  return "";
+}
+
+async function getShadowingAccessTokenOrGuide() {
+  const token = await remoteDb.getCurrentAccessToken({ timeoutMs: 8000 });
+  if (token) return token;
+  return guideShadowingLogin();
+}
+
+function shadowingTtsErrorMessage(error) {
+  const message = clean(error?.message);
+  if (/ELEVENLABS_API_KEY|voiceId|AI Voice|TTS/i.test(message)) {
+    return "AI Voice är inte konfigurerad för standardljud ännu. New Words fungerar fortfarande utan AI Voice.";
+  }
+  return message || "Kunde inte generera standardljud.";
+}
+
+async function generateStandardShadowingAudio() {
+  let item = ensureSelectedShadowingItem();
+  const text = normalizeShadowingFlowText(els.shadowingSwedishInput?.value || item?.swedish || "");
   if (!text) {
     alert("Skriv svensk text innan du genererar ljud.");
     return;
@@ -3580,11 +3613,21 @@ async function generateStandardShadowingAudio() {
     els.generateShadowingAudioBtn.textContent = "Generating...";
   }
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) throw sessionError;
-    const token = sessionData?.session?.access_token || "";
-    if (!token) throw new Error("Logga in för att generera standardljud.");
-    await remoteDb.upsertShadowingItem({ ...item, swedish: text });
+    const token = await getShadowingAccessTokenOrGuide();
+    if (!token) return;
+    if (!item?.id || clean(item.swedish) !== text) {
+      item = await saveShadowingItemFromForm();
+    }
+    if (!item?.id) return;
+    const remoteResult = await remoteDb.upsertShadowingItem({ ...item, swedish: text });
+    if (!remoteResult?.item) throw new Error("Logga in för att generera standardljud.");
+    item = shadowingStore.normalizeShadowingItem(remoteResult.item);
+    remotePhase4Snapshot = {
+      ...(remotePhase4Snapshot || {}),
+      shadowingItems: mergeShadowingItemsForApp([item], remotePhase4Snapshot?.shadowingItems || []),
+    };
+    await refreshShadowingState();
+    state.selectedShadowingId = item.id;
     const response = await fetch("/api/shadowing/tts", {
       method: "POST",
       headers: {
@@ -3612,10 +3655,12 @@ async function generateStandardShadowingAudio() {
     }
   } catch (error) {
     console.error("[Shadowing] Standard audio generation failed", error);
-    alert(error.message || "Kunde inte generera standardljud.");
+    const message = shadowingTtsErrorMessage(error);
+    updateShadowingAudioHint(message);
+    alert(message);
   } finally {
     if (els.generateShadowingAudioBtn) {
-      els.generateShadowingAudioBtn.textContent = "Generate Standard Audio";
+      els.generateShadowingAudioBtn.textContent = "Generate Audio / Läs upp";
       updateShadowingPlaybackUI();
     }
   }
@@ -3903,6 +3948,7 @@ async function startShadowingRecording() {
   };
   recorder.start();
   updateShadowingPlaybackUI();
+  renderShadowingPlayer();
 }
 
 function stopShadowingRecording() {

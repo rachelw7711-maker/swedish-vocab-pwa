@@ -1,4 +1,4 @@
-import { getAccessToken, getCurrentUser as getSharedAuthUser, supabase, supabaseAnonKey, supabaseUrl } from "./supabase.js";
+import { getAccessToken, getAuthState as getSharedAuthState, getCurrentUser as getSharedAuthUser, supabase, supabaseAnonKey, supabaseUrl } from "./supabase.js";
 
 const TABLES = {
   words: "words",
@@ -152,7 +152,10 @@ function sanitizeUserWordRows(userWordRows = [], sourceBookNames = new Set()) {
 
 async function readCurrentUser() {
   try {
-    return await getSharedAuthUser();
+    const authState = await getSharedAuthState({ waitForAccessToken: true });
+    if (authState?.session?.user?.id) return authState.session.user;
+    if (authState?.user?.id) return authState.user;
+    return await getSharedAuthUser({ refresh: true });
   } catch (error) {
     console.warn("[Min Ordbok] Failed to read auth session. Continuing without user state.", error);
     return null;
@@ -202,8 +205,8 @@ export async function getCurrentAccountId() {
   return user?.id || null;
 }
 
-export async function getCurrentAccessToken() {
-  return getAccessToken();
+export async function getCurrentAccessToken(options = {}) {
+  return getAccessToken(options);
 }
 
 export async function ensureProfile() {
