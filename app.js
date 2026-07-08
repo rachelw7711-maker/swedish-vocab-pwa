@@ -4955,6 +4955,29 @@ async function updateWord(id, patch, action = "updated") {
   if (action === "learned") updateStudyStatsForToday();
 }
 
+function updateWordInMemory(id, patch, action = "updated") {
+  const word = state.words.find((item) => item.id === id);
+  if (!word) return null;
+  const updated = normalizeForSave({ ...word, ...patch });
+  state.words = state.words.map((item) => (item.id === id ? updated : item));
+  if (remoteLibrarySnapshot?.words) {
+    remoteLibrarySnapshot = {
+      ...remoteLibrarySnapshot,
+      words: remoteLibrarySnapshot.words.map((item) => (item.id === id ? updated : item)),
+    };
+  }
+  appendLocalHistory(action, updated);
+  return updated;
+}
+
+function saveStudyWordProgressInBackground(word, action = "updated") {
+  if (!word?.id) return;
+  void remoteDb.upsertUserWordProgress(word).catch((error) => {
+    console.warn("[Min Ordbok] Background study progress sync failed.", error);
+  });
+  if (action === "learned") updateStudyStatsForToday();
+}
+
 async function setWordFavorite(word, favorite, category = getFavoriteCategory(word)) {
   saveFavoriteState(word, favorite, category);
   await updateWord(word.id, { favorite }, "favorite");
@@ -5724,56 +5747,57 @@ async function completeCurrentStudyWordFromSpelling() {
   const nextMasteryLevel = Math.min(5, Math.max(0, nextReviewCount));
   const mastered = session.mode === "review" && isCorrect && nextMasteryLevel >= 5;
   const status = !isCorrect ? "needs_review" : mastered ? "mastered" : "learning";
-  try {
-    await updateWord(
-      word.id,
-      {
-        status,
-        learned: session.mode === "review" ? mastered : false,
-        mastered_at: mastered ? word.mastered_at || now : word.mastered_at,
-        first_studied_at: word.first_studied_at || now,
-        last_studied_at: now,
-        last_study_date: todayKey(),
-        last_reviewed: session.mode === "review" ? now : word.last_reviewed,
-        last_review_date: session.mode === "review" ? todayKey() : word.last_review_date,
-        review_count: nextReviewCount,
-        spelling_correct_count: word.spelling_correct_count + (isCorrect ? 1 : 0),
-        wrong_count: word.wrong_count + (isCorrect ? 0 : MAX_SPELLING_ATTEMPTS),
-        next_review_at: session.mode === "review" ? nextReviewTimestamp(nextReviewCount, isCorrect) : startOfDayTimestamp(1),
-      },
-      session.mode === "review" ? "reviewed" : "updated",
-    );
-    markDailyCompleted(word.id);
-    if (session.mode === "new") {
-      await refreshDailyProgressUntilWordIncluded(word.id, "new");
-      const todayNewWordIds = uniqueIds([...previousTodayNewWordIds, ...(state.dailyProgress?.todayNewWordIds || []), word.id]);
-      const todayNewCount = Math.max(Number(state.dailyProgress?.todayNewCount || 0), previousTodayNewCount + 1, todayNewWordIds.length);
-      state.dailyProgress = {
-        ...(state.dailyProgress || {}),
-        todayNewWordIds,
-        todayNewCount,
-      };
-    } else {
-      await refreshDailyProgress();
-    }
-    state.dailyStudy = ensureDailyStudyPlan(state.studyScope);
-    renderStudyStats();
-  } catch (error) {
-    console.error("[Min Ordbok] Failed to persist study answer", error);
-    els.studySessionFeedback.textContent = "Kunde inte spara till Supabase. Försök igen.";
+  const updated = updateWordInMemory(
+    word.id,
+    {
+      status,
+      learned: session.mode === "review" ? mastered : false,
+      mastered_at: mastered ? word.mastered_at || now : word.mastered_at,
+      first_studied_at: word.first_studied_at || now,
+      last_studied_at: now,
+      last_study_date: todayKey(),
+      last_reviewed: session.mode === "review" ? now : word.last_reviewed,
+      last_review_date: session.mode === "review" ? todayKey() : word.last_review_date,
+      review_count: nextReviewCount,
+      spelling_correct_count: word.spelling_correct_count + (isCorrect ? 1 : 0),
+      wrong_count: word.wrong_count + (isCorrect ? 0 : MAX_SPELLING_ATTEMPTS),
+      next_review_at: session.mode === "review" ? nextReviewTimestamp(nextReviewCount, isCorrect) : startOfDayTimestamp(1),
+    },
+    session.mode === "review" ? "reviewed" : "updated",
+  );
+  if (!updated) {
     session.busy = false;
     renderStudySession();
-    els.studySessionFeedback.textContent = "Kunde inte spara till Supabase. Försök igen.";
     return;
+  }
+  markDailyCompleted(word.id);
+  if (session.mode === "new") {
+    const todayNewWordIds = uniqueIds([...previousTodayNewWordIds, word.id]);
+    const todayNewCount = Math.max(previousTodayNewCount + (previousTodayNewWordIds.includes(word.id) ? 0 : 1), todayNewWordIds.length);
+    state.dailyProgress = {
+      ...(state.dailyProgress || {}),
+      todayNewWordIds,
+      todayNewCount,
+    };
+  } else {
+    state.dailyProgress = {
+      ...(state.dailyProgress || {}),
+      dueReviewWordIds: uniqueIds(state.dailyProgress?.dueReviewWordIds || []).filter((id) => id !== word.id),
+      dueReviewCount: Math.max(0, Number(state.dailyProgress?.dueReviewCount || 0) - 1),
+    };
   }
   updateStudyStatsForToday();
   session.result = isCorrect ? "correct" : "wrong";
   session.busy = false;
+  const progressAction = session.mode === "review" ? "reviewed" : "updated";
+  renderStudyStats();
   if (isDailySessionCompleted(session.mode)) {
     showStudySessionComplete(session.mode);
+    saveStudyWordProgressInBackground(updated, progressAction);
     return;
   }
   goToNextStudyWord();
+  saveStudyWordProgressInBackground(updated, progressAction);
 }
 
 function goToNextStudyWord() {
