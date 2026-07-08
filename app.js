@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=118";
+import * as remoteDb from "./src/lib/db.js?v=119";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { supabase } from "./src/lib/supabase.js";
 
@@ -6815,7 +6815,7 @@ function bindEvents() {
     state.shadowingPendingAudioName = "";
   });
   els.shadowingSwedishInput?.addEventListener("input", () => {
-    if (state.shadowingFlowStep === "preview" || state.shadowingUnknownExpanded) renderShadowingFlow();
+    renderShadowingFlow();
   });
   els.shadowingUnknownWordsList?.addEventListener("change", (event) => {
     const checkbox = event.target.closest('[data-shadowing-unknown-word]');
