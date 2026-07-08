@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import "dotenv/config";
+import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 const ROOT = process.cwd();
@@ -52,7 +53,7 @@ const checks = [
   {
     file: "sw.js",
     mustInclude: [
-      'const CACHE_NAME = "ordbok-v46";',
+      'const CACHE_NAME = "ordbok-v47";',
       '"./node_modules/@supabase/supabase-js/dist/umd/supabase.js"',
       '"./icons/app-icon.png"',
       '"./icons/apple-touch-icon.png"',
@@ -131,6 +132,7 @@ async function buildDist() {
   }
 
   await copyPath(join(ROOT, "src"), join(DIST, "src"));
+  await injectSupabaseBrowserConfig();
   await copyPath(
     join(ROOT, "node_modules/@supabase/supabase-js/dist/umd/supabase.js"),
     join(DIST, "node_modules/@supabase/supabase-js/dist/umd/supabase.js"),
@@ -138,6 +140,21 @@ async function buildDist() {
   await copyPath(join(ROOT, "audio"), join(DIST, "audio"));
   await copyPath(join(ROOT, "icons"), join(DIST, "icons"));
   await removeLegacyPwaIcons();
+}
+
+async function injectSupabaseBrowserConfig() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY for browser config injection.");
+  }
+  const target = join(DIST, "src/lib/supabase.js");
+  const source = await readFile(target, "utf8");
+  const next = source.replace(
+    "const env = import.meta.env || {};",
+    `const env = ${JSON.stringify({ VITE_SUPABASE_URL: supabaseUrl, VITE_SUPABASE_ANON_KEY: supabaseAnonKey })};`,
+  );
+  await writeFile(target, next);
 }
 
 async function removeLegacyPwaIcons() {
