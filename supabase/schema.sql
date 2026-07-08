@@ -29,6 +29,7 @@ create table if not exists public.user_words (
   id text primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
   word_id text not null references public.words (id) on delete cascade,
+  status text not null default 'new',
   favorite boolean not null default false,
   learned boolean not null default false,
   notebook text not null default '',

@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=114";
+import * as remoteDb from "./src/lib/db.js?v=116";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { supabase } from "./src/lib/supabase.js";
 
@@ -30,6 +30,7 @@ const STUDY_SCOPE_ALL = "all";
 const STUDY_SCOPE_FAVORITES = "favorites";
 const STUDY_SCOPE_LEARNED = "learned";
 const DAILY_NEW_WORD_LIMIT = 10;
+const MAX_SPELLING_ATTEMPTS = 3;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
@@ -256,6 +257,7 @@ const state = {
   exportNotebook: "all",
   favoriteStates: new Map(),
   dailyStudy: null,
+  dailyProgress: null,
   studyStats: null,
   studyScope: STUDY_SCOPE_ALL,
   studySession: null,
@@ -567,6 +569,7 @@ function normalizeWord(word) {
     book_names: explicitBooks,
     tags,
     favorite: Boolean(word.favorite),
+    status: clean(firstDefined(word.status, "")),
     learned: Boolean(word.learned),
     review_count: Number(firstDefined(word.review_count, word.reviewCount, 0)) || 0,
     wrong_count: Number(firstDefined(word.wrong_count, word.wrongCount, 0)) || 0,
@@ -847,14 +850,6 @@ async function persistDailyStudyPlan(plan = state.dailyStudy || readDailyStudy()
 
 function applyRemoteStudyState(plan, snapshot = remotePhase4Snapshot) {
   if (!snapshot?.enabled || !plan) return plan;
-  const sessionsById = new Map((snapshot.studySessions || []).map((session) => [session.id, session]));
-  const itemsByMode = { new: [], review: [] };
-  (snapshot.studySessionItems || []).forEach((item) => {
-    const session = sessionsById.get(item.study_session_id);
-    if (!session?.mode || !itemsByMode[session.mode]) return;
-    itemsByMode[session.mode].push(item);
-  });
-  Object.values(itemsByMode).forEach((items) => items.sort((a, b) => (a.position || 0) - (b.position || 0)));
   const sessionIds = {};
   (snapshot.studySessions || []).forEach((session) => {
     if (session.mode) sessionIds[session.mode] = session.id;
@@ -864,17 +859,6 @@ function applyRemoteStudyState(plan, snapshot = remotePhase4Snapshot) {
     remotePlanId: snapshot.studyPlan?.id || plan.remotePlanId || null,
     remoteSessionIds: { ...(plan.remoteSessionIds || {}), ...sessionIds },
   };
-  if (itemsByMode.new.length) {
-    next.newWordIds = uniqueIds(itemsByMode.new.map((item) => item.word_id));
-    next.completedNewWordIds = uniqueIds(itemsByMode.new.filter((item) => item.status === "completed").map((item) => item.word_id));
-    next.spellingPassedWordIds = uniqueIds(itemsByMode.new.filter((item) => item.spelling_passed).map((item) => item.word_id));
-    next.newSessionCompleted = Boolean(sessionsById.get(sessionIds.new)?.status === "completed" || (next.newWordIds.length && next.completedNewWordIds.length >= next.newWordIds.length));
-  }
-  if (itemsByMode.review.length) {
-    next.reviewWordIds = uniqueIds(itemsByMode.review.map((item) => item.word_id));
-    next.completedReviewWordIds = uniqueIds(itemsByMode.review.filter((item) => item.status === "completed").map((item) => item.word_id));
-    next.reviewSessionCompleted = Boolean(sessionsById.get(sessionIds.review)?.status === "completed" || (next.reviewWordIds.length && next.completedReviewWordIds.length >= next.reviewWordIds.length));
-  }
   writeDailyStudy(next);
   return readDailyStudy();
 }
@@ -1129,6 +1113,33 @@ async function replaceWords(words) {
     ].length,
   };
   remoteLibrarySnapshotLoaded = true;
+}
+
+async function refreshDailyProgress() {
+  state.dailyProgress = await remoteDb.loadDailyWordProgress({
+    date: todayKey(),
+  }).catch((error) => {
+    console.warn("[Min Ordbok] Daily Supabase progress load failed.", error);
+    return {
+      enabled: false,
+      date: todayKey(),
+      todayNewWordIds: [],
+      todayNewCount: 0,
+      dueReviewWordIds: [],
+      dueReviewCount: 0,
+    };
+  });
+  return state.dailyProgress;
+}
+
+async function refreshDailyProgressUntilWordIncluded(wordId, mode) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const progress = await refreshDailyProgress();
+    const ids = mode === "review" ? progress?.dueReviewWordIds || [] : progress?.todayNewWordIds || [];
+    if (!wordId || ids.includes(wordId)) return progress;
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+  }
+  return state.dailyProgress;
 }
 
 function readLocalHistory() {
@@ -1658,6 +1669,7 @@ async function applyManualRelatedWordExamples() {
 
 async function loadData() {
   const words = await readWords();
+  await refreshDailyProgress();
   remotePhase4Snapshot = await remoteDb.loadRemotePhase4Snapshot({
     date: todayKey(),
     scope: state.studyScope || STUDY_SCOPE_ALL,
@@ -1989,35 +2001,34 @@ function renderStudyStats() {
   if (!state.dailyStudy) return;
   const newSession = readDailySession("new", state.dailyStudy);
   const reviewSession = readDailySession("review", state.dailyStudy);
-  const todayNew = newSession.completedWordIds.length;
-  const todayReview = reviewSession.completedWordIds.length;
+  const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
+  const todayReview = Math.min(Number(state.dailyProgress?.dueReviewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
   const streak = state.studyStats?.current_streak || 0;
   const mastered = state.words.filter((word) => word.learned).length;
-  const newTotal = state.dailyStudy.newWordIds?.length || 0;
-  const reviewTotal = state.dailyStudy.reviewWordIds?.length || 0;
-  const completedTotal = todayNew + todayReview;
-  const plannedTotal = newTotal + reviewTotal;
-  els.studyNewCount.textContent = `${todayNew}/${newTotal}`;
-  els.studyReviewCount.textContent = `${todayReview}/${reviewTotal}`;
+  const completedTotal = todayNew;
+  els.studyNewCount.textContent = `${todayNew}/${DAILY_NEW_WORD_LIMIT}`;
+  els.studyReviewCount.textContent = `${todayReview}/${DAILY_NEW_WORD_LIMIT}`;
   els.studyStreakCount.textContent = streak;
   els.studyMasteredCount.textContent = mastered;
-  els.entryNewCount.textContent = `${newTotal} ord idag`;
-  els.entryReviewCount.textContent = `${reviewTotal} ord idag`;
-  if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = newTotal === 0 || newSession.completed;
-  if (els.startReviewStudyBtn) els.startReviewStudyBtn.disabled = reviewTotal === 0 || reviewSession.completed;
+  els.entryNewCount.textContent = `Today's New Words: ${todayNew}/${DAILY_NEW_WORD_LIMIT}`;
+  els.entryReviewCount.textContent = todayReview > 0
+    ? `Today's Review: ${todayReview}/${DAILY_NEW_WORD_LIMIT}`
+    : "No review scheduled today";
+  if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = todayNew >= DAILY_NEW_WORD_LIMIT || newSession.completed;
+  if (els.startReviewStudyBtn) els.startReviewStudyBtn.disabled = todayReview === 0 || reviewSession.completed;
   els.completeTodayCount.textContent = `${completedTotal} klara idag`;
   els.completeMasteredCount.textContent = `${mastered} lärda ord`;
   els.completeStreakCount.textContent = `${streak} dagar i rad`;
   const parts = [
-    `Nyord ${todayNew}/${newTotal}`,
-    `Repetition ${todayReview}/${reviewTotal}`,
+    `Nyord ${todayNew}/${DAILY_NEW_WORD_LIMIT}`,
+    todayReview > 0 ? `Repetition ${todayReview}/${DAILY_NEW_WORD_LIMIT}` : "No review scheduled today",
     `Streak ${streak}`,
     `Lärt mig ${mastered}`,
   ];
   if (!state.currentQuiz && els.quizHint) {
-    els.quizHint.textContent = plannedTotal > 0 ? parts.join(" · ") : "Inga ord i dagens kö.";
+    els.quizHint.textContent = parts.join(" · ");
   }
-  els.studyCompletePanel.hidden = !(plannedTotal > 0 && completedTotal >= plannedTotal && !state.currentQuiz);
+  els.studyCompletePanel.hidden = !(todayNew >= DAILY_NEW_WORD_LIMIT && todayReview === 0 && !state.currentQuiz);
 }
 
 function setupHomeGreeting() {
@@ -2435,7 +2446,6 @@ function createWordCard(word, mode = "library") {
     addStudyDetail(details, "Exempel", formatExampleForStudy(word.example));
     addStudyDetail(details, "Fraser", createStudyCollocationList(word.collocations, word.example));
     addStudyDetail(details, "Relaterade ord", createRelatedWordList(word.related_words));
-    addStudyDetail(details, "Kommentar", formatStudyNote(word));
   } else if (mode === "search" || mode === "dictionary") {
     card.classList.add("compact-word-card");
     addCompactDetail(details, "Böjning", summarizeForms(word.forms));
@@ -4939,6 +4949,7 @@ async function updateWord(id, patch, action = "updated") {
   if (!word) return;
   const updated = normalizeForSave({ ...word, ...patch });
   await replaceWords((await readWords()).map((item) => (item.id === id ? updated : item)));
+  await remoteDb.upsertUserWordProgress(updated);
   appendLocalHistory(action, updated);
   await loadData();
   if (action === "learned") updateStudyStatsForToday();
@@ -4971,6 +4982,7 @@ async function markWordLearned(word) {
   await updateWord(
     word.id,
     {
+      status: "mastered",
       learned: true,
       mastered_at: word.mastered_at || now,
       first_studied_at: word.first_studied_at || now,
@@ -5052,6 +5064,13 @@ function startOfDayTimestamp(offset = 0) {
   return date.getTime();
 }
 
+function nextReviewTimestamp(reviewCount, isCorrect) {
+  if (!isCorrect) return startOfDayTimestamp(1);
+  const intervals = [1, 2, 4, 7, 14, 30, 60];
+  const index = Math.max(0, Math.min(Number(reviewCount || 1) - 1, intervals.length - 1));
+  return startOfDayTimestamp(intervals[index]);
+}
+
 function sameCategory(a, b) {
   return normalizeNotebookName(a).toLocaleLowerCase("sv-SE") === normalizeNotebookName(b).toLocaleLowerCase("sv-SE");
 }
@@ -5108,15 +5127,13 @@ function hasWordStudyHistory(word) {
 }
 
 function eligibleReviewWords(scope = state.studyScope) {
-  const now = Date.now();
   const today = todayKey();
+  const dueIds = new Set(state.dailyProgress?.dueReviewWordIds || []);
   return getLibraryWordsForDisplay().filter((word) => {
     if (!studyScopeMatches(word, scope)) return false;
     if (isWordInLearnedNotebook(word)) return false;
     if (word.last_review_date === today) return false;
-    const studyDate = studyDateValue(word);
-    const studiedBeforeToday = Boolean(studyDate && studyDate < today);
-    return studiedBeforeToday || (hasWordStudyHistory(word) && word.next_review_at <= now);
+    return dueIds.has(word.id);
   });
 }
 
@@ -5182,23 +5199,26 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
   const existing = readDailyStudy();
   const candidates = eligibleStudyWords(scope);
   const reviewCandidatesAll = eligibleReviewWords(scope);
-  const newCandidates = candidates.filter((word) => !hasWordStudyHistory(word));
+  const todayNewWordIds = uniqueIds(state.dailyProgress?.todayNewWordIds || []);
+  const todayNewCount = Number(state.dailyProgress?.todayNewCount || todayNewWordIds.length || 0) || 0;
+  const remainingNewLimit = Math.max(DAILY_NEW_WORD_LIMIT - todayNewCount, 0);
+  const newCandidates = remainingNewLimit > 0
+    ? candidates.filter((word) => !hasWordStudyHistory(word) && !todayNewWordIds.includes(word.id))
+    : [];
   const availableWordIds = new Set(candidates.map((word) => word.id));
   const samePlan = existing.date === date && existing.scope === scope;
   const existingNewWordIds = samePlan
     ? uniqueIds(existing.newWordIds).filter((id) => availableWordIds.has(id))
     : [];
-  const reviewWordIds = pickDailyReviewWordIds(
-    reviewCandidatesAll,
-    new Set(),
-    samePlan ? existing.reviewWordIds : [],
-  );
+  const reviewWordIds = uniqueIds(state.dailyProgress?.dueReviewWordIds || [])
+    .filter((id) => reviewCandidatesAll.some((word) => word.id === id))
+    .slice(0, DAILY_NEW_WORD_LIMIT);
   const newWordIds = pickDailyNewWordIds(
     newCandidates,
     new Set(reviewWordIds),
     samePlan ? existingNewWordIds : [],
-  );
-  const completedNewWordIds = samePlan ? uniqueIds(existing.completedNewWordIds).filter((id) => newWordIds.includes(id)) : [];
+  ).slice(0, remainingNewLimit);
+  const completedNewWordIds = todayNewWordIds;
   const completedReviewWordIds = samePlan ? uniqueIds(existing.completedReviewWordIds).filter((id) => reviewWordIds.includes(id)) : [];
 
   const plan = {
@@ -5209,7 +5229,7 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
     completedNewWordIds,
     completedReviewWordIds,
     spellingPassedWordIds: samePlan ? uniqueIds(existing.spellingPassedWordIds).filter((id) => newWordIds.includes(id)) : [],
-    newSessionCompleted: newWordIds.length > 0 && completedNewWordIds.length >= newWordIds.length,
+    newSessionCompleted: todayNewCount >= DAILY_NEW_WORD_LIMIT,
     reviewSessionCompleted: reviewWordIds.length > 0 && completedReviewWordIds.length >= reviewWordIds.length,
     completedAt: samePlan ? existing.completedAt || null : null,
   };
@@ -5243,6 +5263,7 @@ function getSessionIds(mode) {
 }
 
 function isDailySessionCompleted(mode, plan = state.dailyStudy || ensureDailyStudyPlan()) {
+  if (mode === "new" && Number(state.dailyProgress?.todayNewCount || 0) >= DAILY_NEW_WORD_LIMIT) return true;
   return readDailySession(mode, plan).completed;
 }
 
@@ -5343,6 +5364,7 @@ async function startStudySession(mode) {
     completedAtStart: getCompletedSessionIds(mode).length,
     wordId: queue[0]?.id || null,
     result: null,
+    spelling: createStudySpellingState(),
     sessionCompleted: isDailySessionCompleted(mode),
     remoteSessionId: remoteSession?.id || state.dailyStudy?.remoteSessionIds?.[mode] || null,
   };
@@ -5353,6 +5375,30 @@ async function startStudySession(mode) {
 
 function currentStudySessionWord() {
   return getLibraryWordsForDisplay().find((word) => word.id === state.studySession?.wordId) || null;
+}
+
+function createStudySpellingState(overrides = {}) {
+  return {
+    attempts: 0,
+    checked: false,
+    correct: false,
+    locked: false,
+    feedback: "",
+    showAnswer: false,
+    ...overrides,
+  };
+}
+
+function resetStudySessionSpelling(session = state.studySession) {
+  if (!session) return;
+  session.spelling = createStudySpellingState();
+  state.spellingPassed = false;
+  els.sessionWordInput.value = "";
+  els.sessionCollocationInput.value = "";
+}
+
+function studySessionCanAdvance(session = state.studySession) {
+  return Boolean(session?.spelling?.correct || session?.spelling?.locked);
 }
 
 function renderStudySession() {
@@ -5414,7 +5460,8 @@ function renderStudySession() {
     renderStudySessionSpelling(word);
     renderStudySessionActions([
       ...(session.mode === "review" ? [{ label: "Lyssna", action: "listen", kind: "secondary" }] : []),
-      { label: "Kontrollera", action: "check", kind: "primary" },
+      { label: "Check", action: "check", kind: "secondary", disabled: Boolean(session.spelling?.locked || session.spelling?.correct) },
+      { label: "Next", action: "next", kind: "primary", disabled: !studySessionCanAdvance(session) },
     ]);
     window.setTimeout(() => els.sessionWordInput.focus(), 0);
     return;
@@ -5457,7 +5504,7 @@ function renderStudySessionFullWordCard(word) {
 
 function renderStudySessionSpelling(word) {
   const session = state.studySession;
-  const primaryCollocation = getPrimaryCollocation(word);
+  const spelling = session?.spelling || createStudySpellingState();
   const panel = document.createElement("section");
   panel.className = "session-spell-panel";
   if (session?.mode === "review") {
@@ -5476,11 +5523,15 @@ function renderStudySessionSpelling(word) {
   els.sessionWordInputWrap.hidden = false;
   els.sessionWordInputWrap.classList.add("session-word-input");
   panel.append(els.sessionWordInputWrap);
-  if (primaryCollocation) {
-    els.sessionCollocationInputWrap.hidden = false;
-    els.sessionCollocationInputWrap.classList.add("session-word-input");
-    els.sessionCollocationInputWrap.querySelector("input").placeholder = primaryCollocation.meaning || "Fast fras";
-    panel.append(els.sessionCollocationInputWrap);
+  const feedback = document.createElement("p");
+  feedback.className = "session-spell-feedback";
+  feedback.textContent = spelling.feedback || `Attempts ${spelling.attempts}/${MAX_SPELLING_ATTEMPTS}`;
+  panel.append(feedback);
+  if (spelling.showAnswer) {
+    const answer = document.createElement("p");
+    answer.className = "session-spell-answer";
+    answer.textContent = `Correct answer: ${word.swedish}`;
+    panel.append(answer);
   }
   els.studySessionCard.replaceChildren(panel);
 }
@@ -5518,7 +5569,7 @@ function renderStudySessionActions(actions = []) {
       button.className = item.kind === "primary" ? "primary-button" : "secondary-button";
       button.dataset.studyAction = item.action;
       button.textContent = item.label;
-      button.disabled = busy;
+      button.disabled = busy || Boolean(item.disabled);
       return button;
     }),
   );
@@ -5635,34 +5686,85 @@ async function submitStudySessionAnswer() {
   if (!session || !word) return;
   if (session.busy) return;
   clearStudySessionAdvanceTimer();
+  const spelling = session.spelling || createStudySpellingState();
+  if (spelling.correct || spelling.locked) return;
+  const isCorrect = normalizeSpelling(els.sessionWordInput.value) === normalizeSpelling(word.swedish);
+  const attempts = isCorrect ? spelling.attempts : spelling.attempts + 1;
+  session.spelling = createStudySpellingState({
+    attempts,
+    checked: true,
+    correct: isCorrect,
+    locked: !isCorrect && attempts >= MAX_SPELLING_ATTEMPTS,
+    feedback: isCorrect
+      ? "Correct"
+      : attempts >= MAX_SPELLING_ATTEMPTS
+        ? "Try again"
+        : "Try again",
+    showAnswer: !isCorrect && attempts >= MAX_SPELLING_ATTEMPTS,
+  });
+  state.spellingPassed = isCorrect;
+  renderStudySession();
+}
+
+async function completeCurrentStudyWordFromSpelling() {
+  const session = state.studySession;
+  const word = currentStudySessionWord();
+  if (!session || !word || !studySessionCanAdvance(session)) return;
+  if (session.busy) return;
+  clearStudySessionAdvanceTimer();
   session.busy = true;
   renderStudySession();
-  const primaryCollocation = getPrimaryCollocation(word);
-  const wordCorrect = normalizeSpelling(els.sessionWordInput.value) === normalizeSpelling(word.swedish);
-  const collocationCorrect =
-    !primaryCollocation || normalizeSpelling(els.sessionCollocationInput.value) === normalizeSpelling(primaryCollocation.phrase);
-  const isCorrect = wordCorrect && collocationCorrect;
+  const spelling = session.spelling || createStudySpellingState();
+  const isCorrect = Boolean(spelling.correct);
   state.spellingPassed = isCorrect;
-  markDailyCompleted(word.id);
+  const previousTodayNewCount = Number(state.dailyProgress?.todayNewCount || 0) || 0;
+  const previousTodayNewWordIds = uniqueIds(state.dailyProgress?.todayNewWordIds || []);
   const now = Date.now();
+  const nextReviewCount = session.mode === "review" ? Number(word.review_count || 0) + 1 : Number(word.review_count || 0);
+  const nextMasteryLevel = Math.min(5, Math.max(0, nextReviewCount));
+  const mastered = session.mode === "review" && isCorrect && nextMasteryLevel >= 5;
+  const status = !isCorrect ? "needs_review" : mastered ? "mastered" : "learning";
   try {
     await updateWord(
       word.id,
       {
-        learned: session.mode === "review" ? isCorrect : false,
+        status,
+        learned: session.mode === "review" ? mastered : false,
+        mastered_at: mastered ? word.mastered_at || now : word.mastered_at,
         first_studied_at: word.first_studied_at || now,
         last_studied_at: now,
         last_study_date: todayKey(),
         last_reviewed: session.mode === "review" ? now : word.last_reviewed,
         last_review_date: session.mode === "review" ? todayKey() : word.last_review_date,
-        review_count: session.mode === "review" ? word.review_count + 1 : word.review_count,
+        review_count: nextReviewCount,
         spelling_correct_count: word.spelling_correct_count + (isCorrect ? 1 : 0),
-        next_review_at: session.mode === "review" ? word.next_review_at : startOfDayTimestamp(1),
+        wrong_count: word.wrong_count + (isCorrect ? 0 : MAX_SPELLING_ATTEMPTS),
+        next_review_at: session.mode === "review" ? nextReviewTimestamp(nextReviewCount, isCorrect) : startOfDayTimestamp(1),
       },
       session.mode === "review" ? "reviewed" : "updated",
     );
+    markDailyCompleted(word.id);
+    if (session.mode === "new") {
+      await refreshDailyProgressUntilWordIncluded(word.id, "new");
+      const todayNewWordIds = uniqueIds([...previousTodayNewWordIds, ...(state.dailyProgress?.todayNewWordIds || []), word.id]);
+      const todayNewCount = Math.max(Number(state.dailyProgress?.todayNewCount || 0), previousTodayNewCount + 1, todayNewWordIds.length);
+      state.dailyProgress = {
+        ...(state.dailyProgress || {}),
+        todayNewWordIds,
+        todayNewCount,
+      };
+    } else {
+      await refreshDailyProgress();
+    }
+    state.dailyStudy = ensureDailyStudyPlan(state.studyScope);
+    renderStudyStats();
   } catch (error) {
     console.error("[Min Ordbok] Failed to persist study answer", error);
+    els.studySessionFeedback.textContent = "Kunde inte spara till Supabase. Försök igen.";
+    session.busy = false;
+    renderStudySession();
+    els.studySessionFeedback.textContent = "Kunde inte spara till Supabase. Försök igen.";
+    return;
   }
   updateStudyStatsForToday();
   session.result = isCorrect ? "correct" : "wrong";
@@ -5691,6 +5793,7 @@ function goToNextStudyWord() {
     ...session,
     stage: session.mode === "review" ? "spell" : "view",
     result: null,
+    spelling: createStudySpellingState(),
     busy: false,
     sessionCompleted: false,
     wordId: next.id,
@@ -5707,9 +5810,7 @@ function retryStudyWord() {
   state.studySession.stage = "spell";
   state.studySession.result = null;
   state.studySession.busy = false;
-  state.spellingPassed = false;
-  els.sessionWordInput.value = "";
-  els.sessionCollocationInput.value = "";
+  resetStudySessionSpelling(state.studySession);
   renderStudySession();
   window.setTimeout(() => els.sessionWordInput.focus(), 0);
 }
@@ -5718,8 +5819,15 @@ async function markCurrentStudyWordLearned() {
   const word = currentStudySessionWord();
   if (!word) return;
   clearStudySessionAdvanceTimer();
-  markDailyCompleted(word.id);
-  void markWordLearned(word).catch((error) => console.error("[Min Ordbok] Failed to mark word learned", error));
+  try {
+    await markWordLearned(word);
+    markDailyCompleted(word.id);
+  } catch (error) {
+    console.error("[Min Ordbok] Failed to mark word learned", error);
+    renderStudySession();
+    els.studySessionFeedback.textContent = "Kunde inte spara till Supabase. Försök igen.";
+    return;
+  }
   if (isDailySessionCompleted(state.studySession.mode)) {
     showStudySessionComplete(state.studySession.mode);
     return;
@@ -6925,6 +7033,7 @@ function bindEvents() {
     if (action === "spell") {
       state.studySession.stage = "spell";
       state.studySession.result = null;
+      resetStudySessionSpelling(state.studySession);
       renderStudySession();
       return;
     }
@@ -6937,7 +7046,11 @@ function bindEvents() {
       return;
     }
     if (action === "next") {
-      goToNextStudyWord();
+      if (state.studySession?.stage === "spell") {
+        await completeCurrentStudyWordFromSpelling();
+      } else {
+        goToNextStudyWord();
+      }
       return;
     }
     if (action === "retry") {
@@ -6953,7 +7066,7 @@ function bindEvents() {
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
-        submitStudySessionAnswer();
+        if (state.studySession?.stage === "spell") submitStudySessionAnswer();
       }
     });
   });

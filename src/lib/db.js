@@ -16,6 +16,7 @@ const TABLES = {
 
 const PAGE_SIZE = 1000;
 const DEFAULT_PROFILE_ID = "default";
+const DAILY_WORD_LIMIT = 10;
 
 function clean(value) {
   return String(value || "").trim();
@@ -116,18 +117,19 @@ function normalizeWord(row, userRow = null) {
     tags: Array.isArray(row.tags) ? row.tags : clean(firstDefined(row.tags, readNoteSection(note, "Tags"), row.level)).split(",").map(clean).filter(Boolean),
     notebook: clean(userRow?.notebook),
     book_names: bookNames,
-    favorite: Boolean(userRow?.favorite ?? row.favorite),
-    learned: Boolean(userRow?.learned ?? row.learned),
+    favorite: Boolean(userRow?.favorite ?? userRow?.is_favorite ?? row.favorite),
+    status: clean(userRow?.status ?? row.status),
+    learned: Boolean(userRow?.learned ?? userRow?.mastered ?? row.learned),
     review_count: Number(userRow?.review_count ?? row.review_count ?? 0) || 0,
     wrong_count: Number(userRow?.wrong_count ?? row.wrong_count ?? 0) || 0,
-    spelling_correct_count: Number(userRow?.spelling_correct_count ?? row.spelling_correct_count ?? 0) || 0,
-    first_studied_at: userRow?.first_studied_at ?? row.first_studied_at ?? null,
-    last_studied_at: userRow?.last_studied_at ?? row.last_studied_at ?? null,
-    last_reviewed: userRow?.last_reviewed ?? row.last_reviewed ?? null,
-    last_study_date: clean(userRow?.last_study_date ?? row.last_study_date),
+    spelling_correct_count: Number(userRow?.spelling_correct_count ?? userRow?.learned_count ?? row.spelling_correct_count ?? 0) || 0,
+    first_studied_at: dateToMillis(userRow?.first_studied_at) || dateToMillis(userRow?.last_studied_at) || row.first_studied_at || null,
+    last_studied_at: dateToMillis(userRow?.last_studied_at) || row.last_studied_at || null,
+    last_reviewed: dateToMillis(userRow?.last_reviewed ?? userRow?.last_reviewed_at) || row.last_reviewed || null,
+    last_study_date: clean(userRow?.last_study_date ?? row.last_study_date) || (userRow?.last_studied_at ? new Date(userRow.last_studied_at).toISOString().slice(0, 10) : ""),
     last_review_date: clean(userRow?.last_review_date ?? row.last_review_date),
-    mastered_at: userRow?.mastered_at ?? row.mastered_at ?? null,
-    next_review_at: Number(userRow?.next_review_at ?? row.next_review_at ?? 0) || 0,
+    mastered_at: dateToMillis(userRow?.mastered_at) || row.mastered_at || null,
+    next_review_at: dateToMillis(userRow?.next_review_at) || Number(row.next_review_at ?? 0) || 0,
     created_at: row.created_at ?? null,
     updated_at: Number(userRow?.updated_at ?? row.updated_at ?? 0) || Date.now(),
   };
@@ -171,6 +173,20 @@ function millisToIso(value) {
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function endOfDayMillis(dateKey = todayKey()) {
+  const [year, month, day] = clean(dateKey).split("-").map(Number);
+  const date = year && month && day ? new Date(year, month - 1, day) : new Date();
+  date.setHours(23, 59, 59, 999);
+  return date.getTime();
+}
+
+function startOfDayMillis(dateKey = todayKey()) {
+  const [year, month, day] = clean(dateKey).split("-").map(Number);
+  const date = year && month && day ? new Date(year, month - 1, day) : new Date();
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
 }
 
 function requireUser(user) {
@@ -412,14 +428,15 @@ async function initializeUserWords(userId, wordRows = []) {
 
 function toUserWordRow(userId, word) {
   if (!userId || !word?.id) return null;
+  const status = clean(word.status) || (word.learned ? "mastered" : word.first_studied_at || word.last_study_date ? "learning" : "new");
   return {
     id: userWordId(userId, word.id),
     user_id: userId,
     word_id: word.id,
     favorite: Boolean(word.favorite),
+    status,
     learned: Boolean(word.learned),
     notebook: clean(word.notebook),
-    book_names: normalizeBookNames(firstDefined(word.book_names, word.bookNames, word.books)),
     review_count: Number(word.review_count || 0) || 0,
     wrong_count: Number(word.wrong_count || 0) || 0,
     spelling_correct_count: Number(word.spelling_correct_count || 0) || 0,
@@ -430,6 +447,22 @@ function toUserWordRow(userId, word) {
     last_review_date: clean(word.last_review_date),
     mastered_at: word.mastered_at || null,
     next_review_at: word.next_review_at ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function toUserWordProgressRow(userId, word) {
+  if (!userId || !word?.id) return null;
+  const status = clean(word.status) || (word.learned ? "mastered" : word.first_studied_at || word.last_study_date ? "learning" : "new");
+  return {
+    user_id: userId,
+    word_id: word.id,
+    status,
+    mastered: Boolean(word.learned),
+    learned_count: Number(word.spelling_correct_count || 0) || 0,
+    review_count: Number(word.review_count || 0) || 0,
+    last_studied_at: millisToIso(word.last_studied_at) || null,
+    next_review_at: millisToIso(word.next_review_at) || null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -486,6 +519,74 @@ export async function syncRemoteWordChanges({ previousWords = [], nextWords = []
     enabled: true,
     words: contentChangedWords.length,
     userWords: user?.id ? changedWords.length : 0,
+  };
+}
+
+export async function upsertUserWordProgress(word = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id || !word?.id) return { enabled: false, word: null };
+  await ensureProfile();
+  const row = toUserWordProgressRow(user.id, word);
+  const { data: existing, error: readError } = await supabase
+    .from(TABLES.userWords)
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("word_id", word.id)
+    .maybeSingle();
+  if (readError) throw readError;
+  const query = existing?.id
+    ? supabase.from(TABLES.userWords).update(row).eq("id", existing.id)
+    : supabase.from(TABLES.userWords).insert(row);
+  const { data, error } = await query
+    .select()
+    .single();
+  if (error) throw error;
+  return { enabled: true, word: data };
+}
+
+export async function loadDailyWordProgress({ date = todayKey() } = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id) {
+    return {
+      enabled: false,
+      date,
+      todayNewWordIds: [],
+      todayNewCount: 0,
+      dueReviewWordIds: [],
+      dueReviewCount: 0,
+    };
+  }
+  const startOfTodayIso = millisToIso(startOfDayMillis(date));
+  const endOfTodayIso = millisToIso(endOfDayMillis(date));
+  const [{ data: todayNewRows, error: newCountError }, { data: dueReviewRows, error: dueReviewError }] = await Promise.all([
+    supabase
+      .from(TABLES.userWords)
+      .select("word_id")
+      .eq("user_id", user.id)
+      .eq("review_count", 0)
+      .gte("last_studied_at", startOfTodayIso)
+      .lte("last_studied_at", endOfTodayIso),
+    supabase
+      .from(TABLES.userWords)
+      .select("word_id,next_review_at,review_count,status")
+      .eq("user_id", user.id)
+      .not("next_review_at", "is", null)
+      .lte("next_review_at", endOfTodayIso)
+      .neq("status", "mastered")
+      .order("next_review_at", { ascending: true })
+      .limit(DAILY_WORD_LIMIT),
+  ]);
+  if (newCountError) throw newCountError;
+  if (dueReviewError) throw dueReviewError;
+  const todayNewWordIds = unique((todayNewRows || []).map((row) => row.word_id));
+  const dueReviewWordIds = unique((dueReviewRows || []).map((row) => row.word_id)).slice(0, DAILY_WORD_LIMIT);
+  return {
+    enabled: true,
+    date,
+    todayNewWordIds,
+    todayNewCount: todayNewWordIds.length,
+    dueReviewWordIds,
+    dueReviewCount: dueReviewWordIds.length,
   };
 }
 
