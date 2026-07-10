@@ -198,7 +198,7 @@ async function removeUnsupportedServerAssets(root) {
     const fullPath = join(root, entry.name);
     if (entry.isDirectory()) {
       await removeUnsupportedServerAssets(fullPath);
-    } else if (entry.name.endsWith(".ico")) {
+    } else if (/\.(ico|png|jpg|jpeg|gif|svg)$/i.test(entry.name)) {
       await rm(fullPath, { force: true });
     }
   }
