@@ -151,9 +151,6 @@ async function buildDist() {
   await copyPath(join(ROOT, "audio"), join(CLIENT, "audio"));
   await copyPath(join(ROOT, "icons"), join(DIST, "icons"));
   await copyPath(join(ROOT, "icons"), join(CLIENT, "icons"));
-  await copyPath(join(ROOT, ".openai"), join(DIST, ".openai"));
-  await writeSitesServerEntry();
-  await removeUnsupportedServerAssets(join(DIST, "server"));
   await removeLegacyPwaIcons();
 }
 
@@ -196,40 +193,6 @@ async function removeLegacyIconsFromDir(iconsDir, entries) {
     const looksLikeIcon = /^(app-icon|apple-touch-icon|favicon|maskable|pwa|icon)(?:[-.].*)?\.(png|ico|svg)$/i.test(entry.name);
     if (entry.isFile() && looksLikeIcon && !allowed.has(entry.name)) {
       await rm(join(iconsDir, entry.name), { force: true });
-    }
-  }
-}
-
-async function writeSitesServerEntry() {
-  const productionServer = `export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) {
-      return Response.json({ error: "Server API is not available in this deployment yet." }, { status: 501 });
-    }
-    if (env?.ASSETS?.fetch) {
-      const assetUrl = new URL(request.url);
-      if (assetUrl.pathname === "/" || !assetUrl.pathname.split("/").pop().includes(".")) {
-        assetUrl.pathname = "/index.html";
-      }
-      return env.ASSETS.fetch(new Request(assetUrl, request));
-    }
-    return new Response("Not found", { status: 404 });
-  },
-};
-`;
-  await mkdir(join(DIST, "server"), { recursive: true });
-  await writeFile(join(DIST, "server/index.js"), productionServer);
-}
-
-async function removeUnsupportedServerAssets(root) {
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  for (const entry of entries) {
-    const fullPath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      await removeUnsupportedServerAssets(fullPath);
-    } else if (/\.(ico|png|jpg|jpeg|gif|svg)$/i.test(entry.name)) {
-      await rm(fullPath, { force: true });
     }
   }
 }
