@@ -142,7 +142,6 @@ async function buildDist() {
   await copyPath(join(ROOT, "audio"), join(DIST, "audio"));
   await copyPath(join(ROOT, "icons"), join(DIST, "icons"));
   await copyPath(join(ROOT, ".openai"), join(DIST, ".openai"));
-  await copyPath(join(ROOT, "node_modules/@supabase"), join(DIST, "server/@supabase"));
   await writeSitesServerEntry();
   await removeUnsupportedServerAssets(join(DIST, "server"));
   await removeLegacyPwaIcons();
@@ -187,9 +186,127 @@ async function removeLegacyPwaIcons() {
 
 async function writeSitesServerEntry() {
   const source = await readFile(join(ROOT, "server.mjs"), "utf8");
-  const productionServer = source.replace(/^import ['"]dotenv\/config['"];?\n/, "");
+  const productionServer = source
+    .replace(/^import ['"]dotenv\/config['"];?\n/, "")
+    .replace('import { createClient } from "@supabase/supabase-js";\n', supabaseRestClientShim());
   await mkdir(join(DIST, "server"), { recursive: true });
   await writeFile(join(DIST, "server/index.js"), productionServer);
+}
+
+function supabaseRestClientShim() {
+  return `function createClient(url, key, options = {}) {
+  const authHeader = options?.global?.headers?.Authorization || \`Bearer \${key}\`;
+  const baseHeaders = {
+    apikey: key,
+    Authorization: authHeader,
+  };
+  const requestJson = async (path, init = {}) => {
+    const response = await fetch(\`\${url}\${path}\`, {
+      ...init,
+      headers: {
+        ...baseHeaders,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...(init.headers || {}),
+      },
+    });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!response.ok) return { data: null, error: data || { message: response.statusText } };
+    return { data, error: null };
+  };
+  const executeBuilder = async (builder) => {
+    const params = new URLSearchParams();
+    if (builder.selectColumns) params.set("select", builder.selectColumns);
+    builder.filters.forEach(([column, value]) => params.append(column, \`eq.\${value}\`));
+    if (builder.orderBy) params.set("order", \`\${builder.orderBy.column}.\${builder.orderBy.ascending ? "asc" : "desc"}\`);
+    const headers = {};
+    if (builder.rangeBounds) {
+      headers["range-unit"] = "items";
+      headers.range = \`\${builder.rangeBounds.from}-\${builder.rangeBounds.to}\`;
+    }
+    if (builder.method !== "GET") headers.prefer = builder.returnSingle || builder.selectColumns ? "return=representation" : "return=minimal";
+    if (builder.returnSingle) headers.accept = "application/vnd.pgrst.object+json";
+    const query = params.toString();
+    const result = await requestJson(\`/rest/v1/\${builder.table}\${query ? \`?\${query}\` : ""}\`, {
+      method: builder.method,
+      headers,
+      body: builder.body ? JSON.stringify(builder.body) : undefined,
+    });
+    if (builder.returnSingle && Array.isArray(result.data)) result.data = result.data[0] || null;
+    return result;
+  };
+  const from = (table) => {
+    const builder = {
+      table,
+      method: "GET",
+      body: null,
+      filters: [],
+      selectColumns: "*",
+      orderBy: null,
+      rangeBounds: null,
+      returnSingle: false,
+      select(columns = "*") {
+        this.selectColumns = columns;
+        return this;
+      },
+      update(payload) {
+        this.method = "PATCH";
+        this.body = payload;
+        return this;
+      },
+      eq(column, value) {
+        this.filters.push([column, value]);
+        return this;
+      },
+      order(column, options = {}) {
+        this.orderBy = { column, ascending: options.ascending !== false };
+        return this;
+      },
+      range(from, to) {
+        this.rangeBounds = { from, to };
+        return this;
+      },
+      single() {
+        this.returnSingle = true;
+        return this;
+      },
+      then(resolve, reject) {
+        return executeBuilder(this).then(resolve, reject);
+      },
+    };
+    return builder;
+  };
+  return {
+    auth: {
+      getUser: (token) => requestJson("/auth/v1/user", {
+        headers: { Authorization: \`Bearer \${token}\` },
+      }),
+    },
+    from,
+    storage: {
+      from(bucket) {
+        return {
+          async upload(path, body, options = {}) {
+            const response = await fetch(\`\${url}/storage/v1/object/\${bucket}/\${path}\`, {
+              method: "POST",
+              headers: {
+                ...baseHeaders,
+                "content-type": options.contentType || "application/octet-stream",
+                "x-upsert": options.upsert ? "true" : "false",
+              },
+              body,
+            });
+            const text = await response.text();
+            const data = text ? JSON.parse(text) : null;
+            if (!response.ok) return { data: null, error: data || { message: response.statusText } };
+            return { data, error: null };
+          },
+        };
+      },
+    },
+  };
+}
+`;
 }
 
 async function removeUnsupportedServerAssets(root) {
