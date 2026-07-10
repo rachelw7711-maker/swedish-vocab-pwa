@@ -142,6 +142,7 @@ async function buildDist() {
   await copyPath(join(ROOT, "audio"), join(DIST, "audio"));
   await copyPath(join(ROOT, "icons"), join(DIST, "icons"));
   await copyPath(join(ROOT, ".openai"), join(DIST, ".openai"));
+  await copyPath(join(ROOT, "node_modules/@supabase"), join(DIST, "server/@supabase"));
   await writeSitesServerEntry();
   await removeLegacyPwaIcons();
 }
