@@ -142,7 +142,7 @@ async function buildDist() {
   await copyPath(join(ROOT, "audio"), join(DIST, "audio"));
   await copyPath(join(ROOT, "icons"), join(DIST, "icons"));
   await copyPath(join(ROOT, ".openai"), join(DIST, ".openai"));
-  await copyPath(join(ROOT, "server.mjs"), join(DIST, "server/index.js"));
+  await writeSitesServerEntry();
   await removeLegacyPwaIcons();
 }
 
@@ -181,6 +181,13 @@ async function removeLegacyPwaIcons() {
       await rm(join(iconsDir, entry.name), { force: true });
     }
   }
+}
+
+async function writeSitesServerEntry() {
+  const source = await readFile(join(ROOT, "server.mjs"), "utf8");
+  const productionServer = source.replace(/^import ['"]dotenv\/config['"];?\n/, "");
+  await mkdir(join(DIST, "server"), { recursive: true });
+  await writeFile(join(DIST, "server/index.js"), productionServer);
 }
 
 async function copyPath(source, target) {
