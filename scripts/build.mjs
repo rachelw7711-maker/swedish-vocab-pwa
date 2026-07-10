@@ -144,6 +144,7 @@ async function buildDist() {
   await copyPath(join(ROOT, ".openai"), join(DIST, ".openai"));
   await copyPath(join(ROOT, "node_modules/@supabase"), join(DIST, "server/@supabase"));
   await writeSitesServerEntry();
+  await removeUnsupportedServerAssets(join(DIST, "server"));
   await removeLegacyPwaIcons();
 }
 
@@ -189,6 +190,18 @@ async function writeSitesServerEntry() {
   const productionServer = source.replace(/^import ['"]dotenv\/config['"];?\n/, "");
   await mkdir(join(DIST, "server"), { recursive: true });
   await writeFile(join(DIST, "server/index.js"), productionServer);
+}
+
+async function removeUnsupportedServerAssets(root) {
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    const fullPath = join(root, entry.name);
+    if (entry.isDirectory()) {
+      await removeUnsupportedServerAssets(fullPath);
+    } else if (entry.name.endsWith(".ico")) {
+      await rm(fullPath, { force: true });
+    }
+  }
 }
 
 async function copyPath(source, target) {
