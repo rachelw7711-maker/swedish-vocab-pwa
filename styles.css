@@ -443,40 +443,8 @@ main {
 
 #libraryView.active {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 12px;
-  overflow: hidden;
-}
-
-#libraryView > .search-panel,
-#libraryView > .toolbar,
-#libraryView > .dictionary-panel {
-  flex: 0 0 auto;
-}
-
-#libraryView > .toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-}
-
-#libraryView .practice-actions {
-  justify-content: flex-end;
-}
-
-#closeLibraryBtn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 5;
-}
-
-#libraryView .word-list {
-  flex: 1 1 auto;
-  min-height: 0;
+  gap: 18px;
   overflow: auto;
   padding-bottom: calc(154px + env(safe-area-inset-bottom));
 }
@@ -497,6 +465,97 @@ main {
   overflow: auto;
   padding-bottom: calc(154px + env(safe-area-inset-bottom));
   scroll-padding-bottom: calc(176px + env(safe-area-inset-bottom));
+}
+
+#libraryView {
+  padding-top: 8px;
+}
+
+.library-hero {
+  display: grid;
+  gap: 8px;
+  padding: 8px 4px 2px;
+}
+
+.library-hero-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.library-hero-copy h2 {
+  margin: 0;
+  font-size: 1.18rem;
+}
+
+.library-hero-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.library-shelf {
+  display: grid;
+  gap: 14px;
+}
+
+.library-book-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 96px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 36px rgba(31, 42, 48, 0.12);
+  text-align: left;
+}
+
+.library-book-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 40px rgba(31, 42, 48, 0.15);
+}
+
+.library-book-spine {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 247, 249, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  font-size: 1.8rem;
+}
+
+.library-book-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.library-book-copy strong {
+  color: var(--ink);
+  font-size: 1.02rem;
+  font-weight: 760;
+}
+
+.library-book-copy span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.library-book-action {
+  color: var(--accent-strong);
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.shelf-return-panel {
+  display: flex;
+  justify-content: flex-start;
+  padding: 12px 14px;
 }
 
 #profileView.active {
@@ -3577,6 +3636,27 @@ dialog::backdrop {
     width: 100%;
   }
 
+  .library-book-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "spine copy"
+      "action action";
+    align-items: start;
+  }
+
+  .library-book-spine {
+    grid-area: spine;
+  }
+
+  .library-book-copy {
+    grid-area: copy;
+  }
+
+  .library-book-action {
+    grid-area: action;
+    justify-self: end;
+  }
+
   .export-controls,
   .book-grid {
     grid-template-columns: 1fr;
@@ -3877,6 +3957,40 @@ dialog::backdrop {
 
   .shadowing-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 560px) {
+  .library-hero {
+    padding-inline: 2px;
+  }
+
+  .library-shelf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .library-book-card {
+    min-height: 138px;
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "spine copy"
+      "spine action";
+  }
+
+  .library-book-spine {
+    grid-area: spine;
+  }
+
+  .library-book-copy {
+    grid-area: copy;
+    padding-top: 2px;
+  }
+
+  .library-book-action {
+    grid-area: action;
+    align-self: end;
   }
 }
 

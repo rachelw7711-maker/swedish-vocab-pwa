@@ -7185,6 +7185,37 @@ function bindEvents() {
       activateView(tab.dataset.view);
     });
   });
+  document.querySelectorAll("[data-open-book]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const viewId = button.dataset.openBook;
+      if (viewId === "notebookView") {
+        state.selectedNotebook = "";
+        resetListLimit("notebook");
+      }
+      activateView(viewId);
+    });
+  });
+  document.querySelectorAll("[data-return-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const viewId = button.dataset.returnView;
+      if (viewId === "libraryView") {
+        closeTransientOverlays();
+        closeShadowingPlayback();
+        state.activeView = "libraryView";
+        document.body.dataset.activeView = "libraryView";
+        document.querySelectorAll(".tab").forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.view === "libraryView");
+        });
+        document.querySelectorAll(".view").forEach((view) => {
+          view.classList.toggle("active", view.id === "libraryView");
+        });
+        window.scrollTo(0, 0);
+        renderActiveView();
+        return;
+      }
+      activateView(viewId);
+    });
+  });
 
   els.searchInput.addEventListener("input", runSearch);
   els.searchInput.addEventListener("search", runSearch);
