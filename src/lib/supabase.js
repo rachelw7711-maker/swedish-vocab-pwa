@@ -90,6 +90,46 @@ export async function getCurrentUser({ refresh = false } = {}) {
   return currentUser;
 }
 
+export async function syncAuthState() {
+  await initializeAuth();
+  if (!supabase?.auth) {
+    setCurrentSession(null);
+    return {
+      session: null,
+      user: null,
+      accessToken: "",
+    };
+  }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  setCurrentSession(data?.session || null);
+  if (!currentSession) {
+    return {
+      session: null,
+      user: null,
+      accessToken: "",
+    };
+  }
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData?.user?.id) {
+    currentUser = null;
+    return {
+      session: currentSession,
+      user: null,
+      accessToken: currentSession?.access_token || "",
+    };
+  }
+
+  currentUser = userData.user;
+  return {
+    session: currentSession,
+    user: currentUser,
+    accessToken: currentSession.access_token || "",
+  };
+}
+
 export async function getAccessToken(options = {}) {
   const { timeoutMs = AUTH_READY_TIMEOUT_MS } = options;
   await initializeAuth();

@@ -209,11 +209,8 @@ main {
 }
 
 .topbar {
+  flex-wrap: wrap;
   padding: 9px 0 19px;
-}
-
-body[data-active-view="homeView"] .topbar {
-  display: none;
 }
 
 .brand-lockup {
@@ -222,6 +219,7 @@ body[data-active-view="homeView"] .topbar {
   gap: 10px;
   line-height: 1;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .brand-system {
@@ -244,6 +242,55 @@ body[data-active-view="homeView"] .topbar {
   min-width: 0;
   padding-top: 0;
   line-height: 1;
+}
+
+.auth-panel {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  flex: 0 1 auto;
+  text-align: right;
+}
+
+.auth-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.auth-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.auth-copy strong,
+.auth-copy span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-copy strong {
+  color: var(--ink);
+  font-size: 0.94rem;
+  font-weight: 740;
+}
+
+.auth-copy span:last-child {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 640;
+  max-width: 220px;
+}
+
+.auth-button {
+  flex: 0 0 auto;
 }
 
 .tabbar {
@@ -2792,6 +2839,38 @@ dialog:not([open]) {
   font-size: 1rem;
 }
 
+.auth-dialog {
+  width: min(calc(100% - 24px), 420px);
+}
+
+.auth-dialog-form {
+  display: grid;
+  gap: 16px;
+  padding: 0;
+}
+
+.auth-dialog-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.auth-dialog menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 16px;
+}
+
+.auth-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  min-height: 1.3em;
+}
+
 .discard-word-dialog menu {
   display: grid;
   gap: 8px;
@@ -3328,6 +3407,17 @@ dialog::backdrop {
     width: 34px;
     height: 34px;
     border-radius: 11px;
+  }
+
+  .auth-panel {
+    width: 100%;
+    align-items: flex-start;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .auth-copy span:last-child {
+    max-width: none;
   }
 
   h1 {

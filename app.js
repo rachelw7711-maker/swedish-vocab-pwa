@@ -1,6 +1,6 @@
 import * as remoteDb from "./src/lib/db.js?v=119";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
-import { supabase } from "./src/lib/supabase.js";
+import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
 import { documentWordPacks } from "./document-vocab-data.js";
 
@@ -255,6 +255,12 @@ const state = {
   selectedShadowingId: "",
   shadowingPlaybackState: "paused",
   shadowingSeeking: false,
+  auth: {
+    user: null,
+    loading: true,
+    busy: false,
+    message: "",
+  },
   stopBatchEnrich: false,
   favoriteCategory: "all",
   exportPos: "all",
@@ -344,6 +350,15 @@ const els = {
   printLibraryBtn: document.querySelector("#printLibraryBtn"),
   homeGreeting: document.querySelector("#homeGreeting"),
   homeHeroImage: document.querySelector(".mot-sverige-cutout"),
+  authStatusText: document.querySelector("#authStatusText"),
+  authEmailText: document.querySelector("#authEmailText"),
+  authButton: document.querySelector("#authButton"),
+  authDialog: document.querySelector("#authDialog"),
+  authForm: document.querySelector("#authForm"),
+  authEmailInput: document.querySelector("#authEmailInput"),
+  authMessage: document.querySelector("#authMessage"),
+  closeAuthDialogBtn: document.querySelector("#closeAuthDialogBtn"),
+  submitAuthBtn: document.querySelector("#submitAuthBtn"),
   notebookPinnedBookList: document.querySelector("#notebookPinnedBookList"),
   notebookBookList: document.querySelector("#notebookBookList"),
   notebookExportPanel: document.querySelector("#notebookExportPanel"),
@@ -2240,6 +2255,7 @@ function increaseListLimit(key) {
 }
 
 function renderAll() {
+  renderAuthState();
   renderStats();
   renderNotebookOptions();
   renderExportNotebookOptions();
@@ -2308,6 +2324,114 @@ function renderStudyStats() {
 function setupHomeGreeting() {
   if (!els.homeGreeting) return;
   els.homeGreeting.innerHTML = "<span>Hej!</span><span>Bra jobbat idag.</span>";
+}
+
+function getAuthDisplayEmail(user) {
+  return clean(user?.email || user?.phone || "") || "Inte inloggad";
+}
+
+function setAuthMessage(message = "") {
+  state.auth.message = clean(message);
+  if (els.authMessage) els.authMessage.textContent = state.auth.message;
+}
+
+function renderAuthState() {
+  const user = state.auth.user;
+  const isSignedIn = Boolean(user?.id);
+  if (els.authStatusText) {
+    els.authStatusText.textContent = state.auth.loading ? "Kontrollerar konto" : isSignedIn ? "Inloggad" : "Inte inloggad";
+  }
+  if (els.authEmailText) {
+    els.authEmailText.textContent = state.auth.loading
+      ? "Verifierar session..."
+      : isSignedIn
+        ? getAuthDisplayEmail(user)
+        : "Logga in för att synka mellan enheter";
+  }
+  if (els.authButton) {
+    els.authButton.textContent = state.auth.loading ? "Läser..." : isSignedIn ? "Logga ut" : "Logga in";
+    els.authButton.disabled = state.auth.loading || state.auth.busy;
+  }
+  if (els.submitAuthBtn) {
+    els.submitAuthBtn.disabled = state.auth.loading || state.auth.busy;
+    els.submitAuthBtn.textContent = state.auth.busy ? "Skickar..." : "Skicka länk";
+  }
+}
+
+async function refreshAuthState({ reloadData = false } = {}) {
+  const authState = await syncAuthState().catch((error) => {
+    console.warn("[Min Ordbok] Failed to read auth state.", error);
+    return { user: null };
+  });
+  state.auth.user = authState?.user || (await getCurrentUser().catch(() => null));
+  state.auth.loading = false;
+  renderAuthState();
+  if (reloadData) {
+    await loadData();
+  }
+}
+
+function openAuthDialog() {
+  if (!els.authDialog) return;
+  setAuthMessage("");
+  if (els.authEmailInput) {
+    els.authEmailInput.value = clean(state.auth.user?.email || "");
+    window.setTimeout(() => els.authEmailInput.focus(), 0);
+  }
+  if (!els.authDialog.open) els.authDialog.showModal();
+}
+
+function closeAuthDialog() {
+  if (!els.authDialog?.open) return;
+  els.authDialog.close();
+}
+
+async function submitAuthForm(event) {
+  event.preventDefault();
+  const email = clean(els.authEmailInput?.value || "");
+  if (!email) {
+    setAuthMessage("Ange din e-postadress.");
+    return;
+  }
+  state.auth.busy = true;
+  setAuthMessage("");
+  renderAuthState();
+  const redirectTo = `${window.location.origin}${window.location.pathname}`;
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: redirectTo,
+    },
+  });
+  state.auth.busy = false;
+  renderAuthState();
+  if (error) {
+    setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
+    return;
+  }
+  setAuthMessage("Vi har skickat en inloggningslänk till din e-post.");
+  if (els.authEmailInput) els.authEmailInput.value = email;
+}
+
+async function handleAuthButtonClick() {
+  if (state.auth.loading || state.auth.busy) return;
+  if (state.auth.user?.id) {
+    state.auth.busy = true;
+    renderAuthState();
+    const { error } = await supabase.auth.signOut();
+    state.auth.busy = false;
+    renderAuthState();
+    if (error) {
+      setAuthMessage(error.message || "Kunde inte logga ut.");
+      return;
+    }
+    state.auth.user = null;
+    setAuthMessage("");
+    await syncAuthState().catch(() => {});
+    await loadData();
+    return;
+  }
+  openAuthDialog();
 }
 
 function renderNotebookOptions() {
@@ -7693,6 +7817,23 @@ function bindEvents() {
     if (event.target.closest("#detailMoreMenu") || event.target.closest("#detailMoreBtn")) return;
     closeDetailMoreMenu();
   });
+  els.authButton?.addEventListener("click", () => {
+    handleAuthButtonClick().catch((error) => {
+      console.error("[Min Ordbok] Auth action failed", error);
+      setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
+    });
+  });
+  els.authForm?.addEventListener("submit", (event) => {
+    submitAuthForm(event).catch((error) => {
+      console.error("[Min Ordbok] Auth submit failed", error);
+      setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
+    });
+  });
+  els.closeAuthDialogBtn?.addEventListener("click", closeAuthDialog);
+  els.authDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeAuthDialog();
+  });
 }
 
 function setupInstallPrompt() {
@@ -7841,6 +7982,7 @@ async function bootstrapApp() {
   setupHomeGreeting();
   setupInstallPrompt();
   setupCrossOriginTransfer();
+  await refreshAuthState();
   if ("scrollRestoration" in history) {
     history.scrollRestoration = "manual";
   }

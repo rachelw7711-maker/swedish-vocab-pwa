@@ -40,6 +40,14 @@
             </div>
           </div>
         </div>
+        <div class="auth-panel" aria-label="Konto">
+          <div class="auth-copy">
+            <span class="auth-label">Konto</span>
+            <strong id="authStatusText">Inte inloggad</strong>
+            <span id="authEmailText">Logga in för att synka mellan enheter</span>
+          </div>
+          <button class="secondary-button auth-button" id="authButton" type="button">Logga in</button>
+        </div>
       </header>
       <main>
         <section id="homeView" class="view active home-page">
@@ -450,6 +458,35 @@
           </section>
         </section>
       </main>
+
+      <dialog id="authDialog" class="auth-dialog">
+        <form id="authForm" class="auth-dialog-form">
+          <header class="detail-dialog-header">
+            <div>
+              <p class="section-kicker">Konto</p>
+              <h2>Logga in</h2>
+            </div>
+            <button class="icon-button" id="closeAuthDialogBtn" type="button" title="Stäng">×</button>
+          </header>
+          <section class="auth-dialog-body">
+            <label class="field-label">
+              E-post
+              <input
+                id="authEmailInput"
+                type="email"
+                autocomplete="email"
+                inputmode="email"
+                placeholder="namn@exempel.se"
+                required
+              />
+            </label>
+            <p id="authMessage" class="auth-message" aria-live="polite"></p>
+          </section>
+          <menu>
+            <button class="primary-button" id="submitAuthBtn" type="submit">Skicka länk</button>
+          </menu>
+        </form>
+      </dialog>
 
       <dialog id="wordDialog">
         <form method="dialog" id="wordForm" class="word-form">
