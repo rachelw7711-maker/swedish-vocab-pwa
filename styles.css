@@ -19,8 +19,8 @@
   --shadow: 0 22px 58px rgba(31, 42, 48, 0.08);
   --soft-shadow: 0 10px 26px rgba(31, 42, 48, 0.055);
   --blur: blur(22px) saturate(180%);
-  --topbar-height: calc(96px + env(safe-area-inset-top));
-  --tabbar-height: calc(112px + env(safe-area-inset-bottom));
+  --topbar-height: calc(82px + env(safe-area-inset-top));
+  --tabbar-height: calc(76px + env(safe-area-inset-bottom));
   --chinese-font: "圆体-简", "Yuanti SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -186,11 +186,11 @@ select:focus-visible {
 }
 
 .app-shell {
-  width: min(100%, 560px);
+  width: 100%;
   height: 100dvh;
   height: 100svh;
   margin: 0 auto;
-  padding: 0 12px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -200,14 +200,14 @@ main {
   position: fixed;
   top: var(--topbar-height);
   bottom: var(--tabbar-height);
-  left: 50%;
+  left: 0;
+  right: 0;
   z-index: 1;
-  width: min(100%, 560px);
+  width: 100%;
   min-height: 0;
-  padding: 0 12px;
+  padding: 0 12px calc(18px + env(safe-area-inset-bottom));
   overflow-y: auto;
   overflow-x: hidden;
-  transform: translateX(-50%);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
@@ -225,24 +225,24 @@ main {
 .topbar {
   position: fixed;
   top: 0;
-  left: 50%;
+  left: 0;
+  right: 0;
   z-index: 50;
-  width: min(100%, 560px);
+  width: 100%;
   min-height: var(--topbar-height);
   flex-wrap: nowrap;
-  padding: calc(42px + env(safe-area-inset-top)) 14px 16px;
-  border-bottom: 1px solid rgba(31, 42, 48, 0.08);
-  background: rgba(251, 251, 253, 0.96);
-  box-shadow: 0 5px 16px rgba(31, 42, 48, 0.035);
-  transform: translateX(-50%);
+  padding: calc(12px + env(safe-area-inset-top)) 12px 14px;
+  border-bottom: 1px solid rgba(31, 42, 48, 0.06);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 2px 8px rgba(31, 42, 48, 0.02);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
 }
 
 .topbar-auth-button {
   display: inline-grid;
-  min-width: 84px;
-  height: 42px;
+  min-width: 82px;
+  height: 40px;
   place-items: center;
   border: 1px solid rgba(55, 65, 72, 0.1);
   border-radius: 999px;
@@ -299,38 +299,37 @@ main {
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   position: fixed;
-  left: 50%;
-  right: auto;
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 40;
-  width: min(100%, 560px);
+  width: 100%;
   min-height: var(--tabbar-height);
-  align-content: start;
-  padding: 12px 18px calc(22px + env(safe-area-inset-bottom));
-  border: 1px solid rgba(34, 40, 40, 0.08);
+  align-content: center;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  border: 1px solid rgba(34, 40, 40, 0.06);
   border-bottom: 0;
-  border-radius: 28px 28px 0 0;
-  background: rgba(251, 251, 253, 0.96);
-  box-shadow: 0 -8px 24px rgba(31, 42, 48, 0.08);
-  transform: translateX(-50%);
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border-radius: 24px 24px 0 0;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 -3px 10px rgba(31, 42, 48, 0.04);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
 }
 
 .tab {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  min-height: 48px;
-  padding: 7px 6px 9px;
+  min-height: 56px;
+  padding: 5px 6px 4px;
   border: 0;
   border-radius: 16px;
   background: transparent;
   color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.92rem;
+  font-weight: 720;
   cursor: pointer;
   touch-action: manipulation;
   transition:
@@ -350,21 +349,21 @@ main {
 
 .tab-icon {
   display: inline-grid;
-  flex: 0 0 22px;
+  flex: 0 0 24px;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  max-width: 22px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  max-width: 24px;
   overflow: hidden;
 }
 
 .tab-icon svg {
   display: block;
-  width: 19px !important;
-  height: 19px !important;
-  max-width: 19px;
-  max-height: 19px;
+  width: 22px !important;
+  height: 22px !important;
+  max-width: 22px;
+  max-height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -374,24 +373,30 @@ main {
 
 .tab-label {
   position: relative;
-  padding-bottom: 3px;
+  padding-bottom: 6px;
   line-height: 1;
 }
 
 .tab.active {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.5);
+  background: transparent;
 }
 
 .tab.active .tab-label::after {
   content: "";
   position: absolute;
-  left: 14%;
-  right: 14%;
+  left: 50%;
+  width: 30px;
   bottom: -3px;
   height: 3px;
   border-radius: 999px;
-  background: #ff9f2d;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+
+.tab.active .tab-icon,
+.tab.active .tab-label {
+  color: var(--accent-strong);
 }
 
 .home-hero {
@@ -3973,7 +3978,7 @@ dialog::backdrop {
 
   .topbar {
     align-items: center;
-    padding: calc(42px + env(safe-area-inset-top)) 14px 16px;
+    padding: calc(12px + env(safe-area-inset-top)) 12px 14px;
   }
 
   .brand-lockup {
@@ -4013,12 +4018,12 @@ dialog::backdrop {
   }
 
   .tabbar {
-    width: min(100%, 560px);
-    padding-inline: 18px;
+    width: 100%;
+    padding-inline: 12px;
   }
 
   .tab {
-    min-height: 54px;
+    min-height: 56px;
   }
 
   .profile-auth-button {
