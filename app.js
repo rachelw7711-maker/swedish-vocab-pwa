@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=121";
+import * as remoteDb from "./src/lib/db.js?v=122";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -38,7 +38,7 @@ const MAX_SPELLING_ATTEMPTS = 3;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
-const APP_BOOT_VERSION = "stable-start-20260710-7";
+const APP_BOOT_VERSION = "stable-start-20260710-8";
 const SHADOWING_STANDARD_AUDIO_BUCKET = "shadowing-standard-audio";
 const SHADOWING_RECORDINGS_BUCKET = "shadowing-recordings";
 const DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -368,7 +368,9 @@ const els = {
   profileStudyHint: document.querySelector("#profileStudyHint"),
   profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
   profileSettingsHint: document.querySelector("#profileSettingsHint"),
+  profileStartCard: document.querySelector("#profileStartCard"),
   profileLoginButton: document.querySelector("#profileLoginButton"),
+  profileSignupButton: document.querySelector("#profileSignupButton"),
   profileLogoutButton: document.querySelector("#profileLogoutButton"),
   notebookPinnedBookList: document.querySelector("#notebookPinnedBookList"),
   notebookBookList: document.querySelector("#notebookBookList"),
@@ -7947,6 +7949,12 @@ function bindEvents() {
       setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
     });
   });
+  els.profileSignupButton?.addEventListener("click", () => {
+    openAuthDialog();
+  });
+  els.profileStartCard?.addEventListener("click", () => {
+    openAuthDialog();
+  });
   els.profileLogoutButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {
       console.error("[Min Ordbok] Auth action failed", error);
@@ -8088,7 +8096,7 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=51", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }

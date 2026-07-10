@@ -19,7 +19,7 @@
     <link rel="shortcut icon" href="/icons/favicon.ico?v=22" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=22" />
     <title>SpråkLab</title>
-    <link rel="stylesheet" href="/styles.css?v=104" />
+    <link rel="stylesheet" href="/styles.css?v=105" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -216,22 +216,37 @@
 
         <section id="profileView" class="view">
           <section class="profile-shell" aria-label="Profil">
-            <section class="panel profile-hero-card">
-              <div class="profile-brand">
-                <img src="/icons/app-icon.png?v=22" alt="" aria-hidden="true" class="brand-icon" />
-                <div>
-                  <p class="section-kicker">SpråkLab</p>
-                  <h2>Profil</h2>
-                  <p>Hantera konto, molnsynk och inställningar.</p>
-                </div>
-              </div>
-            </section>
+            <header class="profile-page-header">
+              <h2>Profil</h2>
+            </header>
 
-            <section id="profileSignedOutCard" class="panel profile-auth-panel">
-              <p class="section-kicker">Konto</p>
-              <h2>Logga in eller skapa konto</h2>
-              <p>Logga in med din e-post för att aktivera synk mellan enheter.</p>
-              <button class="primary-button profile-auth-button" id="profileLoginButton" type="button">Logga in</button>
+            <section id="profileSignedOutCard" class="profile-signed-out-panel">
+              <button class="profile-start-card" type="button" id="profileStartCard">
+                <span class="profile-start-icon" aria-hidden="true">🎓</span>
+                <span>Ny i SpråkLab? Kom igång.</span>
+              </button>
+              <div class="profile-auth-actions">
+                <button class="profile-outline-button" id="profileLoginButton" type="button">Logga in</button>
+                <button class="profile-primary-button" id="profileSignupButton" type="button">Skapa konto</button>
+              </div>
+              <nav class="profile-menu profile-menu--settings" aria-label="Profilinställningar">
+                <button class="profile-menu-row" type="button">
+                  <span>Språk</span>
+                </button>
+                <button class="profile-menu-row" type="button">
+                  <span>Studieområde: svenska</span>
+                </button>
+                <button class="profile-menu-row" type="button">
+                  <span>Hjälpcenter</span>
+                </button>
+                <button class="profile-menu-row" type="button">
+                  <span>Mer info</span>
+                </button>
+              </nav>
+              <button class="profile-share-row" type="button">
+                <span>Dela med vänner</span>
+              </button>
+              <p class="profile-version">v2.20.0</p>
             </section>
 
             <section id="profileSignedInGrid" class="profile-account-panel" hidden>
@@ -777,6 +792,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=121" type="module"></script>
+    <script src="/app.js?v=122" type="module"></script>
   </body>
 </html>
