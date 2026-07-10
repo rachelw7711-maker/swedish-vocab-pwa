@@ -19,7 +19,7 @@
     <link rel="shortcut icon" href="/icons/favicon.ico?v=22" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=22" />
     <title>SpråkLab</title>
-    <link rel="stylesheet" href="/styles.css?v=105" />
+    <link rel="stylesheet" href="/styles.css?v=106" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -40,6 +40,7 @@
             </div>
           </div>
         </div>
+        <button class="topbar-auth-button" id="topbarAuthButton" type="button">Logga in</button>
       </header>
       <main>
         <section id="homeView" class="view active home-page">
@@ -226,8 +227,8 @@
                 <span>Ny i SpråkLab? Kom igång.</span>
               </button>
               <div class="profile-auth-actions">
-                <button class="profile-outline-button" id="profileLoginButton" type="button">Logga in</button>
-                <button class="profile-primary-button" id="profileSignupButton" type="button">Skapa konto</button>
+                <button class="profile-outline-button" id="profileLoginButton" type="button" data-auth-mode="login">Logga in</button>
+                <button class="profile-primary-button" id="profileSignupButton" type="button" data-auth-mode="signup">Skapa konto</button>
               </div>
               <nav class="profile-menu profile-menu--settings" aria-label="Profilinställningar">
                 <button class="profile-menu-row" type="button">
@@ -520,14 +521,30 @@
 
       <dialog id="authDialog" class="auth-dialog">
         <form id="authForm" class="auth-dialog-form">
-          <header class="detail-dialog-header">
-            <div>
-              <p class="section-kicker">Konto</p>
-              <h2>Logga in</h2>
-            </div>
+          <header class="auth-sheet-header">
+            <span class="auth-sheet-handle" aria-hidden="true"></span>
             <button class="icon-button" id="closeAuthDialogBtn" type="button" title="Stäng">×</button>
           </header>
+          <div class="auth-tabs" role="tablist" aria-label="Konto">
+            <button class="auth-tab active" id="authLoginTab" type="button" role="tab" aria-selected="true" data-auth-mode="login">Logga in</button>
+            <button class="auth-tab" id="authSignupTab" type="button" role="tab" aria-selected="false" data-auth-mode="signup">Skapa konto</button>
+          </div>
           <section class="auth-dialog-body">
+            <div class="auth-social-row" aria-label="Snabbval">
+              <button type="button" aria-label="Apple" disabled></button>
+              <button type="button" aria-label="Google" disabled>G</button>
+              <button type="button" aria-label="Facebook" disabled>f</button>
+            </div>
+            <div class="auth-signup-fields" id="authSignupFields" hidden>
+              <label class="field-label">
+                Förnamn
+                <input id="authFirstNameInput" autocomplete="given-name" placeholder="Förnamn" />
+              </label>
+              <label class="field-label">
+                Efternamn <span class="optional-label">(valfritt)</span>
+                <input id="authLastNameInput" autocomplete="family-name" placeholder="Efternamn" />
+              </label>
+            </div>
             <label class="field-label">
               E-post
               <input
@@ -539,10 +556,11 @@
                 required
               />
             </label>
+            <p class="auth-helper" id="authHelperText">Vi skickar en säker inloggningslänk till din e-post.</p>
             <p id="authMessage" class="auth-message" aria-live="polite"></p>
           </section>
           <menu>
-            <button class="primary-button" id="submitAuthBtn" type="submit">Skicka länk</button>
+            <button class="primary-button auth-submit-button" id="submitAuthBtn" type="submit">Skicka länk</button>
           </menu>
         </form>
       </dialog>
@@ -792,6 +810,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=122" type="module"></script>
+    <script src="/app.js?v=123" type="module"></script>
   </body>
 </html>

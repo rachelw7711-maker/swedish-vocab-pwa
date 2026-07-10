@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=122";
+import * as remoteDb from "./src/lib/db.js?v=123";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -38,7 +38,7 @@ const MAX_SPELLING_ATTEMPTS = 3;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
-const APP_BOOT_VERSION = "stable-start-20260710-8";
+const APP_BOOT_VERSION = "stable-start-20260710-9";
 const SHADOWING_STANDARD_AUDIO_BUCKET = "shadowing-standard-audio";
 const SHADOWING_RECORDINGS_BUCKET = "shadowing-recordings";
 const DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -260,6 +260,7 @@ const state = {
     loading: true,
     busy: false,
     message: "",
+    mode: "login",
   },
   stopBatchEnrich: false,
   favoriteCategory: "all",
@@ -352,6 +353,12 @@ const els = {
   homeHeroImage: document.querySelector(".mot-sverige-cutout"),
   authDialog: document.querySelector("#authDialog"),
   authForm: document.querySelector("#authForm"),
+  authLoginTab: document.querySelector("#authLoginTab"),
+  authSignupTab: document.querySelector("#authSignupTab"),
+  authSignupFields: document.querySelector("#authSignupFields"),
+  authHelperText: document.querySelector("#authHelperText"),
+  authFirstNameInput: document.querySelector("#authFirstNameInput"),
+  authLastNameInput: document.querySelector("#authLastNameInput"),
   authEmailInput: document.querySelector("#authEmailInput"),
   authMessage: document.querySelector("#authMessage"),
   closeAuthDialogBtn: document.querySelector("#closeAuthDialogBtn"),
@@ -369,6 +376,7 @@ const els = {
   profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
   profileSettingsHint: document.querySelector("#profileSettingsHint"),
   profileStartCard: document.querySelector("#profileStartCard"),
+  topbarAuthButton: document.querySelector("#topbarAuthButton"),
   profileLoginButton: document.querySelector("#profileLoginButton"),
   profileSignupButton: document.querySelector("#profileSignupButton"),
   profileLogoutButton: document.querySelector("#profileLogoutButton"),
@@ -2361,6 +2369,12 @@ function renderAuthState() {
   const isSignedIn = Boolean(user?.id);
   if (els.profileSignedOutCard) els.profileSignedOutCard.hidden = isSignedIn;
   if (els.profileSignedInGrid) els.profileSignedInGrid.hidden = !isSignedIn;
+  if (els.topbarAuthButton) {
+    els.topbarAuthButton.dataset.signedIn = String(isSignedIn);
+    els.topbarAuthButton.textContent = state.auth.loading ? "..." : isSignedIn ? "👤" : "Logga in";
+    els.topbarAuthButton.setAttribute("aria-label", isSignedIn ? "Öppna profil" : "Logga in");
+    els.topbarAuthButton.disabled = state.auth.loading || state.auth.busy;
+  }
   if (els.profileLoginButton) {
     els.profileLoginButton.textContent = state.auth.loading ? "Läser..." : "Logga in";
     els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
@@ -2424,7 +2438,7 @@ function renderAuthState() {
   }
   if (els.submitAuthBtn) {
     els.submitAuthBtn.disabled = state.auth.loading || state.auth.busy;
-    els.submitAuthBtn.textContent = state.auth.busy ? "Skickar..." : "Skicka länk";
+    els.submitAuthBtn.textContent = state.auth.busy ? "Skickar..." : state.auth.mode === "signup" ? "Skapa konto" : "Skicka länk";
   }
 }
 
@@ -2441,8 +2455,25 @@ async function refreshAuthState({ reloadData = false } = {}) {
   }
 }
 
-function openAuthDialog() {
+function setAuthMode(mode = "login") {
+  state.auth.mode = mode === "signup" ? "signup" : "login";
+  const isSignup = state.auth.mode === "signup";
+  els.authLoginTab?.classList.toggle("active", !isSignup);
+  els.authSignupTab?.classList.toggle("active", isSignup);
+  els.authLoginTab?.setAttribute("aria-selected", String(!isSignup));
+  els.authSignupTab?.setAttribute("aria-selected", String(isSignup));
+  if (els.authSignupFields) els.authSignupFields.hidden = !isSignup;
+  if (els.authHelperText) {
+    els.authHelperText.textContent = isSignup
+      ? "Skapa konto med din e-post. Vi skickar en säker bekräftelselänk."
+      : "Vi skickar en säker inloggningslänk till din e-post.";
+  }
+  renderAuthState();
+}
+
+function openAuthDialog(mode = "login") {
   if (!els.authDialog) return;
+  setAuthMode(mode);
   setAuthMessage("");
   if (els.authEmailInput) {
     els.authEmailInput.value = clean(state.auth.user?.email || "");
@@ -2479,7 +2510,11 @@ async function submitAuthForm(event) {
     setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
     return;
   }
-  setAuthMessage("Vi har skickat en inloggningslänk till din e-post.");
+  setAuthMessage(
+    state.auth.mode === "signup"
+      ? "Vi har skickat en bekräftelselänk till din e-post."
+      : "Vi har skickat en inloggningslänk till din e-post.",
+  );
   if (els.authEmailInput) els.authEmailInput.value = email;
 }
 
@@ -7949,11 +7984,26 @@ function bindEvents() {
       setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
     });
   });
+  els.topbarAuthButton?.addEventListener("click", () => {
+    if (state.auth.user?.id) {
+      activateView("profileView");
+      return;
+    }
+    openAuthDialog("login");
+  });
+  els.authLoginTab?.addEventListener("click", () => {
+    setAuthMode("login");
+    setAuthMessage("");
+  });
+  els.authSignupTab?.addEventListener("click", () => {
+    setAuthMode("signup");
+    setAuthMessage("");
+  });
   els.profileSignupButton?.addEventListener("click", () => {
-    openAuthDialog();
+    openAuthDialog("signup");
   });
   els.profileStartCard?.addEventListener("click", () => {
-    openAuthDialog();
+    openAuthDialog("signup");
   });
   els.profileLogoutButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {
@@ -8096,7 +8146,7 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js?v=51", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=52", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
