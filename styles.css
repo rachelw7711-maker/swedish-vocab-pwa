@@ -267,7 +267,9 @@ main {
 .tab {
   display: grid;
   justify-items: center;
+  align-content: center;
   gap: 3px;
+  min-width: 0;
   min-height: 48px;
   padding: 7px 6px 9px;
   border: 0;
@@ -295,14 +297,21 @@ main {
 
 .tab-icon {
   display: inline-grid;
+  flex: 0 0 22px;
   place-items: center;
   width: 22px;
   height: 22px;
+  min-width: 22px;
+  max-width: 22px;
+  overflow: hidden;
 }
 
 .tab-icon svg {
-  width: 19px;
-  height: 19px;
+  display: block;
+  width: 19px !important;
+  height: 19px !important;
+  max-width: 19px;
+  max-height: 19px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;

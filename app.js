@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=119";
+import * as remoteDb from "./src/lib/db.js?v=120";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -38,7 +38,7 @@ const MAX_SPELLING_ATTEMPTS = 3;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
-const APP_BOOT_VERSION = "stable-start-20260526-5";
+const APP_BOOT_VERSION = "stable-start-20260710-6";
 const SHADOWING_STANDARD_AUDIO_BUCKET = "shadowing-standard-audio";
 const SHADOWING_RECORDINGS_BUCKET = "shadowing-recordings";
 const DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -7034,7 +7034,32 @@ function cleanupLegacyViewState() {
   removeStoredViewState();
 }
 
+function isSupabaseAuthCallbackLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const authKeys = [
+    "access_token",
+    "code",
+    "error",
+    "error_code",
+    "error_description",
+    "expires_at",
+    "expires_in",
+    "refresh_token",
+    "token_hash",
+    "token_type",
+    "type",
+  ];
+  return authKeys.some((key) => params.has(key) || hashParams.has(key));
+}
+
+function clearAuthCallbackLocation() {
+  if (!isSupabaseAuthCallbackLocation()) return;
+  window.history.replaceState({}, "", "/");
+}
+
 function normalizeStartupLocation() {
+  if (isSupabaseAuthCallbackLocation()) return false;
   const pathname = window.location.pathname.replace(/\/+$/, "").toLowerCase() || "/";
   const hash = window.location.hash.replace(/^#\/?/, "/").toLowerCase();
   const params = new URLSearchParams(window.location.search);
@@ -8078,6 +8103,7 @@ async function bootstrapApp() {
   setupInstallPrompt();
   setupCrossOriginTransfer();
   await refreshAuthState();
+  clearAuthCallbackLocation();
   if ("scrollRestoration" in history) {
     history.scrollRestoration = "manual";
   }
