@@ -145,8 +145,8 @@ async function buildDist() {
 }
 
 async function injectSupabaseBrowserConfig() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://ppdackgoghffpgcmvjgr.supabase.co";
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_GEmmm6tacHIbrTtAo4PwjA_fucB7hlL";
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY for browser config injection.");
   }
