@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=120";
+import * as remoteDb from "./src/lib/db.js?v=121";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -38,7 +38,7 @@ const MAX_SPELLING_ATTEMPTS = 3;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
-const APP_BOOT_VERSION = "stable-start-20260710-6";
+const APP_BOOT_VERSION = "stable-start-20260710-7";
 const SHADOWING_STANDARD_AUDIO_BUCKET = "shadowing-standard-audio";
 const SHADOWING_RECORDINGS_BUCKET = "shadowing-recordings";
 const DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -358,6 +358,8 @@ const els = {
   submitAuthBtn: document.querySelector("#submitAuthBtn"),
   profileSignedOutCard: document.querySelector("#profileSignedOutCard"),
   profileSignedInGrid: document.querySelector("#profileSignedInGrid"),
+  profileAccountName: document.querySelector("#profileAccountName"),
+  profilePlanBadge: document.querySelector("#profilePlanBadge"),
   profileAccountEmail: document.querySelector("#profileAccountEmail"),
   profileAccountHint: document.querySelector("#profileAccountHint"),
   profileSyncStatus: document.querySelector("#profileSyncStatus"),
@@ -2362,8 +2364,16 @@ function renderAuthState() {
     els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.profileLogoutButton) {
-    els.profileLogoutButton.textContent = state.auth.loading ? "Läser..." : "Logga ut";
+    const label = els.profileLogoutButton.querySelector("span");
+    if (label) label.textContent = state.auth.loading ? "Läser..." : "Logga ut";
+    else els.profileLogoutButton.textContent = state.auth.loading ? "Läser..." : "Logga ut";
     els.profileLogoutButton.disabled = state.auth.loading || state.auth.busy;
+  }
+  if (els.profileAccountName) {
+    els.profileAccountName.textContent = state.auth.loading ? "Läser profil..." : "Huijing Wang";
+  }
+  if (els.profilePlanBadge) {
+    els.profilePlanBadge.textContent = "Premium";
   }
   if (els.profileAccountEmail) {
     els.profileAccountEmail.textContent = state.auth.loading

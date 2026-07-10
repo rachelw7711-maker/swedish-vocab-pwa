@@ -19,7 +19,7 @@
     <link rel="shortcut icon" href="/icons/favicon.ico?v=22" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=22" />
     <title>SpråkLab</title>
-    <link rel="stylesheet" href="/styles.css?v=103" />
+    <link rel="stylesheet" href="/styles.css?v=104" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -234,42 +234,39 @@
               <button class="primary-button profile-auth-button" id="profileLoginButton" type="button">Logga in</button>
             </section>
 
-            <section id="profileSignedInGrid" class="profile-grid" hidden>
-              <article class="panel profile-card">
-                <p class="section-kicker">Konto</p>
-                <h2>Mitt konto</h2>
-                <div class="profile-detail">
-                  <strong id="profileAccountEmail">Inte inloggad</strong>
-                  <span id="profileAccountHint">Logga in för att synka mellan enheter</span>
+            <section id="profileSignedInGrid" class="profile-account-panel" hidden>
+              <header class="profile-account-head">
+                <span class="profile-avatar" aria-hidden="true">👤</span>
+                <div class="profile-account-copy">
+                  <h2 id="profileAccountName">Huijing Wang</h2>
+                  <span id="profilePlanBadge">Premium</span>
                 </div>
-              </article>
-              <article class="panel profile-card">
-                <p class="section-kicker">Synk</p>
-                <h2>Molnsynkronisering</h2>
-                <div class="profile-detail">
-                  <strong id="profileSyncStatus">Inte ansluten</strong>
-                  <span id="profileSyncHint">Dina data synkas via Supabase.</span>
-                </div>
-              </article>
-              <article class="panel profile-card">
-                <p class="section-kicker">Statistik</p>
-                <h2>Studiestatistik</h2>
-                <div class="profile-detail">
-                  <strong id="profileStudyStats">0 dagar i rad</strong>
-                  <span id="profileStudyHint">0 lärda ord · 0 klara idag</span>
-                </div>
-              </article>
-              <article class="panel profile-card">
-                <p class="section-kicker">Inställningar</p>
-                <h2>Inställningar</h2>
-                <div class="profile-detail">
-                  <strong id="profileSettingsSummary">Standardläge</strong>
-                  <span id="profileSettingsHint">Synk, studieområde och ljudinställningar följer ditt konto.</span>
-                </div>
-              </article>
-              <article class="panel profile-card profile-logout-card">
-                <button class="secondary-button profile-auth-button" id="profileLogoutButton" type="button">Logga ut</button>
-              </article>
+              </header>
+              <nav class="profile-menu" aria-label="Profilinställningar">
+                <button class="profile-menu-row" type="button">
+                  <span>Mitt konto</span>
+                  <span class="profile-menu-value" id="profileAccountEmail">Inte inloggad</span>
+                </button>
+                <button class="profile-menu-row" type="button">
+                  <span>Molnsynkronisering</span>
+                  <span class="profile-menu-value" id="profileSyncStatus">Inte ansluten</span>
+                </button>
+                <button class="profile-menu-row" type="button">
+                  <span>Studiestatistik</span>
+                  <span class="profile-menu-value" id="profileStudyStats">0 dagar i rad</span>
+                </button>
+                <button class="profile-menu-row" type="button">
+                  <span>Inställningar</span>
+                  <span class="profile-menu-value" id="profileSettingsSummary">Standardläge</span>
+                </button>
+                <button class="profile-menu-row profile-menu-row--logout" id="profileLogoutButton" type="button">
+                  <span>Logga ut</span>
+                </button>
+              </nav>
+              <span id="profileAccountHint" class="visually-hidden">Logga in för att synka mellan enheter</span>
+              <span id="profileSyncHint" class="visually-hidden">Dina data synkas via Supabase.</span>
+              <span id="profileStudyHint" class="visually-hidden">0 lärda ord · 0 klara idag</span>
+              <span id="profileSettingsHint" class="visually-hidden">Synk, studieområde och ljudinställningar följer ditt konto.</span>
             </section>
           </section>
         </section>
@@ -780,6 +777,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=120" type="module"></script>
+    <script src="/app.js?v=121" type="module"></script>
   </body>
 </html>
