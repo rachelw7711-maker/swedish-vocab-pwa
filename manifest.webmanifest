@@ -1,7 +1,7 @@
 {
-  "name": "Åka",
-  "short_name": "Åka",
-  "description": "Mobil PWA för svenska ord",
+  "name": "SpråkLab",
+  "short_name": "SpråkLab",
+  "description": "SpråkLab - Mobil PWA för svenska ord",
   "id": "/",
   "start_url": "/",
   "scope": "/",

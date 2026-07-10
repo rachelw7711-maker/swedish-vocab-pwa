@@ -10,8 +10,8 @@ const checks = [
     file: "manifest.webmanifest",
     mustInclude: [
       '"start_url": "/"',
-      '"name": "Åka"',
-      '"short_name": "Åka"',
+      '"name": "SpråkLab"',
+      '"short_name": "SpråkLab"',
       '"/icons/pwa-192x192.png?v=22"',
       '"/icons/pwa-512x512.png?v=22"',
       '"/icons/maskable-icon.png?v=22"',
@@ -31,8 +31,8 @@ const checks = [
   {
     file: "index.html",
     mustInclude: [
-      "<title>Åka</title>",
-      'name="apple-mobile-web-app-title" content="Åka"',
+      "<title>SpråkLab</title>",
+      'name="apple-mobile-web-app-title" content="SpråkLab"',
       'href="/manifest.webmanifest?v=22"',
       'href="/icons/favicon.png?v=22"',
       'href="/icons/favicon.ico?v=22"',
