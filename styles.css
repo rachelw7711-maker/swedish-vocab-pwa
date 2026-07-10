@@ -126,7 +126,7 @@ body {
   min-height: 100dvh;
   min-height: 100svh;
   margin: 0;
-  overflow-x: hidden;
+  overflow: hidden;
   color: var(--ink);
   background:
     radial-gradient(circle at 50% -10%, rgba(255, 255, 255, 0.95) 0 240px, rgba(245, 245, 247, 0) 520px),
@@ -185,17 +185,29 @@ select:focus-visible {
 
 .app-shell {
   width: min(100%, 560px);
-  min-height: 100dvh;
-  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
   margin: 0 auto;
-  padding: calc(16px + env(safe-area-inset-top)) 12px calc(126px + env(safe-area-inset-bottom));
+  padding: 0 12px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 main {
-  flex: 1;
+  position: fixed;
+  top: calc(76px + env(safe-area-inset-top));
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 1;
+  width: min(100%, 560px);
   min-height: 0;
+  padding: 0 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transform: translateX(-50%);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .topbar,
@@ -209,8 +221,20 @@ main {
 }
 
 .topbar {
-  flex-wrap: wrap;
-  padding: 8px 0 16px;
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 50;
+  width: min(100%, 560px);
+  min-height: calc(76px + env(safe-area-inset-top));
+  flex-wrap: nowrap;
+  padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
+  border-bottom: 1px solid rgba(31, 42, 48, 0.08);
+  background: rgba(255, 251, 245, 0.96);
+  box-shadow: 0 8px 22px rgba(31, 42, 48, 0.06);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
 }
 
 .topbar-auth-button {
@@ -275,14 +299,16 @@ main {
   position: fixed;
   left: 50%;
   right: auto;
-  bottom: max(8px, env(safe-area-inset-bottom));
+  bottom: 0;
   z-index: 40;
-  width: min(calc(100% - 20px), 560px);
-  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  width: min(100%, 560px);
+  min-height: calc(86px + env(safe-area-inset-bottom));
+  padding: 10px 18px calc(12px + env(safe-area-inset-bottom));
   border: 1px solid rgba(34, 40, 40, 0.08);
-  border-radius: 24px;
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
   background: rgba(255, 251, 245, 0.96);
-  box-shadow: 0 10px 26px rgba(31, 42, 48, 0.08);
+  box-shadow: 0 -12px 32px rgba(31, 42, 48, 0.12);
   transform: translateX(-50%);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -417,9 +443,8 @@ main {
 
 .home-page {
   position: relative;
-  padding: 8px 20px 120px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  padding: 14px 20px 24px;
+  overflow: visible;
 }
 
 .home-page > * + * {
@@ -441,8 +466,8 @@ main {
   position: relative;
   display: grid;
   gap: 20px;
-  overflow: auto;
-  padding-bottom: calc(126px + env(safe-area-inset-bottom));
+  overflow: visible;
+  padding-bottom: 24px;
 }
 
 #notebookView.active {
@@ -458,9 +483,9 @@ main {
   flex-direction: column;
   min-height: 0;
   gap: 12px;
-  overflow: auto;
-  padding-bottom: calc(126px + env(safe-area-inset-bottom));
-  scroll-padding-bottom: calc(148px + env(safe-area-inset-bottom));
+  overflow: visible;
+  padding-bottom: 24px;
+  scroll-padding-bottom: 24px;
 }
 
 #libraryView {
@@ -621,10 +646,10 @@ main {
   flex-direction: column;
   min-height: 0;
   gap: 12px;
-  overflow: auto;
+  overflow: visible;
   background: #f3eee8;
-  padding-bottom: calc(126px + env(safe-area-inset-bottom));
-  scroll-padding-bottom: calc(148px + env(safe-area-inset-bottom));
+  padding-bottom: 24px;
+  scroll-padding-bottom: 24px;
 }
 
 .profile-shell {
@@ -3922,7 +3947,6 @@ dialog::backdrop {
 @media (max-width: 430px) {
   .app-shell {
     padding-inline: 10px;
-    padding-bottom: calc(126px + env(safe-area-inset-bottom));
   }
 
   .home-hero h2 span:first-child {
@@ -3946,8 +3970,7 @@ dialog::backdrop {
 
   .topbar {
     align-items: center;
-    padding-top: 5px;
-    padding-bottom: 17px;
+    padding: calc(13px + env(safe-area-inset-top)) 14px 13px;
   }
 
   .brand-lockup {
@@ -3987,8 +4010,8 @@ dialog::backdrop {
   }
 
   .tabbar {
-    width: min(calc(100% - 14px), 560px);
-    padding-inline: 6px;
+    width: min(100%, 560px);
+    padding-inline: 18px;
   }
 
   .tab {
