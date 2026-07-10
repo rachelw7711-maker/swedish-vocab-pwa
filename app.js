@@ -350,18 +350,24 @@ const els = {
   printLibraryBtn: document.querySelector("#printLibraryBtn"),
   homeGreeting: document.querySelector("#homeGreeting"),
   homeHeroImage: document.querySelector(".mot-sverige-cutout"),
-  authStatusText: document.querySelector("#authStatusText"),
-  authEmailText: document.querySelector("#authEmailText"),
-  authButton: document.querySelector("#authButton"),
   authDialog: document.querySelector("#authDialog"),
   authForm: document.querySelector("#authForm"),
   authEmailInput: document.querySelector("#authEmailInput"),
   authMessage: document.querySelector("#authMessage"),
   closeAuthDialogBtn: document.querySelector("#closeAuthDialogBtn"),
   submitAuthBtn: document.querySelector("#submitAuthBtn"),
-  profileStatusText: document.querySelector("#profileStatusText"),
-  profileEmailText: document.querySelector("#profileEmailText"),
-  profileAuthButton: document.querySelector("#profileAuthButton"),
+  profileSignedOutCard: document.querySelector("#profileSignedOutCard"),
+  profileSignedInGrid: document.querySelector("#profileSignedInGrid"),
+  profileAccountEmail: document.querySelector("#profileAccountEmail"),
+  profileAccountHint: document.querySelector("#profileAccountHint"),
+  profileSyncStatus: document.querySelector("#profileSyncStatus"),
+  profileSyncHint: document.querySelector("#profileSyncHint"),
+  profileStudyStats: document.querySelector("#profileStudyStats"),
+  profileStudyHint: document.querySelector("#profileStudyHint"),
+  profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
+  profileSettingsHint: document.querySelector("#profileSettingsHint"),
+  profileLoginButton: document.querySelector("#profileLoginButton"),
+  profileLogoutButton: document.querySelector("#profileLogoutButton"),
   notebookPinnedBookList: document.querySelector("#notebookPinnedBookList"),
   notebookBookList: document.querySelector("#notebookBookList"),
   notebookExportPanel: document.querySelector("#notebookExportPanel"),
@@ -2349,33 +2355,60 @@ function setAuthMessage(message = "") {
 function renderAuthState() {
   const user = state.auth.user;
   const isSignedIn = Boolean(user?.id);
-  if (els.authStatusText) {
-    els.authStatusText.textContent = state.auth.loading ? "Kontrollerar konto" : isSignedIn ? "Inloggad" : "Inte inloggad";
+  if (els.profileSignedOutCard) els.profileSignedOutCard.hidden = isSignedIn;
+  if (els.profileSignedInGrid) els.profileSignedInGrid.hidden = !isSignedIn;
+  if (els.profileLoginButton) {
+    els.profileLoginButton.textContent = state.auth.loading ? "Läser..." : "Logga in";
+    els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
   }
-  if (els.profileStatusText) {
-    els.profileStatusText.textContent = state.auth.loading ? "Kontrollerar konto" : isSignedIn ? "Inloggad" : "Inte inloggad";
+  if (els.profileLogoutButton) {
+    els.profileLogoutButton.textContent = state.auth.loading ? "Läser..." : "Logga ut";
+    els.profileLogoutButton.disabled = state.auth.loading || state.auth.busy;
   }
-  if (els.authEmailText) {
-    els.authEmailText.textContent = state.auth.loading
+  if (els.profileAccountEmail) {
+    els.profileAccountEmail.textContent = state.auth.loading
       ? "Verifierar session..."
       : isSignedIn
         ? getAuthDisplayEmail(user)
-        : "Logga in för att synka mellan enheter";
+        : "Inte inloggad";
   }
-  if (els.profileEmailText) {
-    els.profileEmailText.textContent = state.auth.loading
-      ? "Verifierar session..."
+  if (els.profileAccountHint) {
+    els.profileAccountHint.textContent = state.auth.loading
+      ? "Kontrollerar konto..."
       : isSignedIn
-        ? getAuthDisplayEmail(user)
+        ? "Du är inloggad med Supabase Auth."
         : "Logga in för att synka mellan enheter";
   }
-  if (els.authButton) {
-    els.authButton.textContent = state.auth.loading ? "Läser..." : isSignedIn ? "Logga ut" : "Logga in";
-    els.authButton.disabled = state.auth.loading || state.auth.busy;
+  if (els.profileSyncStatus) {
+    els.profileSyncStatus.textContent = state.auth.loading ? "Kontrollerar..." : isSignedIn ? "Aktiv" : "Inte ansluten";
   }
-  if (els.profileAuthButton) {
-    els.profileAuthButton.textContent = state.auth.loading ? "Läser..." : isSignedIn ? "Logga ut" : "Logga in";
-    els.profileAuthButton.disabled = state.auth.loading || state.auth.busy;
+  if (els.profileSyncHint) {
+    els.profileSyncHint.textContent = state.auth.loading
+      ? "Kontrollerar synkstatus..."
+      : isSignedIn
+        ? "Molnsynk för ord, böcker, studier och Shadowing är aktiverad."
+        : "Logga in för att aktivera molnsynk och återställning mellan enheter.";
+  }
+  if (els.profileStudyStats) {
+    const streak = state.studyStats?.current_streak || 0;
+    els.profileStudyStats.textContent = state.auth.loading ? "Laddar..." : `${streak} dagar i rad`;
+  }
+  if (els.profileStudyHint) {
+    const mastered = state.words.filter((word) => word.learned).length;
+    const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
+    els.profileStudyHint.textContent = state.auth.loading
+      ? "Hämtar statistik..."
+      : `${mastered} lärda ord · ${todayNew} klara idag`;
+  }
+  if (els.profileSettingsSummary) {
+    els.profileSettingsSummary.textContent = state.auth.loading
+      ? "Läser inställningar..."
+      : `Studieområde: ${state.studyScope || STUDY_SCOPE_ALL}`;
+  }
+  if (els.profileSettingsHint) {
+    els.profileSettingsHint.textContent = state.auth.loading
+      ? "Dina inställningar läses in."
+      : "Synk, studieområde och ljudinställningar följer kontot.";
   }
   if (els.submitAuthBtn) {
     els.submitAuthBtn.disabled = state.auth.loading || state.auth.busy;
@@ -7873,13 +7906,13 @@ function bindEvents() {
     if (event.target.closest("#detailMoreMenu") || event.target.closest("#detailMoreBtn")) return;
     closeDetailMoreMenu();
   });
-  els.authButton?.addEventListener("click", () => {
+  els.profileLoginButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {
       console.error("[Min Ordbok] Auth action failed", error);
       setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
     });
   });
-  els.profileAuthButton?.addEventListener("click", () => {
+  els.profileLogoutButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {
       console.error("[Min Ordbok] Auth action failed", error);
       setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");

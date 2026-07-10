@@ -40,14 +40,6 @@
             </div>
           </div>
         </div>
-        <div class="auth-panel" aria-label="Konto">
-          <div class="auth-copy">
-            <span class="auth-label">Konto</span>
-            <strong id="authStatusText">Inte inloggad</strong>
-            <span id="authEmailText">Logga in för att synka mellan enheter</span>
-          </div>
-          <button class="secondary-button auth-button" id="authButton" type="button">Logga in</button>
-        </div>
       </header>
       <main>
         <section id="homeView" class="view active home-page">
@@ -211,24 +203,62 @@
         </section>
 
         <section id="profileView" class="view">
-          <section class="panel profile-panel" aria-label="Profil">
-            <div class="profile-header">
+          <section class="profile-shell" aria-label="Profil">
+            <section class="panel profile-hero-card">
               <div class="profile-brand">
                 <img src="/icons/app-icon.png?v=22" alt="" aria-hidden="true" class="brand-icon" />
                 <div>
                   <p class="section-kicker">SpråkLab</p>
                   <h2>Profil</h2>
-                  <p>Hantera konto och synk mellan enheter.</p>
+                  <p>Hantera konto, molnsynk och inställningar.</p>
                 </div>
               </div>
-            </div>
-            <div class="profile-account">
-              <div class="profile-account-copy">
-                <strong id="profileStatusText">Inte inloggad</strong>
-                <span id="profileEmailText">Logga in för att synka mellan enheter</span>
-              </div>
-              <button class="primary-button profile-auth-button" id="profileAuthButton" type="button">Logga in</button>
-            </div>
+            </section>
+
+            <section id="profileSignedOutCard" class="panel profile-auth-panel">
+              <p class="section-kicker">Konto</p>
+              <h2>Logga in eller skapa konto</h2>
+              <p>Logga in med din e-post för att aktivera synk mellan enheter.</p>
+              <button class="primary-button profile-auth-button" id="profileLoginButton" type="button">Logga in</button>
+            </section>
+
+            <section id="profileSignedInGrid" class="profile-grid" hidden>
+              <article class="panel profile-card">
+                <p class="section-kicker">Konto</p>
+                <h2>Mitt konto</h2>
+                <div class="profile-detail">
+                  <strong id="profileAccountEmail">Inte inloggad</strong>
+                  <span id="profileAccountHint">Logga in för att synka mellan enheter</span>
+                </div>
+              </article>
+              <article class="panel profile-card">
+                <p class="section-kicker">Synk</p>
+                <h2>Molnsynkronisering</h2>
+                <div class="profile-detail">
+                  <strong id="profileSyncStatus">Inte ansluten</strong>
+                  <span id="profileSyncHint">Dina data synkas via Supabase.</span>
+                </div>
+              </article>
+              <article class="panel profile-card">
+                <p class="section-kicker">Statistik</p>
+                <h2>Studiestatistik</h2>
+                <div class="profile-detail">
+                  <strong id="profileStudyStats">0 dagar i rad</strong>
+                  <span id="profileStudyHint">0 lärda ord · 0 klara idag</span>
+                </div>
+              </article>
+              <article class="panel profile-card">
+                <p class="section-kicker">Inställningar</p>
+                <h2>Inställningar</h2>
+                <div class="profile-detail">
+                  <strong id="profileSettingsSummary">Standardläge</strong>
+                  <span id="profileSettingsHint">Synk, studieområde och ljudinställningar följer ditt konto.</span>
+                </div>
+              </article>
+              <article class="panel profile-card profile-logout-card">
+                <button class="secondary-button profile-auth-button" id="profileLogoutButton" type="button">Logga ut</button>
+              </article>
+            </section>
           </section>
         </section>
 
