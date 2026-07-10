@@ -8126,7 +8126,7 @@ async function bootstrapApp() {
     startAutoEnrichFromUrl();
     enforceStartsideStartup({ resetScroll: true });
     document.body.dataset.appReady = "ready";
-    await registerServiceWorker();
+    void registerServiceWorker();
   }
 }
 

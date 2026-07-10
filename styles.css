@@ -188,7 +188,7 @@ select:focus-visible {
   min-height: 100dvh;
   min-height: 100svh;
   margin: 0 auto;
-  padding: calc(14px + env(safe-area-inset-top)) 12px calc(154px + env(safe-area-inset-bottom));
+  padding: calc(16px + env(safe-area-inset-top)) 12px calc(126px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
 }
@@ -210,7 +210,7 @@ main {
 
 .topbar {
   flex-wrap: wrap;
-  padding: 9px 0 19px;
+  padding: 8px 0 16px;
 }
 
 .brand-lockup {
@@ -247,35 +247,37 @@ main {
 .tabbar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 4px;
   position: fixed;
   left: 50%;
   right: auto;
-  bottom: max(12px, env(safe-area-inset-bottom));
+  bottom: max(8px, env(safe-area-inset-bottom));
   z-index: 40;
   width: min(calc(100% - 20px), 560px);
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  border-radius: 26px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 18px 42px rgba(31, 42, 48, 0.16);
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  border: 1px solid rgba(34, 40, 40, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 251, 245, 0.96);
+  box-shadow: 0 10px 26px rgba(31, 42, 48, 0.08);
   transform: translateX(-50%);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
 }
 
 .tab {
   display: grid;
   justify-items: center;
-  gap: 4px;
-  min-height: 56px;
-  padding: 8px 6px;
+  gap: 3px;
+  min-height: 48px;
+  padding: 7px 6px 9px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 16px;
   background: transparent;
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 680;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
   transition:
     background-color 0.18s ease,
     color 0.18s ease,
@@ -294,13 +296,13 @@ main {
 .tab-icon {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 .tab-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -309,15 +311,25 @@ main {
 }
 
 .tab-label {
+  position: relative;
+  padding-bottom: 3px;
   line-height: 1;
 }
 
 .tab.active {
-  background: var(--tab-active);
-  color: #fff;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 8px 18px rgba(56, 72, 66, 0.16);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.tab.active .tab-label::after {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: -3px;
+  height: 3px;
+  border-radius: 999px;
+  background: #ff9f2d;
 }
 
 .home-hero {
@@ -395,9 +407,9 @@ main {
 #libraryView.active {
   position: relative;
   display: grid;
-  gap: 18px;
+  gap: 20px;
   overflow: auto;
-  padding-bottom: calc(154px + env(safe-area-inset-bottom));
+  padding-bottom: calc(126px + env(safe-area-inset-bottom));
 }
 
 #notebookView.active {
@@ -414,8 +426,8 @@ main {
   min-height: 0;
   gap: 12px;
   overflow: auto;
-  padding-bottom: calc(154px + env(safe-area-inset-bottom));
-  scroll-padding-bottom: calc(176px + env(safe-area-inset-bottom));
+  padding-bottom: calc(126px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(148px + env(safe-area-inset-bottom));
 }
 
 #libraryView {
@@ -425,7 +437,7 @@ main {
 .library-hero {
   display: grid;
   gap: 8px;
-  padding: 8px 4px 2px;
+  padding: 8px 4px 4px;
 }
 
 .library-hero-copy {
@@ -446,61 +458,123 @@ main {
 
 .library-shelf {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .library-book-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
+  gap: 12px;
+  justify-items: start;
   width: 100%;
-  min-height: 96px;
-  padding: 16px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.84);
+  padding: 14px;
+  border: 0;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 16px 36px rgba(31, 42, 48, 0.12);
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 14px 30px rgba(31, 42, 48, 0.08);
   text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .library-book-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 20px 40px rgba(31, 42, 48, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 38px rgba(31, 42, 48, 0.12);
 }
 
-.library-book-spine {
+.library-book-cover {
+  position: relative;
   display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 247, 249, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  font-size: 1.8rem;
+  width: min(100%, 170px);
+  aspect-ratio: 3 / 4.2;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow:
+    0 16px 32px rgba(33, 38, 45, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
-.library-book-copy {
+.library-book-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+}
+
+.library-book-cover-spine {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.1));
+}
+
+.library-book-cover-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  padding: 16px 16px 14px 28px;
+  color: #1d1c1a;
+}
+
+.library-book-cover-kicker {
+  color: rgba(29, 28, 26, 0.64);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.library-book-cover-face strong {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.03;
+}
+
+.library-book-cover-face span:last-child {
+  color: rgba(29, 28, 26, 0.72);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.library-book-card--ordbok .library-book-cover {
+  background:
+    linear-gradient(135deg, rgba(245, 228, 203, 0.98) 0%, rgba(255, 249, 240, 0.98) 52%, rgba(232, 210, 178, 0.98) 100%);
+}
+
+.library-book-card--ordbok .library-book-cover-spine {
+  background:
+    linear-gradient(180deg, rgba(150, 100, 30, 0.42), rgba(150, 100, 30, 0.1)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.1));
+}
+
+.library-book-card--shadowing .library-book-cover {
+  background:
+    linear-gradient(135deg, rgba(180, 204, 240, 0.98) 0%, rgba(245, 249, 255, 0.98) 54%, rgba(216, 228, 246, 0.98) 100%);
+}
+
+.library-book-card--shadowing .library-book-cover-spine {
+  background:
+    linear-gradient(180deg, rgba(52, 92, 148, 0.42), rgba(52, 92, 148, 0.08)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.1));
+}
+
+.library-book-meta {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.library-book-copy strong {
+.library-book-meta strong {
   color: var(--ink);
   font-size: 1.02rem;
-  font-weight: 760;
+  font-weight: 780;
 }
 
-.library-book-copy span {
+.library-book-meta span {
   color: var(--muted);
-  line-height: 1.45;
-}
-
-.library-book-action {
-  color: var(--accent-strong);
-  font-size: 0.84rem;
-  font-weight: 760;
+  line-height: 1.4;
 }
 
 .shelf-return-panel {
@@ -515,18 +589,19 @@ main {
   min-height: 0;
   gap: 12px;
   overflow: auto;
-  padding-bottom: calc(154px + env(safe-area-inset-bottom));
-  scroll-padding-bottom: calc(176px + env(safe-area-inset-bottom));
+  padding-bottom: calc(126px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(148px + env(safe-area-inset-bottom));
 }
 
 .profile-shell {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .profile-hero-card {
   display: grid;
   gap: 12px;
+  padding-bottom: 18px;
 }
 
 .profile-grid {
@@ -3521,7 +3596,7 @@ dialog::backdrop {
 @media (max-width: 430px) {
   .app-shell {
     padding-inline: 10px;
-    padding-bottom: calc(158px + env(safe-area-inset-bottom));
+    padding-bottom: calc(126px + env(safe-area-inset-bottom));
   }
 
   .home-hero h2 span:first-child {
@@ -3599,24 +3674,7 @@ dialog::backdrop {
   }
 
   .library-book-card {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      "spine copy"
-      "action action";
-    align-items: start;
-  }
-
-  .library-book-spine {
-    grid-area: spine;
-  }
-
-  .library-book-copy {
-    grid-area: copy;
-  }
-
-  .library-book-action {
-    grid-area: action;
-    justify-self: end;
+    justify-items: start;
   }
 
   .export-controls,
@@ -3933,26 +3991,7 @@ dialog::backdrop {
   }
 
   .library-book-card {
-    min-height: 138px;
-    align-items: start;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      "spine copy"
-      "spine action";
-  }
-
-  .library-book-spine {
-    grid-area: spine;
-  }
-
-  .library-book-copy {
-    grid-area: copy;
-    padding-top: 2px;
-  }
-
-  .library-book-action {
-    grid-area: action;
-    align-self: end;
+    min-height: 100%;
   }
 }
 
