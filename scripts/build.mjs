@@ -4,6 +4,7 @@ import { dirname, join, relative } from "node:path";
 
 const ROOT = process.cwd();
 const DIST = join(ROOT, "dist");
+const CLIENT = join(DIST, "client");
 
 const checks = [
   {
@@ -119,6 +120,7 @@ console.log(`Dist built at ${relative(ROOT, DIST)}`);
 async function buildDist() {
   await rm(DIST, { recursive: true, force: true });
   await mkdir(DIST, { recursive: true });
+  await mkdir(CLIENT, { recursive: true });
 
   const filesToCopy = [
     "index.html",
@@ -131,16 +133,24 @@ async function buildDist() {
   ];
   for (const file of filesToCopy) {
     await copyPath(join(ROOT, file), join(DIST, file));
+    await copyPath(join(ROOT, file), join(CLIENT, file));
   }
 
   await copyPath(join(ROOT, "src"), join(DIST, "src"));
+  await copyPath(join(ROOT, "src"), join(CLIENT, "src"));
   await injectSupabaseBrowserConfig();
   await copyPath(
     join(ROOT, "node_modules/@supabase/supabase-js/dist/umd/supabase.js"),
     join(DIST, "node_modules/@supabase/supabase-js/dist/umd/supabase.js"),
   );
+  await copyPath(
+    join(ROOT, "node_modules/@supabase/supabase-js/dist/umd/supabase.js"),
+    join(CLIENT, "node_modules/@supabase/supabase-js/dist/umd/supabase.js"),
+  );
   await copyPath(join(ROOT, "audio"), join(DIST, "audio"));
+  await copyPath(join(ROOT, "audio"), join(CLIENT, "audio"));
   await copyPath(join(ROOT, "icons"), join(DIST, "icons"));
+  await copyPath(join(ROOT, "icons"), join(CLIENT, "icons"));
   await copyPath(join(ROOT, ".openai"), join(DIST, ".openai"));
   await writeSitesServerEntry();
   await removeUnsupportedServerAssets(join(DIST, "server"));
@@ -160,11 +170,17 @@ async function injectSupabaseBrowserConfig() {
     `const env = ${JSON.stringify({ VITE_SUPABASE_URL: supabaseUrl, VITE_SUPABASE_ANON_KEY: supabaseAnonKey })};`,
   );
   await writeFile(target, next);
+  await writeFile(join(CLIENT, "src/lib/supabase.js"), next);
 }
 
 async function removeLegacyPwaIcons() {
-  const iconsDir = join(DIST, "icons");
-  const entries = await readdir(iconsDir, { withFileTypes: true });
+  for (const iconsDir of [join(DIST, "icons"), join(CLIENT, "icons")]) {
+    const entries = await readdir(iconsDir, { withFileTypes: true });
+    await removeLegacyIconsFromDir(iconsDir, entries);
+  }
+}
+
+async function removeLegacyIconsFromDir(iconsDir, entries) {
   const allowed = new Set([
     "app-icon.png",
     "apple-touch-icon.png",
@@ -192,7 +208,11 @@ async function writeSitesServerEntry() {
       return Response.json({ error: "Server API is not available in this deployment yet." }, { status: 501 });
     }
     if (env?.ASSETS?.fetch) {
-      return env.ASSETS.fetch(request);
+      const assetUrl = new URL(request.url);
+      if (assetUrl.pathname === "/" || !assetUrl.pathname.split("/").pop().includes(".")) {
+        assetUrl.pathname = "/index.html";
+      }
+      return env.ASSETS.fetch(new Request(assetUrl, request));
     }
     return new Response("Not found", { status: 404 });
   },
