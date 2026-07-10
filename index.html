@@ -259,6 +259,28 @@
           <section class="word-list" id="wordList" aria-live="polite"></section>
         </section>
 
+        <section id="profileView" class="view">
+          <section class="panel profile-panel" aria-label="Profil">
+            <div class="profile-header">
+              <div class="profile-brand">
+                <img src="/icons/app-icon.png?v=22" alt="" aria-hidden="true" class="brand-icon" />
+                <div>
+                  <p class="section-kicker">SpråkLab</p>
+                  <h2>Profil</h2>
+                  <p>Hantera konto och synk mellan enheter.</p>
+                </div>
+              </div>
+            </div>
+            <div class="profile-account">
+              <div class="profile-account-copy">
+                <strong id="profileStatusText">Inte inloggad</strong>
+                <span id="profileEmailText">Logga in för att synka mellan enheter</span>
+              </div>
+              <button class="primary-button profile-auth-button" id="profileAuthButton" type="button">Logga in</button>
+            </div>
+          </section>
+        </section>
+
         <section id="notebookView" class="view">
           <div class="notebook-top-fixed">
             <section class="panel book-list-panel" id="pinnedBookPanel">
@@ -301,9 +323,35 @@
         </section>
 
         <nav class="tabbar" aria-label="Huvudfunktioner">
-          <button class="tab active" type="button" data-view="homeView">Startsida</button>
-          <button class="tab" type="button" data-view="notebookView">Böcker</button>
-          <button class="tab" type="button" data-view="historyView">Shadowing</button>
+          <button class="tab active" type="button" data-view="homeView" aria-label="Startsida">
+            <span class="tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 10.5 12 4l8 6.5" />
+                <path d="M6.5 9.5V20h11V9.5" />
+                <path d="M10 20v-5h4v5" />
+              </svg>
+            </span>
+            <span class="tab-label">Startsida</span>
+          </button>
+          <button class="tab" type="button" data-view="libraryView" aria-label="Bibliotek">
+            <span class="tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z" />
+                <path d="M5 5.5A2.5 2.5 0 0 1 7.5 8H19" />
+                <path d="M15.5 4.5v4" />
+              </svg>
+            </span>
+            <span class="tab-label">Bibliotek</span>
+          </button>
+          <button class="tab" type="button" data-view="profileView" aria-label="Profil">
+            <span class="tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <circle cx="12" cy="8" r="3.2" />
+                <path d="M5 19.5a7 7 0 0 1 14 0" />
+              </svg>
+            </span>
+            <span class="tab-label">Profil</span>
+          </button>
         </nav>
 
         <section id="historyView" class="view">

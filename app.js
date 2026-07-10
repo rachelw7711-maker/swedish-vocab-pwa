@@ -359,6 +359,9 @@ const els = {
   authMessage: document.querySelector("#authMessage"),
   closeAuthDialogBtn: document.querySelector("#closeAuthDialogBtn"),
   submitAuthBtn: document.querySelector("#submitAuthBtn"),
+  profileStatusText: document.querySelector("#profileStatusText"),
+  profileEmailText: document.querySelector("#profileEmailText"),
+  profileAuthButton: document.querySelector("#profileAuthButton"),
   notebookPinnedBookList: document.querySelector("#notebookPinnedBookList"),
   notebookBookList: document.querySelector("#notebookBookList"),
   notebookExportPanel: document.querySelector("#notebookExportPanel"),
@@ -2269,6 +2272,10 @@ function renderActiveView() {
   if (state.activeView === "homeView") {
     return;
   }
+  if (state.activeView === "profileView") {
+    renderProfileView();
+    return;
+  }
   if (state.activeView === "notebookView") {
     renderNotebook();
     return;
@@ -2326,6 +2333,10 @@ function setupHomeGreeting() {
   els.homeGreeting.innerHTML = "<span>Hej!</span><span>Bra jobbat idag.</span>";
 }
 
+function renderProfileView() {
+  renderAuthState();
+}
+
 function getAuthDisplayEmail(user) {
   return clean(user?.email || user?.phone || "") || "Inte inloggad";
 }
@@ -2341,8 +2352,18 @@ function renderAuthState() {
   if (els.authStatusText) {
     els.authStatusText.textContent = state.auth.loading ? "Kontrollerar konto" : isSignedIn ? "Inloggad" : "Inte inloggad";
   }
+  if (els.profileStatusText) {
+    els.profileStatusText.textContent = state.auth.loading ? "Kontrollerar konto" : isSignedIn ? "Inloggad" : "Inte inloggad";
+  }
   if (els.authEmailText) {
     els.authEmailText.textContent = state.auth.loading
+      ? "Verifierar session..."
+      : isSignedIn
+        ? getAuthDisplayEmail(user)
+        : "Logga in för att synka mellan enheter";
+  }
+  if (els.profileEmailText) {
+    els.profileEmailText.textContent = state.auth.loading
       ? "Verifierar session..."
       : isSignedIn
         ? getAuthDisplayEmail(user)
@@ -2351,6 +2372,10 @@ function renderAuthState() {
   if (els.authButton) {
     els.authButton.textContent = state.auth.loading ? "Läser..." : isSignedIn ? "Logga ut" : "Logga in";
     els.authButton.disabled = state.auth.loading || state.auth.busy;
+  }
+  if (els.profileAuthButton) {
+    els.profileAuthButton.textContent = state.auth.loading ? "Läser..." : isSignedIn ? "Logga ut" : "Logga in";
+    els.profileAuthButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.submitAuthBtn) {
     els.submitAuthBtn.disabled = state.auth.loading || state.auth.busy;
@@ -7818,6 +7843,12 @@ function bindEvents() {
     closeDetailMoreMenu();
   });
   els.authButton?.addEventListener("click", () => {
+    handleAuthButtonClick().catch((error) => {
+      console.error("[Min Ordbok] Auth action failed", error);
+      setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
+    });
+  });
+  els.profileAuthButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {
       console.error("[Min Ordbok] Auth action failed", error);
       setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
