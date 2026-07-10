@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=124";
+import * as remoteDb from "./src/lib/db.js?v=125";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -38,7 +38,7 @@ const MAX_SPELLING_ATTEMPTS = 3;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
-const APP_BOOT_VERSION = "stable-start-20260710-10";
+const APP_BOOT_VERSION = "stable-start-20260710-11";
 const SHADOWING_STANDARD_AUDIO_BUCKET = "shadowing-standard-audio";
 const SHADOWING_RECORDINGS_BUCKET = "shadowing-recordings";
 const DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -8146,7 +8146,7 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js?v=53", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=54", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }

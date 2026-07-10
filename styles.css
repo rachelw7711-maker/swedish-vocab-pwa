@@ -19,6 +19,8 @@
   --shadow: 0 22px 58px rgba(31, 42, 48, 0.08);
   --soft-shadow: 0 10px 26px rgba(31, 42, 48, 0.055);
   --blur: blur(22px) saturate(180%);
+  --topbar-height: calc(96px + env(safe-area-inset-top));
+  --tabbar-height: calc(112px + env(safe-area-inset-bottom));
   --chinese-font: "圆体-简", "Yuanti SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -196,8 +198,8 @@ select:focus-visible {
 
 main {
   position: fixed;
-  top: calc(76px + env(safe-area-inset-top));
-  bottom: calc(92px + env(safe-area-inset-bottom));
+  top: var(--topbar-height);
+  bottom: var(--tabbar-height);
   left: 50%;
   z-index: 1;
   width: min(100%, 560px);
@@ -226,12 +228,12 @@ main {
   left: 50%;
   z-index: 50;
   width: min(100%, 560px);
-  min-height: calc(76px + env(safe-area-inset-top));
+  min-height: var(--topbar-height);
   flex-wrap: nowrap;
-  padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
+  padding: calc(42px + env(safe-area-inset-top)) 14px 16px;
   border-bottom: 1px solid rgba(31, 42, 48, 0.08);
-  background: rgba(255, 251, 245, 0.96);
-  box-shadow: 0 8px 22px rgba(31, 42, 48, 0.06);
+  background: rgba(251, 251, 253, 0.96);
+  box-shadow: 0 5px 16px rgba(31, 42, 48, 0.035);
   transform: translateX(-50%);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -302,13 +304,14 @@ main {
   bottom: 0;
   z-index: 40;
   width: min(100%, 560px);
-  min-height: calc(86px + env(safe-area-inset-bottom));
-  padding: 10px 18px calc(12px + env(safe-area-inset-bottom));
+  min-height: var(--tabbar-height);
+  align-content: start;
+  padding: 12px 18px calc(22px + env(safe-area-inset-bottom));
   border: 1px solid rgba(34, 40, 40, 0.08);
   border-bottom: 0;
   border-radius: 28px 28px 0 0;
-  background: rgba(255, 251, 245, 0.96);
-  box-shadow: 0 -12px 32px rgba(31, 42, 48, 0.12);
+  background: rgba(251, 251, 253, 0.96);
+  box-shadow: 0 -8px 24px rgba(31, 42, 48, 0.08);
   transform: translateX(-50%);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -3970,7 +3973,7 @@ dialog::backdrop {
 
   .topbar {
     align-items: center;
-    padding: calc(13px + env(safe-area-inset-top)) 14px 13px;
+    padding: calc(42px + env(safe-area-inset-top)) 14px 16px;
   }
 
   .brand-lockup {
