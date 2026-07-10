@@ -1,6 +1,8 @@
 import * as remoteDb from "./src/lib/db.js?v=119";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { supabase } from "./src/lib/supabase.js";
+import { educationWordPacks } from "./vocab-data.js";
+import { documentWordPacks } from "./document-vocab-data.js";
 
 const DB_NAME = "swedish-vocab-pwa";
 const DEFAULT_NOTEBOOK = "Mina böcker";
@@ -22,6 +24,7 @@ const LOCAL_DAILY_STUDY_KEY = "swedish-vocab-pwa.dailyStudy";
 const LOCAL_DAILY_STUDY_SESSION_KEY = "swedish-vocab-pwa.dailyStudySession";
 const LOCAL_DAILY_REVIEW_SESSION_KEY = "swedish-vocab-pwa.dailyReviewSession";
 const LOCAL_LEARN_DAILY_SESSION_KEY = "swedish-vocab-pwa.learnDailySession";
+const LOCAL_WORD_PROGRESS_KEY = "swedish-vocab-pwa.wordProgress";
 const LOCAL_STUDY_STATS_KEY = "swedish-vocab-pwa.studyStats";
 const LOCAL_STORAGE_SCHEMA_KEY = "swedish-vocab-pwa.storageSchemaVersion";
 const LOCAL_BACKUPS_KEY = "swedish-vocab-pwa.backups";
@@ -121,7 +124,7 @@ const HISTORY_LIMIT_STEP = 120;
 const NEEDS_REVIEW_PLACEHOLDER = "behöver kontrolleras";
 
 const dictionaryWords = [];
-const allWordPacks = [];
+const allWordPacks = [...educationWordPacks, ...documentWordPacks];
 const builtInNotebookNames = new Set(allWordPacks.map((pack) => normalizeNotebookName(pack.notebook)));
 const legacyNotebookNames = new Set([
   "SFI 常用词",
@@ -285,6 +288,7 @@ let shadowingRecordStream = null;
 let shadowingRecordChunks = [];
 let shadowingRecordingStartedAt = 0;
 let shadowingComparisonQueued = false;
+let shadowingSpeechUtterance = null;
 const shadowingSignedUrlCache = new Map();
 
 function isLocalDevelopmentOrigin() {
@@ -310,6 +314,8 @@ const searchTextCache = new WeakMap();
 const searchIndexCache = new WeakMap();
 const shadowingAudio = new Audio();
 const shadowingRecordingAudio = new Audio();
+const wordSpeechAudio = new Audio();
+const wordSpeechUrlCache = new Map();
 const shadowingStageLabels = {
   1: "Level 1 Listen",
   2: "Level 2 Repeat",
@@ -401,6 +407,7 @@ const els = {
   shadowingLoopRange: document.querySelector("#shadowingLoopRange"),
   shadowingRecordingPanel: document.querySelector("#shadowingRecordingPanel"),
   shadowingRecordingStatus: document.querySelector("#shadowingRecordingStatus"),
+  shadowingRecordingPlayer: document.querySelector("#shadowingRecordingPlayer"),
   shadowingRecordingActions: document.querySelector("#shadowingRecordingActions"),
   template: document.querySelector("#wordCardTemplate"),
   addWordBtn: document.querySelector("#addWordBtn"),
@@ -800,6 +807,58 @@ function writeLearnDailySession(plan = state.dailyStudy || {}) {
   }
 }
 
+function readLocalWordProgressMap() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_WORD_PROGRESS_KEY) || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalWordProgressMap(progressMap) {
+  try {
+    localStorage.setItem(LOCAL_WORD_PROGRESS_KEY, JSON.stringify(progressMap || {}));
+  } catch {
+    // Continue with in-memory progress if storage is unavailable.
+  }
+}
+
+function progressSnapshotForWord(word) {
+  if (!word?.id) return null;
+  return {
+    id: word.id,
+    learned: Boolean(word.learned),
+    status: clean(word.status),
+    review_count: Number(word.review_count || 0) || 0,
+    wrong_count: Number(word.wrong_count || 0) || 0,
+    spelling_correct_count: Number(word.spelling_correct_count || 0) || 0,
+    first_studied_at: word.first_studied_at || null,
+    last_studied_at: word.last_studied_at || null,
+    last_reviewed: word.last_reviewed || null,
+    last_study_date: clean(word.last_study_date),
+    last_review_date: clean(word.last_review_date),
+    mastered_at: word.mastered_at || null,
+    next_review_at: word.next_review_at ?? null,
+  };
+}
+
+function readLocalWordProgressWords() {
+  return Object.values(readLocalWordProgressMap()).filter((word) => word?.id);
+}
+
+function writeLocalWordProgress(word) {
+  const snapshot = progressSnapshotForWord(word);
+  if (!snapshot) return;
+  const progressMap = readLocalWordProgressMap();
+  progressMap[snapshot.id] = {
+    ...(progressMap[snapshot.id] || {}),
+    ...snapshot,
+    updated_at: Date.now(),
+  };
+  writeLocalWordProgressMap(progressMap);
+}
+
 function sessionWordIdsForMode(mode, plan = state.dailyStudy || readDailyStudy()) {
   return mode === "review" ? uniqueIds(plan.reviewWordIds) : uniqueIds(plan.newWordIds);
 }
@@ -877,6 +936,35 @@ function persistUserPreferences() {
   }).catch((error) => console.warn("[Min Ordbok] Remote preferences sync failed.", error));
 }
 
+function remoteStudySessionState(snapshot = remotePhase4Snapshot) {
+  const sessions = Array.isArray(snapshot?.studySessions) ? snapshot.studySessions : [];
+  const items = Array.isArray(snapshot?.studySessionItems) ? snapshot.studySessionItems : [];
+  return sessions.reduce((result, session) => {
+    if (!session?.mode || result[session.mode]) return result;
+    const sessionItems = items
+      .filter((item) => item.study_session_id === session.id)
+      .sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+    const wordIds = uniqueIds(sessionItems.map((item) => item.word_id));
+    const completedWordIds = uniqueIds(
+      sessionItems
+        .filter((item) => item.status === "completed" || item.completed_at)
+        .map((item) => item.word_id),
+    ).filter((id) => wordIds.includes(id));
+    result[session.mode] = {
+      id: session.id,
+      status: session.status || "active",
+      wordIds,
+      completedWordIds,
+      spellingPassedWordIds: uniqueIds(
+        sessionItems
+          .filter((item) => item.spelling_passed)
+          .map((item) => item.word_id),
+      ).filter((id) => wordIds.includes(id)),
+    };
+    return result;
+  }, {});
+}
+
 async function persistDailyStudyPlan(plan = state.dailyStudy || readDailyStudy()) {
   const result = await remoteDb.upsertStudyPlan({
     id: plan.remotePlanId,
@@ -897,16 +985,69 @@ async function persistDailyStudyPlan(plan = state.dailyStudy || readDailyStudy()
 
 function applyRemoteStudyState(plan, snapshot = remotePhase4Snapshot) {
   if (!snapshot?.enabled || !plan) return plan;
+  const remoteSessions = remoteStudySessionState(snapshot);
   const sessionIds = {};
   (snapshot.studySessions || []).forEach((session) => {
     if (session.mode) sessionIds[session.mode] = session.id;
   });
+  const remoteNewWordIds = uniqueIds(remoteSessions.new?.wordIds || []);
+  const remoteReviewWordIds = uniqueIds(remoteSessions.review?.wordIds || []);
+  const nextNewWordIds = remoteNewWordIds.length ? remoteNewWordIds : uniqueIds(plan.newWordIds);
+  const nextReviewWordIds = remoteReviewWordIds.length ? remoteReviewWordIds : uniqueIds(plan.reviewWordIds);
+  const completedNewWordIds = uniqueIds([
+    ...uniqueIds(plan.completedNewWordIds),
+    ...uniqueIds(remoteSessions.new?.completedWordIds || []),
+  ]).filter((id) => nextNewWordIds.includes(id));
+  const completedReviewWordIds = uniqueIds([
+    ...uniqueIds(plan.completedReviewWordIds),
+    ...uniqueIds(remoteSessions.review?.completedWordIds || []),
+  ]).filter((id) => nextReviewWordIds.includes(id));
   const next = {
     ...plan,
+    newWordIds: nextNewWordIds,
+    reviewWordIds: nextReviewWordIds,
+    completedNewWordIds,
+    completedReviewWordIds,
+    spellingPassedWordIds: uniqueIds([
+      ...uniqueIds(plan.spellingPassedWordIds),
+      ...uniqueIds(remoteSessions.new?.spellingPassedWordIds || []),
+    ]).filter((id) => nextNewWordIds.includes(id)),
+    newSessionCompleted:
+      nextNewWordIds.length > 0 &&
+      (remoteSessions.new?.status === "completed" || completedNewWordIds.length >= nextNewWordIds.length || Boolean(plan.newSessionCompleted)),
+    reviewSessionCompleted:
+      nextReviewWordIds.length > 0 &&
+      (remoteSessions.review?.status === "completed" || completedReviewWordIds.length >= nextReviewWordIds.length || Boolean(plan.reviewSessionCompleted)),
     remotePlanId: snapshot.studyPlan?.id || plan.remotePlanId || null,
     remoteSessionIds: { ...(plan.remoteSessionIds || {}), ...sessionIds },
   };
   writeDailyStudy(next);
+  return readDailyStudy();
+}
+
+async function ensureRemoteDailyStudySessions(plan = state.dailyStudy || ensureDailyStudyPlan()) {
+  if (!plan?.date || plan.date !== todayKey()) return null;
+  const remotePlan = await persistDailyStudyPlan(plan);
+  if (!remotePlan?.id && !plan.remotePlanId) return null;
+  const sessionIds = { ...(state.dailyStudy?.remoteSessionIds || {}) };
+  for (const mode of ["new", "review"]) {
+    const wordIds = mode === "review" ? uniqueIds(plan.reviewWordIds) : uniqueIds(plan.newWordIds);
+    if (wordIds.length === 0) continue;
+    const result = await remoteDb.ensureStudySession({
+      plan: remotePlan || { id: plan.remotePlanId, date: plan.date, scope: plan.scope },
+      mode,
+      wordIds,
+    }).catch((error) => {
+      console.warn(`[Min Ordbok] Remote ${mode} session sync failed.`, error);
+      return null;
+    });
+    if (result?.session?.id) sessionIds[mode] = result.session.id;
+  }
+  writeDailyStudy({
+    ...state.dailyStudy,
+    remotePlanId: remotePlan?.id || state.dailyStudy?.remotePlanId,
+    remoteSessionIds: sessionIds,
+  });
   return readDailyStudy();
 }
 
@@ -1055,8 +1196,10 @@ async function readStoredWordsWithDebug() {
   const remoteSnapshot = await ensureRemoteLibrarySnapshot();
   const remoteWords = remoteSnapshot?.words || [];
   const remoteBooks = remoteSnapshot?.books || [];
+  const fallbackWords = remoteWords.length > 0 ? [] : initialLibraryWords();
+  const localProgressWords = readLocalWordProgressWords();
   return {
-    words: mergeWordLists(remoteWords),
+    words: mergeWordLists(remoteWords, fallbackWords, localProgressWords),
     debug: {
       remoteReadOk: Boolean(remoteSnapshot),
       remoteLength: remoteWords.length,
@@ -1067,6 +1210,8 @@ async function readStoredWordsWithDebug() {
       fromIndexedDb: false,
       fromLocalStorage: false,
       fromRemote: remoteWords.length > 0,
+      fromDefaultLibrary: fallbackWords.length > 0,
+      fromLocalProgress: localProgressWords.length > 0,
       remoteBooks,
     },
   };
@@ -1113,6 +1258,8 @@ function mergeWordLists(...lists) {
 }
 
 function mergeStoredWordState(primary, secondary) {
+  const primaryNextReview = Number(primary.next_review_at || 0) || 0;
+  const secondaryNextReview = Number(secondary.next_review_at || 0) || 0;
   return normalizeWord({
     ...primary,
     favorite: primary.favorite || secondary.favorite,
@@ -1125,13 +1272,24 @@ function mergeStoredWordState(primary, secondary) {
     last_reviewed: Math.max(primary.last_reviewed || 0, secondary.last_reviewed || 0) || null,
     last_study_date: primary.last_study_date || secondary.last_study_date,
     last_review_date: primary.last_review_date || secondary.last_review_date,
-    next_review_at: Math.min(primary.next_review_at || Date.now(), secondary.next_review_at || Date.now()),
+    next_review_at:
+      primaryNextReview && secondaryNextReview
+        ? Math.min(primaryNextReview, secondaryNextReview)
+        : primaryNextReview || secondaryNextReview,
     mastered_at: primary.mastered_at || secondary.mastered_at,
   });
 }
 
 function initialLibraryWords() {
-  return [];
+  return allWordPacks.flatMap((pack) =>
+    (pack.words || []).map((word) =>
+      normalizeWord({
+        ...word,
+        notebook: normalizeNotebookName(word.notebook || pack.notebook || DEFAULT_NOTEBOOK),
+        tags: word.tags?.length ? word.tags : [pack.level, pack.notebook].filter(Boolean),
+      }),
+    ),
+  );
 }
 
 async function replaceWords(words) {
@@ -1162,8 +1320,78 @@ async function replaceWords(words) {
   remoteLibrarySnapshotLoaded = true;
 }
 
-async function refreshDailyProgress() {
-  state.dailyProgress = await remoteDb.loadDailyWordProgress({
+function dateFromTimestamp(value) {
+  const timestamp = Number(value || 0) || 0;
+  return timestamp ? new Date(timestamp).toISOString().slice(0, 10) : "";
+}
+
+function localDailyWordProgress(words = getLibraryWordsForDisplay(), date = todayKey()) {
+  const start = startOfDayTimestamp(0);
+  const end = (() => {
+    const value = new Date();
+    value.setHours(23, 59, 59, 999);
+    return value.getTime();
+  })();
+  const todayNewWordIds = uniqueIds(
+    words
+      .filter((word) => {
+        const studiedAt = Number(word.last_studied_at || 0) || 0;
+        return (
+          Number(word.review_count || 0) === 0 &&
+          ((studiedAt >= start && studiedAt <= end) || clean(word.last_study_date) === date)
+        );
+      })
+      .map((word) => word.id),
+  ).slice(0, DAILY_NEW_WORD_LIMIT);
+  const dueReviewWordIds = uniqueIds(
+    words
+      .filter((word) => {
+        if (!word?.id || isWordInLearnedNotebook(word)) return false;
+        if (clean(word.last_review_date) === date) return false;
+        const nextReviewAt = Number(word.next_review_at || 0) || 0;
+        const lastStudyDate = clean(word.last_study_date) || dateFromTimestamp(word.last_studied_at);
+        const firstReviewDue = Number(word.review_count || 0) === 0 && lastStudyDate && lastStudyDate < date;
+        return firstReviewDue || (nextReviewAt > 0 && nextReviewAt <= end);
+      })
+      .sort((a, b) => {
+        const nextA = Number(a.next_review_at || 0) || Number.MAX_SAFE_INTEGER;
+        const nextB = Number(b.next_review_at || 0) || Number.MAX_SAFE_INTEGER;
+        return nextA - nextB;
+      })
+      .map((word) => word.id),
+  ).slice(0, DAILY_NEW_WORD_LIMIT);
+  return {
+    enabled: true,
+    date,
+    todayNewWordIds,
+    todayNewCount: todayNewWordIds.length,
+    dueReviewWordIds,
+    dueReviewCount: dueReviewWordIds.length,
+  };
+}
+
+function mergeDailyWordProgress(remoteProgress, localProgress) {
+  const todayNewWordIds = uniqueIds([
+    ...(remoteProgress?.todayNewWordIds || []),
+    ...(localProgress?.todayNewWordIds || []),
+  ]).slice(0, DAILY_NEW_WORD_LIMIT);
+  const dueReviewWordIds = uniqueIds([
+    ...(remoteProgress?.dueReviewWordIds || []),
+    ...(localProgress?.dueReviewWordIds || []),
+  ]).slice(0, DAILY_NEW_WORD_LIMIT);
+  return {
+    ...(remoteProgress || {}),
+    enabled: Boolean(remoteProgress?.enabled || localProgress?.enabled),
+    date: remoteProgress?.date || localProgress?.date || todayKey(),
+    todayNewWordIds,
+    todayNewCount: Math.max(Number(remoteProgress?.todayNewCount || 0) || 0, todayNewWordIds.length),
+    dueReviewWordIds,
+    dueReviewCount: dueReviewWordIds.length,
+  };
+}
+
+async function refreshDailyProgress(wordsForLocalProgress = state.words) {
+  const remoteProgress = await remoteDb.loadDailyWordProgress({
     date: todayKey(),
   }).catch((error) => {
     console.warn("[Min Ordbok] Daily Supabase progress load failed.", error);
@@ -1176,6 +1404,7 @@ async function refreshDailyProgress() {
       dueReviewCount: 0,
     };
   });
+  state.dailyProgress = mergeDailyWordProgress(remoteProgress, localDailyWordProgress(wordsForLocalProgress, todayKey()));
   return state.dailyProgress;
 }
 
@@ -1716,7 +1945,7 @@ async function applyManualRelatedWordExamples() {
 
 async function loadData() {
   const words = await readWords();
-  await refreshDailyProgress();
+  await refreshDailyProgress(words);
   remotePhase4Snapshot = await remoteDb.loadRemotePhase4Snapshot({
     date: todayKey(),
     scope: state.studyScope || STUDY_SCOPE_ALL,
@@ -1767,7 +1996,7 @@ async function loadData() {
   state.history = history.sort((a, b) => b.created_at - a.created_at);
   state.studyStats = readStudyStats();
   state.dailyStudy = applyRemoteStudyState(ensureDailyStudyPlan(state.studyScope), remotePhase4Snapshot);
-  void persistDailyStudyPlan(state.dailyStudy);
+  await ensureRemoteDailyStudySessions(state.dailyStudy);
   state.shadowingRecordings = remotePhase4Snapshot?.shadowingRecordings || [];
   state.shadowing = mergeShadowingItemsForApp(remotePhase4Snapshot?.shadowingItems || []);
   console.info("[Min Ordbok] Data init", {
@@ -2057,10 +2286,8 @@ function renderStudyStats() {
   els.studyReviewCount.textContent = `${todayReview}/${DAILY_NEW_WORD_LIMIT}`;
   els.studyStreakCount.textContent = streak;
   els.studyMasteredCount.textContent = mastered;
-  els.entryNewCount.textContent = `Today's New Words: ${todayNew}/${DAILY_NEW_WORD_LIMIT}`;
-  els.entryReviewCount.textContent = todayReview > 0
-    ? `Today's Review: ${todayReview}/${DAILY_NEW_WORD_LIMIT}`
-    : "No review scheduled today";
+  els.entryNewCount.textContent = `${todayNew}/${DAILY_NEW_WORD_LIMIT}`;
+  els.entryReviewCount.textContent = `${todayReview}/${DAILY_NEW_WORD_LIMIT}`;
   if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = todayNew >= DAILY_NEW_WORD_LIMIT || newSession.completed;
   if (els.startReviewStudyBtn) els.startReviewStudyBtn.disabled = todayReview === 0 || reviewSession.completed;
   els.completeTodayCount.textContent = `${completedTotal} klara idag`;
@@ -3014,6 +3241,10 @@ function standardAudioDescriptor(item = getSelectedShadowingItem()) {
   };
 }
 
+function canSpeakShadowingText(item = getSelectedShadowingItem()) {
+  return Boolean(item?.swedish && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window);
+}
+
 function recordingAudioDescriptor(recording = getLatestShadowingRecording(state.selectedShadowingId)) {
   if (!recording?.audio_path) return null;
   return {
@@ -3021,6 +3252,35 @@ function recordingAudioDescriptor(recording = getLatestShadowingRecording(state.
     path: recording.audio_path,
     mimeType: recording.audio_mime_type || "audio/webm",
   };
+}
+
+function splitShadowingDisplayLines(text) {
+  const normalized = String(text || "")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .trim();
+  if (!normalized) return [];
+  const sourceLines = normalized
+    .replace(/\s+(?=(?:[-–—]\s+|["“]?[A-ZÅÄÖ][A-Za-zÅÄÖåäö0-9 .'-]{0,24}:))/g, "\n")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return sourceLines.flatMap((line) => {
+    const sentences = line.match(/[^.!?。！？…]+(?:[.!?。！？…]+["”')\]]*)?/g);
+    const cleaned = (sentences?.length ? sentences : [line])
+      .map((sentence) => sentence.trim())
+      .filter(Boolean);
+    return cleaned.length ? cleaned : [line];
+  });
+}
+
+function renderShadowingTextLines(text, className) {
+  const lines = splitShadowingDisplayLines(text);
+  const fallback = clean(text) || "—";
+  return (lines.length ? lines : [fallback])
+    .map((line) => `<span class="${className}">${escapeHtml(line)}</span>`)
+    .join("");
 }
 
 function revokeShadowingRecordingObjectUrl() {
@@ -3039,6 +3299,11 @@ async function applyShadowingRecordingForItem(itemId) {
     state.shadowingRecordingMimeType = "";
     state.shadowingRecordingBlob = null;
     state.shadowingRecordingItemId = "";
+    if (els.shadowingRecordingPlayer) {
+      els.shadowingRecordingPlayer.pause();
+      els.shadowingRecordingPlayer.removeAttribute("src");
+      els.shadowingRecordingPlayer.hidden = true;
+    }
     return;
   }
   revokeShadowingRecordingObjectUrl();
@@ -3047,6 +3312,10 @@ async function applyShadowingRecordingForItem(itemId) {
   state.shadowingRecordingBlob = null;
   state.shadowingRecordingItemId = itemId;
   shadowingRecordingAudio.src = state.shadowingRecordingUrl;
+  if (els.shadowingRecordingPlayer) {
+    els.shadowingRecordingPlayer.src = state.shadowingRecordingUrl;
+    els.shadowingRecordingPlayer.hidden = false;
+  }
 }
 
 function getSelectedShadowingItem() {
@@ -3204,7 +3473,7 @@ function renderShadowingFlow() {
   state.shadowingFlowSelectedUnknownWords = unknownPanelActive ? nextSelection : null;
 
   if (els.shadowingContinueBtn) {
-    els.shadowingContinueBtn.textContent = "Starta shadowing";
+    els.shadowingContinueBtn.textContent = "Shadowing";
     els.shadowingContinueBtn.disabled = false;
   }
   if (els.shadowingPreviewPanel) els.shadowingPreviewPanel.hidden = !previewActive;
@@ -3266,8 +3535,7 @@ async function continueShadowingFlow() {
   if (!savedItem) return;
   renderShadowingFlow();
   if (!standardAudioDescriptor(savedItem)) {
-    updateShadowingAudioHint("Tips: generera standardljud först för bättre shadowing-träning.");
-    alert("Texten är redo för Practice. Generera gärna standardljud först för bättre shadowing-träning.");
+    updateShadowingAudioHint("Practice använder webbläsarens röst tills standardljud finns.");
   }
 }
 
@@ -3324,10 +3592,12 @@ function updateShadowingPlaybackUI() {
   const item = getSelectedShadowingItem();
   const pendingText = normalizeShadowingFlowText(els.shadowingSwedishInput?.value || "");
   const hasStandardAudio = Boolean(standardAudioDescriptor(item));
+  const hasSpeechFallback = canSpeakShadowingText(item);
+  const canPlayStandard = hasStandardAudio || hasSpeechFallback;
   const hasRecording = Boolean(recordingAudioDescriptor() || (state.shadowingRecordingBlob && state.shadowingRecordingItemId === item?.id && state.shadowingRecordingUrl));
-  if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.textContent = "Spela";
-  if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.disabled = !item || !hasStandardAudio;
-  if (els.shadowingPauseBtn) els.shadowingPauseBtn.disabled = !item || !hasStandardAudio;
+  if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.textContent = state.shadowingPlaybackState === "playing" ? "Spelar" : "Spela";
+  if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.disabled = !item || !canPlayStandard;
+  if (els.shadowingPauseBtn) els.shadowingPauseBtn.disabled = !item || !canPlayStandard;
   if (els.shadowingStopBtn) els.shadowingStopBtn.disabled = !item;
   if (els.shadowingSetABtn) els.shadowingSetABtn.disabled = !item;
   if (els.shadowingSetBBtn) els.shadowingSetBBtn.disabled = !item;
@@ -3341,7 +3611,7 @@ function updateShadowingPlaybackUI() {
   if (els.shadowingToggleSubtitlesBtn) els.shadowingToggleSubtitlesBtn.classList.toggle("active", !state.shadowingShowSubtitles);
   if (els.shadowingRecordBtn) els.shadowingRecordBtn.disabled = !item || !navigator.mediaDevices?.getUserMedia || Boolean(shadowingRecorder);
   if (els.shadowingPlayRecordingBtn) els.shadowingPlayRecordingBtn.disabled = !item || !hasRecording;
-  if (els.shadowingExportStandardPlayBtn) els.shadowingExportStandardPlayBtn.disabled = !item || !hasStandardAudio;
+  if (els.shadowingExportStandardPlayBtn) els.shadowingExportStandardPlayBtn.disabled = !item || !canPlayStandard;
   if (els.shadowingExportRecordingPlayBtn) els.shadowingExportRecordingPlayBtn.disabled = !item || !hasRecording;
   if (els.shadowingCompareBtn) els.shadowingCompareBtn.disabled = !item || !hasRecording;
   if (els.shadowingStopRecordBtn) els.shadowingStopRecordBtn.disabled = !item || !shadowingRecorder;
@@ -3415,6 +3685,10 @@ function renderShadowingPlayer() {
     if (els.shadowingTime) els.shadowingTime.textContent = "0:00 / 0:00";
     if (els.shadowingLoopRange) els.shadowingLoopRange.textContent = "A-B: 0:00 - 0:00";
     if (els.shadowingRecordingPanel) els.shadowingRecordingPanel.hidden = true;
+    if (els.shadowingRecordingPlayer) {
+      els.shadowingRecordingPlayer.pause();
+      els.shadowingRecordingPlayer.hidden = true;
+    }
     if (els.shadowingPlayPauseBtn) els.shadowingPlayPauseBtn.disabled = true;
     if (els.shadowingStopBtn) els.shadowingStopBtn.disabled = true;
     if (els.shadowingSetABtn) els.shadowingSetABtn.disabled = true;
@@ -3439,7 +3713,7 @@ function renderShadowingPlayer() {
     els.shadowingSubtitle.classList.toggle("shadowing-subtitles-hidden", subtitlesHidden);
     els.shadowingSubtitle.innerHTML = subtitlesHidden
       ? "<strong>字幕已隐藏</strong><span>切换级别或打开字幕查看文本。</span>"
-      : `<strong>${escapeHtml(item.swedish || "—")}</strong><span>${escapeHtml(item.chinese || "—")}</span>`;
+      : `<strong>${renderShadowingTextLines(item.swedish, "shadowing-subtitle-line")}</strong><span>${renderShadowingTextLines(item.chinese, "shadowing-translation-line")}</span>`;
   }
   if (els.shadowingAudioHint) {
     const audioLabel = item.standard_audio_path ? "Storage standard audio" : item.tts_status === "generating" ? "Genererar standardljud..." : "Ingen standardljud ännu";
@@ -3455,7 +3729,14 @@ function renderShadowingPlayer() {
   if (els.shadowingRecordingPanel) {
     els.shadowingRecordingPanel.hidden = !(state.shadowingRecordingUrl || shadowingRecorder);
     if (els.shadowingRecordingStatus) {
-      els.shadowingRecordingStatus.textContent = shadowingRecorder ? "正在录音" : state.shadowingRecordingUrl ? "已录音" : "尚未录音";
+      els.shadowingRecordingStatus.hidden = !state.shadowingRecordingUrl;
+      els.shadowingRecordingStatus.textContent = "Audio";
+    }
+    if (els.shadowingRecordingPlayer) {
+      els.shadowingRecordingPlayer.hidden = !(state.shadowingRecordingUrl || shadowingRecorder);
+      if (state.shadowingRecordingUrl && els.shadowingRecordingPlayer.src !== state.shadowingRecordingUrl) {
+        els.shadowingRecordingPlayer.src = state.shadowingRecordingUrl;
+      }
     }
   }
   if (els.shadowingLevelButtons) {
@@ -3478,6 +3759,11 @@ function renderShadowingPlayer() {
 async function updateShadowingAudioSource(item) {
   const descriptor = standardAudioDescriptor(item);
   const source = descriptor ? await signedShadowingAudioUrl(descriptor.bucket, descriptor.path) : "";
+  const currentSource = shadowingAudio.currentSrc || shadowingAudio.src || "";
+  if (source && currentSource === source) {
+    shadowingAudio.loop = false;
+    return source;
+  }
   shadowingAudio.src = source || "";
   shadowingAudio.loop = false;
   shadowingAudio.currentTime = 0;
@@ -3489,6 +3775,9 @@ function closeShadowingPlayback() {
   shadowingAudio.currentTime = 0;
   shadowingRecordingAudio.pause();
   shadowingRecordingAudio.currentTime = 0;
+  els.shadowingRecordingPlayer?.pause();
+  if (els.shadowingRecordingPlayer) els.shadowingRecordingPlayer.currentTime = 0;
+  stopShadowingSpeech();
   stopShadowingRecording();
   shadowingComparisonQueued = false;
   state.shadowingPlaybackState = "paused";
@@ -3590,7 +3879,7 @@ async function guideShadowingLogin() {
 async function getShadowingAccessTokenOrGuide() {
   const token = await remoteDb.getCurrentAccessToken({ timeoutMs: 8000 });
   if (token) return token;
-  return guideShadowingLogin();
+  return "";
 }
 
 function shadowingTtsErrorMessage(error) {
@@ -3599,6 +3888,42 @@ function shadowingTtsErrorMessage(error) {
     return "AI Voice är inte konfigurerad för standardljud ännu. New Words fungerar fortfarande utan AI Voice.";
   }
   return message || "Kunde inte generera standardljud.";
+}
+
+function speakShadowingText(text, { onEnd } = {}) {
+  const input = normalizeShadowingFlowText(text);
+  if (!input || !("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+    alert("Din webbläsare kan inte läsa upp texten.");
+    return false;
+  }
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(input);
+  utterance.lang = "sv-SE";
+  utterance.rate = 0.88;
+  utterance.onend = () => {
+    if (shadowingSpeechUtterance !== utterance) return;
+    shadowingSpeechUtterance = null;
+    state.shadowingPlaybackState = "paused";
+    updateShadowingPlaybackUI();
+    if (typeof onEnd === "function") onEnd();
+  };
+  utterance.onerror = () => {
+    if (shadowingSpeechUtterance !== utterance) return;
+    shadowingSpeechUtterance = null;
+    state.shadowingPlaybackState = "paused";
+    updateShadowingPlaybackUI();
+  };
+  shadowingSpeechUtterance = utterance;
+  state.shadowingPlaybackState = "playing";
+  updateShadowingPlaybackUI();
+  speechSynthesis.speak(utterance);
+  return true;
+}
+
+function stopShadowingSpeech() {
+  if (!("speechSynthesis" in window)) return;
+  shadowingSpeechUtterance = null;
+  speechSynthesis.cancel();
 }
 
 async function generateStandardShadowingAudio() {
@@ -3610,28 +3935,28 @@ async function generateStandardShadowingAudio() {
   }
   if (els.generateShadowingAudioBtn) {
     els.generateShadowingAudioBtn.disabled = true;
-    els.generateShadowingAudioBtn.textContent = "Generating...";
+    els.generateShadowingAudioBtn.textContent = "Genererar...";
   }
   try {
     const token = await getShadowingAccessTokenOrGuide();
-    if (!token) return;
     if (!item?.id || clean(item.swedish) !== text) {
       item = await saveShadowingItemFromForm();
     }
     if (!item?.id) return;
     const remoteResult = await remoteDb.upsertShadowingItem({ ...item, swedish: text });
-    if (!remoteResult?.item) throw new Error("Logga in för att generera standardljud.");
-    item = shadowingStore.normalizeShadowingItem(remoteResult.item);
-    remotePhase4Snapshot = {
-      ...(remotePhase4Snapshot || {}),
-      shadowingItems: mergeShadowingItemsForApp([item], remotePhase4Snapshot?.shadowingItems || []),
-    };
-    await refreshShadowingState();
-    state.selectedShadowingId = item.id;
+    if (remoteResult?.item) {
+      item = shadowingStore.normalizeShadowingItem(remoteResult.item);
+      remotePhase4Snapshot = {
+        ...(remotePhase4Snapshot || {}),
+        shadowingItems: mergeShadowingItemsForApp([item], remotePhase4Snapshot?.shadowingItems || []),
+      };
+      await refreshShadowingState();
+      state.selectedShadowingId = item.id;
+    }
     const response = await fetch("/api/shadowing/tts", {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token}`,
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
         "content-type": "application/json",
       },
       body: JSON.stringify({
@@ -3642,31 +3967,59 @@ async function generateStandardShadowingAudio() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || "Kunde inte generera standardljud.");
-    if (payload.item) {
-      const updatedItem = shadowingStore.normalizeShadowingItem(payload.item);
+    if (payload.item || payload.dataUrl) {
+      const updatedItem = shadowingStore.normalizeShadowingItem(payload.item || {
+        ...item,
+        audio: payload.dataUrl,
+        audio_source: payload.dataUrl,
+        audio_file_name: "ElevenLabs standard audio",
+        standard_audio_bucket: "",
+        standard_audio_path: payload.dataUrl,
+        standard_audio_mime_type: payload.mimeType || "audio/mpeg",
+        standard_audio_size_bytes: payload.sizeBytes || null,
+        tts_provider: payload.provider || "elevenlabs",
+        tts_voice_id: payload.voiceId || item.tts_voice_id || DEFAULT_ELEVENLABS_VOICE_ID,
+        tts_model_id: payload.modelId || item.tts_model_id || "",
+        tts_status: "ready",
+        tts_error: "",
+        updatedAt: Date.now(),
+      });
       remotePhase4Snapshot = {
         ...(remotePhase4Snapshot || {}),
         shadowingItems: mergeShadowingItemsForApp([updatedItem], remotePhase4Snapshot?.shadowingItems || []),
       };
-      await refreshShadowingState();
+      if (payload.item) {
+        await refreshShadowingState();
+      } else {
+        state.shadowing = mergeShadowingItemsForApp([updatedItem], state.shadowing);
+      }
       state.selectedShadowingId = updatedItem.id;
       populateShadowingForm(updatedItem);
       renderShadowing();
+      await playShadowingCurrentItem();
     }
   } catch (error) {
     console.error("[Shadowing] Standard audio generation failed", error);
     const message = shadowingTtsErrorMessage(error);
-    updateShadowingAudioHint(message);
-    alert(message);
+    if (speakShadowingText(text)) {
+      updateShadowingAudioHint("Läser upp med webbläsarens röst. Standardljud kunde inte genereras ännu.");
+    } else {
+      updateShadowingAudioHint(message);
+      alert(message);
+    }
   } finally {
     if (els.generateShadowingAudioBtn) {
-      els.generateShadowingAudioBtn.textContent = "Generate Audio / Läs upp";
+      els.generateShadowingAudioBtn.textContent = "Läs upp";
       updateShadowingPlaybackUI();
     }
   }
 }
 
 async function downloadStorageAudio(descriptor, filename) {
+  if (descriptor?.path?.startsWith("data:")) {
+    downloadBlob(dataUrlToBlob(descriptor.path), filename || "standard.mp3");
+    return;
+  }
   if (!descriptor?.bucket || !descriptor?.path) {
     alert("Ingen Storage-ljudfil finns att ladda ner.");
     return;
@@ -3687,6 +4040,17 @@ async function downloadStorageAudio(descriptor, filename) {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [header, encoded = ""] = String(dataUrl || "").split(",");
+  const mime = header.match(/^data:([^;]+)/)?.[1] || "application/octet-stream";
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mime });
 }
 
 function downloadBlob(blob, filename) {
@@ -3779,10 +4143,14 @@ async function playShadowingCurrentItem() {
   const descriptor = standardAudioDescriptor(item);
   const source = descriptor ? await signedShadowingAudioUrl(descriptor.bucket, descriptor.path) : "";
   if (!source) {
-    alert("Generera standardljud först.");
+    speakShadowingText(item.swedish);
     return;
   }
-  await updateShadowingAudioSource(item);
+  stopShadowingSpeech();
+  const currentSource = shadowingAudio.currentSrc || shadowingAudio.src || "";
+  if (currentSource !== source) {
+    await updateShadowingAudioSource(item);
+  }
   updateShadowingLoopBoundsFromAudio();
   try {
     await shadowingAudio.play();
@@ -3796,7 +4164,7 @@ async function playShadowingCurrentItem() {
 
 function pauseShadowingCurrentItem() {
   shadowingAudio.pause();
-  speechSynthesis?.cancel?.();
+  stopShadowingSpeech();
   state.shadowingPlaybackState = "paused";
   updateShadowingPlaybackUI();
 }
@@ -3841,6 +4209,12 @@ async function playShadowingRecording() {
   if (!state.shadowingRecordingUrl) return;
   shadowingRecordingAudio.pause();
   shadowingRecordingAudio.src = state.shadowingRecordingUrl;
+  if (els.shadowingRecordingPlayer) {
+    els.shadowingRecordingPlayer.src = state.shadowingRecordingUrl;
+    els.shadowingRecordingPlayer.hidden = false;
+    await els.shadowingRecordingPlayer.play();
+    return;
+  }
   try {
     await shadowingRecordingAudio.play();
   } catch (error) {
@@ -3895,6 +4269,10 @@ async function startShadowingRecording() {
     state.shadowingRecordingItemId = selectedItem?.id || "";
     state.shadowingRecordingUrl = URL.createObjectURL(blob);
     shadowingRecordingAudio.src = state.shadowingRecordingUrl;
+    if (els.shadowingRecordingPlayer) {
+      els.shadowingRecordingPlayer.src = state.shadowingRecordingUrl;
+      els.shadowingRecordingPlayer.hidden = false;
+    }
     shadowingRecordStream?.getTracks?.().forEach((track) => track.stop());
     shadowingRecordStream = null;
     shadowingRecorder = null;
@@ -3960,7 +4338,21 @@ function stopShadowingRecording() {
   }
 }
 
-function clearShadowingRecording() {
+async function clearShadowingRecording() {
+  const itemId = state.shadowingRecordingItemId || state.selectedShadowingId;
+  const recording = getLatestShadowingRecording(itemId);
+  if (recording?.id) {
+    const descriptor = recordingAudioDescriptor(recording);
+    await remoteDb.deleteShadowingRecording(recording.id).catch((error) => console.warn("[Shadowing] Remote recording delete failed", error));
+    if (descriptor?.bucket && descriptor?.path) {
+      await remoteDb.deleteShadowingAudio(descriptor).catch((error) => console.warn("[Shadowing] Recording audio delete failed", error));
+      shadowingSignedUrlCache.delete(`${descriptor.bucket}:${descriptor.path}`);
+    }
+    state.shadowingRecordings = (state.shadowingRecordings || []).filter((row) => row.id !== recording.id);
+    if (remotePhase4Snapshot?.shadowingRecordings) {
+      remotePhase4Snapshot.shadowingRecordings = remotePhase4Snapshot.shadowingRecordings.filter((row) => row.id !== recording.id);
+    }
+  }
   revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = "";
   state.shadowingRecordingMimeType = "";
@@ -3968,6 +4360,11 @@ function clearShadowingRecording() {
   state.shadowingRecordingItemId = "";
   shadowingRecordingAudio.pause();
   shadowingRecordingAudio.src = "";
+  if (els.shadowingRecordingPlayer) {
+    els.shadowingRecordingPlayer.pause();
+    els.shadowingRecordingPlayer.removeAttribute("src");
+    els.shadowingRecordingPlayer.hidden = true;
+  }
   updateShadowingPlaybackUI();
   renderShadowingPlayer();
 }
@@ -5041,6 +5438,7 @@ async function updateWord(id, patch, action = "updated") {
   const word = state.words.find((item) => item.id === id);
   if (!word) return;
   const updated = normalizeForSave({ ...word, ...patch });
+  writeLocalWordProgress(updated);
   await replaceWords((await readWords()).map((item) => (item.id === id ? updated : item)));
   await remoteDb.upsertUserWordProgress(updated);
   appendLocalHistory(action, updated);
@@ -5052,6 +5450,7 @@ function updateWordInMemory(id, patch, action = "updated") {
   const word = state.words.find((item) => item.id === id);
   if (!word) return null;
   const updated = normalizeForSave({ ...word, ...patch });
+  writeLocalWordProgress(updated);
   state.words = state.words.map((item) => (item.id === id ? updated : item));
   if (remoteLibrarySnapshot?.words) {
     remoteLibrarySnapshot = {
@@ -5065,6 +5464,7 @@ function updateWordInMemory(id, patch, action = "updated") {
 
 function saveStudyWordProgressInBackground(word, action = "updated") {
   if (!word?.id) return;
+  writeLocalWordProgress(word);
   void remoteDb.upsertUserWordProgress(word).catch((error) => {
     console.warn("[Min Ordbok] Background study progress sync failed.", error);
   });
@@ -5155,13 +5555,44 @@ async function deleteWord(id) {
   }
 }
 
-function speakSwedish(text) {
-  if (!("speechSynthesis" in window)) return;
+function speakWithBrowserVoice(text) {
+  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "sv-SE";
   utterance.rate = 0.88;
   speechSynthesis.cancel();
   speechSynthesis.speak(utterance);
+}
+
+async function speakSwedish(text) {
+  const swedishText = clean(text);
+  if (!swedishText) return;
+  try {
+    const cacheKey = swedishText.toLocaleLowerCase("sv-SE");
+    let audioUrl = wordSpeechUrlCache.get(cacheKey);
+    if (!audioUrl) {
+      const response = await fetch("/api/shadowing/tts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          text: swedishText,
+          voiceId: DEFAULT_ELEVENLABS_VOICE_ID,
+          itemId: `word-${Date.now().toString(36)}`,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.dataUrl) throw new Error(payload.error || "Kunde inte generera ljud.");
+      audioUrl = payload.dataUrl;
+      wordSpeechUrlCache.set(cacheKey, audioUrl);
+    }
+    speechSynthesis?.cancel?.();
+    wordSpeechAudio.pause();
+    wordSpeechAudio.src = audioUrl;
+    await wordSpeechAudio.play();
+  } catch (error) {
+    console.warn("[Min Ordbok] ElevenLabs word speech failed. Falling back to browser voice.", error);
+    speakWithBrowserVoice(swedishText);
+  }
 }
 
 function todayKey(offset = 0) {
@@ -6868,7 +7299,11 @@ function bindEvents() {
       console.error("[Shadowing] Compare playback failed", error);
     });
   });
-  els.shadowingClearRecordingBtn?.addEventListener("click", clearShadowingRecording);
+  els.shadowingClearRecordingBtn?.addEventListener("click", () => {
+    clearShadowingRecording().catch((error) => {
+      console.error("[Shadowing] Clear recording failed", error);
+    });
+  });
   els.shadowingLevelButtons?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-shadowing-level]");
     if (!button) return;

@@ -124,6 +124,8 @@ async function buildDist() {
     "index.html",
     "styles.css",
     "app.js",
+    "vocab-data.js",
+    "document-vocab-data.js",
     "manifest.webmanifest",
     "sw.js",
   ];

@@ -318,9 +318,8 @@
                 <textarea id="shadowingSwedishInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
               </label>
               <div class="practice-actions shadowing-module-actions">
-                <button class="secondary-button" id="newShadowingBtn" type="button">Nyheter / New Words</button>
-                <button class="secondary-button" id="generateShadowingAudioBtn" type="button">Generate Audio / Läs upp</button>
-                <button class="primary-button" id="shadowingContinueBtn" type="button">Starta shadowing</button>
+                <button class="secondary-button" id="newShadowingBtn" type="button">Nya ord</button>
+                <button class="primary-button" id="generateShadowingAudioBtn" type="button">Läs upp</button>
               </div>
               <button class="primary-button visually-hidden" id="saveShadowingBtn" type="button">Spara</button>
               <section class="shadowing-preview-panel visually-hidden" id="shadowingPreviewPanel" hidden>
@@ -369,7 +368,6 @@
                 <button class="secondary-button" id="shadowingPauseBtn" type="button">Pausa</button>
                 <button class="secondary-button" id="shadowingRecordBtn" type="button">Spela in</button>
                 <button class="secondary-button" id="shadowingStopRecordBtn" type="button">Stoppa</button>
-                <button class="secondary-button wide" id="shadowingPlayRecordingBtn" type="button">Lyssna</button>
               </div>
               <button class="secondary-button visually-hidden" id="shadowingStopBtn" type="button">Stoppa</button>
               <button class="secondary-button visually-hidden" id="shadowingSetABtn" type="button">Set A</button>
@@ -387,11 +385,12 @@
                 <div class="toolbar">
                   <div>
                     <p class="section-kicker">Inspelning</p>
-                    <h3>跟读录音</h3>
                   </div>
-                  <span id="shadowingRecordingStatus">尚未录音</span>
+                  <span class="shadowing-audio-tag" id="shadowingRecordingStatus" hidden>Audio</span>
                 </div>
+                <audio class="shadowing-recording-audio" id="shadowingRecordingPlayer" controls hidden></audio>
                 <div class="practice-actions">
+                  <button class="secondary-button" id="shadowingPlayRecordingBtn" type="button">Lyssna</button>
                   <button class="secondary-button" id="shadowingClearRecordingBtn" type="button">Rensa</button>
                 </div>
               </section>

@@ -561,7 +561,7 @@ export async function loadDailyWordProgress({ date = todayKey() } = {}) {
   }
   const startOfTodayIso = millisToIso(startOfDayMillis(date));
   const endOfTodayIso = millisToIso(endOfDayMillis(date));
-  const [{ data: todayNewRows, error: newCountError }, { data: dueReviewRows, error: dueReviewError }] = await Promise.all([
+  const [{ data: todayNewRows, error: newCountError }, { data: dueReviewRows, error: dueReviewError }, { data: firstReviewRows, error: firstReviewError }] = await Promise.all([
     supabase
       .from(TABLES.userWords)
       .select("word_id")
@@ -578,11 +578,25 @@ export async function loadDailyWordProgress({ date = todayKey() } = {}) {
       .neq("status", "mastered")
       .order("next_review_at", { ascending: true })
       .limit(DAILY_WORD_LIMIT),
+    supabase
+      .from(TABLES.userWords)
+      .select("word_id,last_studied_at,review_count,status")
+      .eq("user_id", user.id)
+      .eq("review_count", 0)
+      .not("last_studied_at", "is", null)
+      .lt("last_studied_at", startOfTodayIso)
+      .neq("status", "mastered")
+      .order("last_studied_at", { ascending: false })
+      .limit(DAILY_WORD_LIMIT),
   ]);
   if (newCountError) throw newCountError;
   if (dueReviewError) throw dueReviewError;
+  if (firstReviewError) throw firstReviewError;
   const todayNewWordIds = unique((todayNewRows || []).map((row) => row.word_id));
-  const dueReviewWordIds = unique((dueReviewRows || []).map((row) => row.word_id)).slice(0, DAILY_WORD_LIMIT);
+  const dueReviewWordIds = unique([
+    ...(firstReviewRows || []).map((row) => row.word_id),
+    ...(dueReviewRows || []).map((row) => row.word_id),
+  ]).slice(0, DAILY_WORD_LIMIT);
   return {
     enabled: true,
     date,
@@ -955,6 +969,19 @@ export async function upsertShadowingRecording(recording = {}) {
     .single();
   if (error) throw error;
   return { enabled: true, recording: fromShadowingRecordingRow(data) };
+}
+
+export async function deleteShadowingRecording(recordingId) {
+  const user = await readCurrentUser();
+  const id = clean(recordingId);
+  if (!user?.id || !id) return { enabled: false };
+  const { error } = await supabase
+    .from(TABLES.shadowingRecordings)
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) throw error;
+  return { enabled: true };
 }
 
 function fromStudyHistoryRow(row) {
