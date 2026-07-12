@@ -730,7 +730,7 @@ export async function loadRemotePhase4Snapshot({ date = todayKey(), scope = "all
 
   const studyPlan = studyPlans[0] || null;
   const studySessions = studyPlan
-    ? await fetchAll(TABLES.studySessions, (query) => query.eq("user_id", user.id).eq("study_plan_id", studyPlan.id).order("started_at", { ascending: true }))
+    ? await fetchAll(TABLES.studySessions, (query) => query.eq("user_id", user.id).eq("study_plan_id", studyPlan.id).order("started_at", { ascending: false }))
     : [];
   const sessionIds = studySessions.map((row) => row.id).filter(Boolean);
   const studySessionItems = sessionIds.length
@@ -839,7 +839,7 @@ export async function ensureStudySession({ plan, mode, wordIds = [] } = {}) {
   if (rows.length) {
     const { error } = await supabase
       .from(TABLES.studySessionItems)
-      .upsert(rows, { onConflict: "study_session_id,word_id" });
+      .upsert(rows, { onConflict: "study_session_id,word_id", ignoreDuplicates: true });
     if (error) throw error;
   }
   const items = await fetchAll(TABLES.studySessionItems, (query) => query.eq("user_id", user.id).eq("study_session_id", session.id).order("position", { ascending: true }));

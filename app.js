@@ -1092,7 +1092,24 @@ async function ensureRemoteDailyStudySessions(plan = state.dailyStudy || ensureD
       console.warn(`[Min Ordbok] Remote ${mode} session sync failed.`, error);
       return null;
     });
-    if (result?.session?.id) sessionIds[mode] = result.session.id;
+    if (result?.session?.id) {
+      sessionIds[mode] = result.session.id;
+      const completedWordIds = mode === "review" ? uniqueIds(plan.completedReviewWordIds) : uniqueIds(plan.completedNewWordIds);
+      const spellingPassed = new Set(mode === "new" ? uniqueIds(plan.spellingPassedWordIds) : []);
+      await Promise.all(
+        completedWordIds
+          .filter((wordId) => wordIds.includes(wordId))
+          .map((wordId) =>
+            remoteDb.saveStudySessionItem({
+              sessionId: result.session.id,
+              wordId,
+              status: "completed",
+              spellingPassed: spellingPassed.has(wordId),
+              isCorrect: spellingPassed.has(wordId) || null,
+            }),
+          ),
+      ).catch((error) => console.warn(`[Min Ordbok] Remote ${mode} completion repair failed.`, error));
+    }
   }
   writeDailyStudy({
     ...state.dailyStudy,
@@ -6268,7 +6285,6 @@ function getSessionIds(mode) {
 }
 
 function isDailySessionCompleted(mode, plan = state.dailyStudy || ensureDailyStudyPlan()) {
-  if (mode === "new" && Number(state.dailyProgress?.todayNewCount || 0) >= DAILY_NEW_WORD_LIMIT) return true;
   return readDailySession(mode, plan).completed;
 }
 
@@ -6788,7 +6804,10 @@ async function completeCurrentStudyWordFromSpelling() {
     renderStudySession();
     return;
   }
-  markDailyCompleted(word.id);
+  await markDailyCompleted(word.id);
+  await remoteDb.upsertUserWordProgress(updated).catch((error) => {
+    console.warn("[Min Ordbok] Study progress sync before advance failed.", error);
+  });
   if (session.mode === "new") {
     const todayNewWordIds = uniqueIds([...previousTodayNewWordIds, word.id]);
     const todayNewCount = Math.max(previousTodayNewCount + (previousTodayNewWordIds.includes(word.id) ? 0 : 1), todayNewWordIds.length);
@@ -6863,7 +6882,7 @@ async function markCurrentStudyWordLearned() {
   clearStudySessionAdvanceTimer();
   try {
     await markWordLearned(word);
-    markDailyCompleted(word.id);
+    await markDailyCompleted(word.id);
   } catch (error) {
     console.error("[Min Ordbok] Failed to mark word learned", error);
     renderStudySession();
@@ -6963,7 +6982,7 @@ function checkCurrentSpelling() {
   return true;
 }
 
-function markDailyCompleted(wordId) {
+async function markDailyCompleted(wordId) {
   const plan = state.dailyStudy || ensureDailyStudyPlan();
   const mode = plan.reviewWordIds?.includes(wordId) ? "review" : "new";
   const session = readDailySession(mode, plan);
@@ -6982,7 +7001,7 @@ function markDailyCompleted(wordId) {
   }, plan);
   const remoteSessionId = state.studySession?.remoteSessionId || state.dailyStudy?.remoteSessionIds?.[mode];
   if (remoteSessionId) {
-    void remoteDb.saveStudySessionItem({
+    await remoteDb.saveStudySessionItem({
       sessionId: remoteSessionId,
       wordId,
       status: "completed",
@@ -7042,7 +7061,7 @@ async function recordQuiz(result) {
     patch,
     result === "known" ? "learned" : "reviewed",
   );
-  markDailyCompleted(word.id);
+  await markDailyCompleted(word.id);
   updateStudyStatsForToday();
   startQuiz();
 }
