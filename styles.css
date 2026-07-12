@@ -507,6 +507,10 @@ main {
   display: block;
 }
 
+#homeView:not(.active) {
+  display: none;
+}
+
 #libraryView.active {
   position: absolute;
   inset: 0;
@@ -546,7 +550,7 @@ main {
 .library-hero {
   display: grid;
   gap: 4px;
-  padding: 12px 0 2px;
+  padding: 12px 12px 2px;
   background: transparent;
 }
 
@@ -1120,12 +1124,6 @@ main {
   margin-top: 18px;
 }
 
-#notebookView #createNotebookPanel,
-#notebookView #bookListPanel,
-#notebookView .notebook-scroll-area {
-  display: none;
-}
-
 body[data-active-view="notebookView"] main,
 body[data-active-view="historyView"] main {
   overflow: hidden;
@@ -1147,6 +1145,7 @@ body[data-active-view="historyView"] main {
   min-height: 100%;
   padding: 4px 4px 24px;
   align-items: start;
+  flex: 0 0 auto;
 }
 
 .profile-welcome-brand {
@@ -4706,7 +4705,7 @@ dialog::backdrop {
 
 @media (min-width: 560px) {
   .library-hero {
-    padding-inline: 0;
+    padding-inline: 12px;
   }
 
   .library-shelf {

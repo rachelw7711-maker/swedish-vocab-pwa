@@ -2573,7 +2573,7 @@ function openOrdlistaFromBooks() {
   resetListLimit("library");
   renderNotebookOptions();
   renderExportNotebookOptions();
-  activateView("libraryView");
+  activateView("wordLibraryView");
 }
 
 function closeLibraryView() {
@@ -2850,7 +2850,6 @@ function renderPinnedNotebookBooks() {
       const button = document.createElement("button");
       button.className = "book-card";
       button.type = "button";
-      button.disabled = true;
       if (book.id === "all") button.dataset.fixedBook = "all";
       else if (book.action) button.dataset.quickAction = book.action;
       else button.dataset.notebook = book.id;
@@ -6039,11 +6038,14 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
   const storedLearnSession = readLearnDailySession(date);
   const candidates = eligibleStudyWords(scope);
   const scheduledReviewCandidates = eligibleReviewWords(scope);
-  const reviewCandidatesAll = scheduledReviewCandidates.length > 0
-    ? scheduledReviewCandidates
-    : getLibraryWordsForDisplay().filter(
+  const studiedReviewCandidates = getLibraryWordsForDisplay().filter(
         (word) => studyScopeMatches(word, scope) && !isWordInLearnedNotebook(word) && hasWordStudyHistory(word) && studyDateValue(word) < date,
       );
+  const reviewCandidatesAll = scheduledReviewCandidates.length > 0
+    ? scheduledReviewCandidates
+    : studiedReviewCandidates.length > 0
+      ? studiedReviewCandidates
+      : candidates;
   const todayNewWordIds = uniqueIds(state.dailyProgress?.todayNewWordIds || []);
   const todayNewCount = Number(state.dailyProgress?.todayNewCount || todayNewWordIds.length || 0) || 0;
   const remainingNewLimit = Math.max(DAILY_NEW_WORD_LIMIT - todayNewCount, 0);
@@ -6061,9 +6063,12 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
   const scheduledReviewWordIds = uniqueIds(state.dailyProgress?.dueReviewWordIds || [])
     .filter((id) => reviewCandidatesAll.some((word) => word.id === id))
     .slice(0, DAILY_NEW_WORD_LIMIT);
+  const pickedReviewWordIds = pickDailyReviewWordIds(reviewCandidatesAll, new Set(), samePlan ? existing.reviewWordIds : []);
   const reviewWordIds = scheduledReviewWordIds.length > 0
     ? scheduledReviewWordIds
-    : pickDailyReviewWordIds(reviewCandidatesAll, new Set(), samePlan ? existing.reviewWordIds : []);
+    : pickedReviewWordIds.length > 0
+      ? pickedReviewWordIds
+      : reviewCandidatesAll.slice(0, DAILY_NEW_WORD_LIMIT).map((word) => word.id);
   const newWordIds = activeLearnWordIds.length > 0
     ? activeLearnWordIds
     : pickDailyNewWordIds(
@@ -7253,7 +7258,7 @@ function activateView(viewId) {
   if (viewId !== "historyView") closeShadowingPlayback();
   state.activeView = viewId;
   document.body.dataset.activeView = state.activeView;
-  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "historyView"].includes(state.activeView);
+  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "wordLibraryView", "historyView"].includes(state.activeView);
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === state.activeView);
   });
@@ -7626,6 +7631,7 @@ function bindEvents() {
   });
   els.shadowingSwedishInput?.addEventListener("input", () => {
     renderShadowingFlow();
+    updateShadowingPlaybackUI();
   });
   els.shadowingUnknownWordsList?.addEventListener("change", (event) => {
     const checkbox = event.target.closest('[data-shadowing-unknown-word]');
@@ -8138,7 +8144,7 @@ function setupInstallPrompt() {
     deferredPrompt = event;
     els.installBtn.hidden = false;
   });
-  els.installBtn.addEventListener("click", async () => {
+  els.installBtn?.addEventListener("click", async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     await deferredPrompt.userChoice;

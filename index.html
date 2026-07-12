@@ -233,6 +233,73 @@
           </section>
         </section>
 
+        <section id="wordLibraryView" class="view word-library-view">
+          <section class="panel export-panel" aria-label="Exportera ordlista">
+            <div><h2>Exportera ordlista</h2></div>
+            <div class="export-controls">
+              <label class="field-label">
+                Ordklass
+                <select id="exportPosFilter">
+                  <option value="all">Alla</option>
+                  <option value="verb">Verb</option>
+                  <option value="noun">Substantiv</option>
+                  <option value="adjective">Adjektiv</option>
+                  <option value="adverb">Adverb</option>
+                  <option value="other-pos">Övrigt</option>
+                </select>
+              </label>
+              <button class="secondary-button" id="printLibraryBtn" type="button">Exportera PDF</button>
+            </div>
+          </section>
+
+          <section class="summary-grid" aria-label="Studieöversikt">
+            <article><strong id="totalCount">0</strong><span>Totalt</span></article>
+            <article><strong id="learnedCount">0</strong><span>Lärt mig</span></article>
+            <article><strong id="dueCount">0</strong><span>Repetition</span></article>
+          </section>
+
+          <section class="search-panel library-controls" aria-label="Sök och filtrera" hidden>
+            <div class="search-actions">
+              <button class="secondary-button" id="importDocumentTopBtn" type="button" hidden></button>
+              <button class="secondary-button" id="enrichSearchBtn" type="button">Komplettera sökresultat</button>
+              <button class="secondary-button" id="generateWordBtn" type="button">AI-generera ordkort</button>
+            </div>
+            <div class="filter-row" id="filterRow">
+              <button class="chip active" type="button" data-filter="all">Alla</button>
+              <button class="chip" type="button" data-filter="due">Repetition</button>
+              <button class="chip" type="button" data-filter="learned">Lärt mig</button>
+              <button class="chip" type="button" data-filter="verb">Verb</button>
+              <button class="chip" type="button" data-filter="noun">Substantiv</button>
+              <button class="chip" type="button" data-filter="adjective">Adjektiv</button>
+              <button class="chip" type="button" data-filter="adverb">Adverb</button>
+              <button class="chip" type="button" data-filter="other-pos">Övrigt</button>
+            </div>
+            <label class="favorite-category-filter" id="favoriteCategoryFilterWrap" hidden>
+              Bok
+              <select id="favoriteCategoryFilter"></select>
+            </label>
+          </section>
+
+          <section class="dictionary-panel" id="dictionaryPanel" hidden>
+            <div>
+              <p class="section-kicker">Dictionary</p>
+              <h2>Inbyggd ordbok</h2>
+              <p>Ord som inte finns i din ordlista visas här med böjning, exempel och fraser.</p>
+            </div>
+            <section class="word-list" id="dictionaryList" aria-live="polite"></section>
+            <button class="secondary-button" id="createFromSearchBtn" type="button" hidden>Skapa ord från sökning</button>
+          </section>
+
+          <section class="toolbar">
+            <h2>Ordlista</h2>
+            <div class="practice-actions">
+              <button class="primary-button" id="addWordBtn" type="button">Lägg till ord</button>
+              <button class="icon-button" id="closeLibraryBtn" type="button" title="Stäng ordlista">×</button>
+            </div>
+          </section>
+          <section class="word-list" id="wordList" aria-live="polite"></section>
+        </section>
+
         <section id="profileView" class="view">
           <section class="profile-shell" aria-label="Profil">
             <section id="profileSignedOutCard" class="profile-signed-out-panel">
@@ -441,7 +508,6 @@
                   <div>
                     <div class="shadowing-export-title-row">
                       <strong>Standardljud</strong>
-                      <span class="shadowing-soon-tag">Coming soon</span>
                     </div>
                     <span id="shadowingAudioHint">AI voice is under development</span>
                   </div>
