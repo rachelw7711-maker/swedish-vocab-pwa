@@ -29,7 +29,7 @@
         try {
           storedVersion = localStorage.getItem(key);
         } catch {}
-        if (storedVersion === version && currentLayout === version) return;
+        if (storedVersion === version) return;
         try {
           localStorage.setItem(key, version);
         } catch {}
