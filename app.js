@@ -262,6 +262,8 @@ const state = {
     busy: false,
     message: "",
     mode: "login",
+    otpPending: false,
+    otpEmail: "",
   },
   stopBatchEnrich: false,
   favoriteCategory: "all",
@@ -362,6 +364,10 @@ const els = {
   authFirstNameInput: document.querySelector("#authFirstNameInput"),
   authLastNameInput: document.querySelector("#authLastNameInput"),
   authEmailInput: document.querySelector("#authEmailInput"),
+  authEmailStep: document.querySelector("#authEmailStep"),
+  authOtpStep: document.querySelector("#authOtpStep"),
+  authOtpInput: document.querySelector("#authOtpInput"),
+  authChangeEmailBtn: document.querySelector("#authChangeEmailBtn"),
   authMessage: document.querySelector("#authMessage"),
   closeAuthDialogBtn: document.querySelector("#closeAuthDialogBtn"),
   submitAuthBtn: document.querySelector("#submitAuthBtn"),
@@ -2457,8 +2463,18 @@ function renderAuthState() {
   }
   if (els.submitAuthBtn) {
     els.submitAuthBtn.disabled = state.auth.loading || state.auth.busy;
-    els.submitAuthBtn.textContent = state.auth.busy ? "Skickar..." : state.auth.mode === "signup" ? "Skapa konto" : "Skicka länk";
+    els.submitAuthBtn.textContent = state.auth.busy
+      ? state.auth.otpPending
+        ? "Verifierar..."
+        : "Skickar..."
+      : state.auth.otpPending
+        ? "Verifiera kod"
+        : "Skicka kod";
   }
+  if (els.authEmailStep) els.authEmailStep.hidden = state.auth.otpPending;
+  if (els.authOtpStep) els.authOtpStep.hidden = !state.auth.otpPending;
+  if (els.authLoginTab) els.authLoginTab.disabled = state.auth.otpPending || state.auth.busy;
+  if (els.authSignupTab) els.authSignupTab.disabled = state.auth.otpPending || state.auth.busy;
   document.querySelectorAll("[data-auth-provider]").forEach((button) => {
     button.disabled = state.auth.loading || state.auth.busy;
   });
@@ -2479,6 +2495,8 @@ async function refreshAuthState({ reloadData = false } = {}) {
 
 function setAuthMode(mode = "login") {
   state.auth.mode = mode === "signup" ? "signup" : "login";
+  state.auth.otpPending = false;
+  state.auth.otpEmail = "";
   const isSignup = state.auth.mode === "signup";
   els.authLoginTab?.classList.toggle("active", !isSignup);
   els.authSignupTab?.classList.toggle("active", isSignup);
@@ -2487,8 +2505,8 @@ function setAuthMode(mode = "login") {
   if (els.authSignupFields) els.authSignupFields.hidden = !isSignup;
   if (els.authHelperText) {
     els.authHelperText.textContent = isSignup
-      ? "Skapa konto med din e-post. Vi skickar en säker bekräftelselänk."
-      : "Vi skickar en säker inloggningslänk till din e-post.";
+      ? "Skapa konto med din e-post. Vi skickar en säker verifieringskod."
+      : "Vi skickar en säker inloggningskod till din e-post.";
   }
   renderAuthState();
 }
@@ -2507,6 +2525,15 @@ function openAuthDialog(mode = "login") {
 function closeAuthDialog() {
   if (!els.authDialog?.open) return;
   els.authDialog.close();
+}
+
+function returnToAuthEmailStep() {
+  state.auth.otpPending = false;
+  state.auth.otpEmail = "";
+  if (els.authOtpInput) els.authOtpInput.value = "";
+  setAuthMessage("");
+  setAuthMode(state.auth.mode);
+  window.setTimeout(() => els.authEmailInput?.focus(), 0);
 }
 
 function getAuthRedirectUrl() {
@@ -2538,6 +2565,10 @@ async function signInWithAuthProvider(provider) {
 
 async function submitAuthForm(event) {
   event.preventDefault();
+  if (state.auth.otpPending) {
+    await verifyAuthOtp();
+    return;
+  }
   const email = clean(els.authEmailInput?.value || "");
   if (!email) {
     setAuthMessage("Ange din e-postadress.");
@@ -2568,14 +2599,44 @@ async function submitAuthForm(event) {
       setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
       return;
     }
-    setAuthMessage(
-      state.auth.mode === "signup"
-        ? "Vi har skickat en bekräftelselänk till din e-post."
-        : "Vi har skickat en inloggningslänk till din e-post.",
-    );
+    state.auth.otpPending = true;
+    state.auth.otpEmail = email;
+    if (els.authOtpInput) els.authOtpInput.value = "";
+    setAuthMessage(`Ange verifieringskoden som skickades till ${email}.`);
+    if (els.authHelperText) els.authHelperText.textContent = "Koden verifieras i den här appen och öppnar ingen annan webbläsare.";
     if (els.authEmailInput) els.authEmailInput.value = email;
   } catch (error) {
     setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
+  } finally {
+    state.auth.busy = false;
+    renderAuthState();
+  }
+}
+
+async function verifyAuthOtp() {
+  const email = clean(state.auth.otpEmail || els.authEmailInput?.value || "");
+  const token = clean(els.authOtpInput?.value || "").replace(/\s+/g, "");
+  if (!email || !/^\d{6,8}$/.test(token)) {
+    setAuthMessage("Ange hela verifieringskoden från e-posten.");
+    return;
+  }
+  state.auth.busy = true;
+  setAuthMessage("");
+  renderAuthState();
+  try {
+    const { data, error } = await withAuthTimeout(supabase.auth.verifyOtp({ email, token, type: "email" }));
+    if (error) {
+      setAuthMessage(error.message || "Koden kunde inte verifieras.");
+      return;
+    }
+    state.auth.user = data?.user || null;
+    state.auth.otpPending = false;
+    state.auth.otpEmail = "";
+    await refreshAuthState({ reloadData: true });
+    closeAuthDialog();
+    activateView("profileView");
+  } catch (error) {
+    setAuthMessage(error.message || "Koden kunde inte verifieras.");
   } finally {
     state.auth.busy = false;
     renderAuthState();
@@ -8195,6 +8256,7 @@ function bindEvents() {
     setAuthMode("signup");
     setAuthMessage("");
   });
+  els.authChangeEmailBtn?.addEventListener("click", returnToAuthEmailStep);
   els.authDialog?.addEventListener("click", (event) => {
     const provider = event.target.closest("[data-auth-provider]")?.dataset.authProvider;
     if (!provider) return;

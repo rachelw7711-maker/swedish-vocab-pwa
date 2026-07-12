@@ -3956,6 +3956,23 @@ dialog:not([open]) {
   padding: 0 22px;
 }
 
+.auth-email-step,
+.auth-otp-step {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-otp-step .field-label input {
+  text-align: center;
+  letter-spacing: 0.18em;
+  font-size: 1.15rem;
+  font-weight: 760;
+}
+
+.auth-change-email {
+  justify-self: center;
+}
+
 .auth-social-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
