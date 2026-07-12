@@ -1206,21 +1206,24 @@ body[data-active-view="historyView"] main {
 }
 
 .profile-account-panel {
-  position: relative;
   gap: 14px;
-  padding: 8px 0;
+  padding: 10px 4px 20px;
   background: transparent;
   box-shadow: none;
 }
 
 .profile-account-head {
-  padding: 4px 4px 14px;
-  border: 0;
+  padding: 8px 4px 18px;
+  border-bottom: 1px solid rgba(31, 42, 48, 0.1);
 }
 
-.profile-avatar {
-  object-fit: cover;
-  background: none;
+.profile-account-copy {
+  gap: 5px;
+}
+
+.profile-account-copy h2 {
+  font-size: 1.12rem;
+  line-height: 1.25;
 }
 
 #profilePlanBadge {
@@ -1230,7 +1233,8 @@ body[data-active-view="historyView"] main {
 }
 
 .profile-settings-toggle {
-  margin-left: auto;
+  display: none;
+  flex: 0 0 42px;
   width: 42px;
   height: 42px;
   border: 1px solid rgba(31, 42, 48, 0.08);
@@ -1240,11 +1244,16 @@ body[data-active-view="historyView"] main {
   font-weight: 900;
 }
 
+body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
+  display: inline-grid;
+  place-items: center;
+}
+
 .profile-settings-popover {
   position: absolute;
-  top: 62px;
-  right: 0;
-  z-index: 20;
+  top: calc(var(--topbar-height) - 4px);
+  right: 12px;
+  z-index: 80;
   width: min(260px, 78vw);
   padding: 8px;
   border: 1px solid rgba(31, 42, 48, 0.08);
@@ -1254,22 +1263,38 @@ body[data-active-view="historyView"] main {
 }
 
 .profile-settings-popover button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  min-height: 42px;
+  min-height: 46px;
   padding: 0 12px;
   border: 0;
   border-radius: 10px;
   background: transparent;
   text-align: left;
   color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 680;
+}
+
+.profile-settings-popover button > span:first-child {
+  font-size: 1rem;
+  text-align: center;
+}
+
+.profile-settings-popover .profile-menu-row--logout {
+  color: #8d342d;
 }
 
 .profile-overview-card {
-  padding: 16px;
-  border: 1px solid rgba(31, 42, 48, 0.07);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 10px 28px rgba(31, 42, 48, 0.06);
+  padding: 16px 4px;
+  border: 0;
+  border-bottom: 1px solid rgba(31, 42, 48, 0.1);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .profile-overview-grid {
@@ -1283,9 +1308,14 @@ body[data-active-view="historyView"] main {
   display: grid;
   gap: 4px;
   padding: 12px 6px;
-  border-radius: 14px;
-  background: #f7f7f3;
+  border-right: 1px solid rgba(31, 42, 48, 0.1);
+  border-radius: 0;
+  background: transparent;
   text-align: center;
+}
+
+.profile-overview-grid article:last-child {
+  border-right: 0;
 }
 
 .profile-overview-grid strong {

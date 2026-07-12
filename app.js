@@ -2386,6 +2386,7 @@ function renderAuthState() {
   const isSignedIn = Boolean(user?.id);
   if (els.profileSignedOutCard) els.profileSignedOutCard.hidden = isSignedIn;
   if (els.profileSignedInGrid) els.profileSignedInGrid.hidden = !isSignedIn;
+  if (els.profileSettingsToggle) els.profileSettingsToggle.hidden = !isSignedIn;
   if (els.topbarAuthButton) {
     els.topbarAuthButton.dataset.signedIn = String(isSignedIn);
     els.topbarAuthButton.textContent = state.auth.loading ? "..." : isSignedIn ? "👤" : "Logga in";
@@ -2397,16 +2398,17 @@ function renderAuthState() {
     els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.profileLogoutButton) {
-    const label = els.profileLogoutButton.querySelector("span");
+    const label = els.profileLogoutButton.querySelector("span:last-child");
     if (label) label.textContent = state.auth.loading ? "Läser..." : "Logga ut";
     else els.profileLogoutButton.textContent = state.auth.loading ? "Läser..." : "Logga ut";
     els.profileLogoutButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.profileAccountName) {
-    els.profileAccountName.textContent = state.auth.loading ? "Läser profil..." : `Hej, ${getAuthDisplayName(user)}`;
+    const accountName = clean(user?.email || "").split("@")[0] || getAuthDisplayName(user);
+    els.profileAccountName.textContent = state.auth.loading ? "Läser profil..." : `Hej, ${accountName}`;
   }
   if (els.profilePlanBadge) {
-    els.profilePlanBadge.textContent = "Premium";
+    els.profilePlanBadge.textContent = "Fortsätt mot flytande svenska! 🇸🇪";
   }
   if (els.profileAccountEmail) {
     els.profileAccountEmail.textContent = state.auth.loading

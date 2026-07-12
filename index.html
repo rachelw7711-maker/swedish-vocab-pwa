@@ -73,6 +73,15 @@
           </div>
         </div>
         <button class="topbar-library-back" type="button" data-return-view="libraryView" hidden>Till Bibliotek</button>
+        <button class="profile-settings-toggle" id="profileSettingsToggle" type="button" aria-label="Öppna inställningar" aria-expanded="false" hidden>•••</button>
+        <nav class="profile-settings-popover" id="profileSettingsMenu" aria-label="Profilinställningar" hidden>
+          <button type="button"><span aria-hidden="true">⚙️</span><span>Inställningar</span></button>
+          <button type="button"><span aria-hidden="true">☁️</span><span>Synkronisering</span></button>
+          <button type="button"><span aria-hidden="true">⬇️</span><span>Exportera data</span></button>
+          <button type="button"><span aria-hidden="true">🔊</span><span>Språk och röst</span></button>
+          <button type="button"><span aria-hidden="true">❓</span><span>Hjälp och support</span></button>
+          <button type="button" class="profile-menu-row--logout" id="profileLogoutButton"><span aria-hidden="true">↩️</span><span>Logga ut</span></button>
+        </nav>
       </header>
       <main>
         <section id="homeView" class="view active home-page">
@@ -320,21 +329,11 @@
 
             <section id="profileSignedInGrid" class="profile-account-panel" hidden>
               <header class="profile-account-head">
-                <img class="profile-avatar" src="/icons/app-icon.png?v=22" alt="" aria-hidden="true" />
                 <div class="profile-account-copy">
                   <h2 id="profileAccountName">Hej!</h2>
                   <span id="profilePlanBadge">Fortsätt mot flytande svenska! 🇸🇪</span>
                 </div>
-                <button class="profile-settings-toggle" id="profileSettingsToggle" type="button" aria-label="Öppna inställningar" aria-expanded="false">•••</button>
               </header>
-              <nav class="profile-settings-popover" id="profileSettingsMenu" aria-label="Profilinställningar" hidden>
-                <button type="button">Inställningar</button>
-                <button type="button">Synkronisering</button>
-                <button type="button">Exportera data</button>
-                <button type="button">Språk och röst</button>
-                <button type="button">Hjälp och support</button>
-                <button type="button" class="profile-menu-row--logout" id="profileLogoutButton"><span>Logga ut</span></button>
-              </nav>
               <section class="profile-overview-card">
                 <p class="section-kicker">Din statistik</p>
                 <div class="profile-overview-grid">
