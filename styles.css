@@ -572,12 +572,12 @@ main {
 .library-shelf {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 26px;
-  row-gap: 52px;
+  column-gap: 20px;
+  row-gap: 28px;
   align-content: start;
   align-items: flex-start;
   min-height: 0;
-  padding: 8px 22px 44px;
+  padding: 8px 28px 40px;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-y: contain;
@@ -596,8 +596,8 @@ main {
   gap: 8px;
   min-width: 0;
   width: 100%;
-  max-width: 158px;
-  min-height: 292px;
+  max-width: 146px;
+  min-height: 276px;
   justify-self: center;
   padding: 0;
   border: 0;
@@ -623,7 +623,7 @@ main {
   position: relative;
   display: block;
   width: 100%;
-  max-width: 158px;
+  max-width: 146px;
   height: auto;
   aspect-ratio: 164 / 218;
   border-radius: 8px;
@@ -4684,12 +4684,12 @@ dialog::backdrop {
   }
 
   .library-shelf {
-    column-gap: 26px;
-    row-gap: 52px;
+    column-gap: 20px;
+    row-gap: 28px;
   }
 
   .library-book-card {
-    min-height: 292px;
+    min-height: 276px;
   }
 }
 
