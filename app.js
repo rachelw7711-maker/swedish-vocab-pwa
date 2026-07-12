@@ -2239,9 +2239,9 @@ function dictionaryRank(word, query) {
   const swedish = normalizeSearchTerm(word.swedish);
   const index = wordSearchIndex(word);
   if (swedish === query) return 0;
-  if (swedish.startsWith(query)) return 1;
-  if (swedish.includes(query)) return 2;
-  if (index.some((entry) => entry === query)) return 3;
+  if (index.some((entry) => entry === query)) return 1;
+  if (swedish.startsWith(query)) return 2;
+  if (swedish.includes(query)) return 3;
   if (index.some((entry) => entry.startsWith(query))) return 4;
   if (index.some((entry) => entry.includes(query))) return 5;
   return 6;
@@ -2892,10 +2892,14 @@ function openMissingSearchDetail(query) {
 }
 
 function findBestSearchMatch() {
-  const query = state.query.toLowerCase();
+  const query = normalizeSearchTerm(state.query);
   const visibleWords = getLibraryWordsForDisplay().filter((word) => wordMatchesQuery(word, query));
-  const exactWord = visibleWords.find((word) => clean(word.swedish).toLowerCase() === query);
+  const exactWord = visibleWords.find((word) => normalizeSearchTerm(word.swedish) === query);
   if (exactWord) return { word: exactWord, mode: "library" };
+  const exactForm = visibleWords
+    .filter((word) => wordMatchesExactSearchForm(word, query))
+    .sort((a, b) => exactSearchRank(a, query) - exactSearchRank(b, query))[0];
+  if (exactForm) return { word: exactForm, mode: "library" };
   if (visibleWords.length > 0) return { word: visibleWords[0], mode: "library" };
 
   const dictionaryMatches = getDictionaryMatches();
