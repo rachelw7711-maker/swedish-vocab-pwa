@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v54";
+const CACHE_NAME = "ordbok-v56";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",
@@ -62,6 +62,18 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   if (event.request.mode === "navigate") {
     event.respondWith(networkFirst(event.request, "./index.html"));
+    return;
+  }
+  const url = new URL(event.request.url);
+  const networkFirstAsset =
+    event.request.destination === "style" ||
+    event.request.destination === "script" ||
+    event.request.destination === "manifest" ||
+    url.pathname.endsWith("/styles.css") ||
+    url.pathname.endsWith("/app.js") ||
+    url.pathname.endsWith("/manifest.webmanifest");
+  if (networkFirstAsset) {
+    event.respondWith(networkFirst(event.request));
     return;
   }
   event.respondWith(cacheFirst(event.request));

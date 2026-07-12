@@ -34,12 +34,12 @@ const checks = [
     mustInclude: [
       "<title>SpråkLab</title>",
       'name="apple-mobile-web-app-title" content="SpråkLab"',
-      'href="/manifest.webmanifest?v=22"',
+      'href="/manifest.webmanifest?v=25"',
       'href="/icons/favicon.png?v=22"',
       'href="/icons/favicon.ico?v=22"',
       'href="/icons/apple-touch-icon.png?v=22"',
       'src="/icons/app-icon.png?v=22"',
-      'src="/app.js?v=125"',
+      'src="/app.js?v=131"',
       'rel="shortcut icon"',
       'rel="apple-touch-icon"',
       'type="image/png"',
@@ -54,7 +54,7 @@ const checks = [
   {
     file: "sw.js",
     mustInclude: [
-      'const CACHE_NAME = "ordbok-v54";',
+      'const CACHE_NAME = "ordbok-v56";',
       '"./node_modules/@supabase/supabase-js/dist/umd/supabase.js"',
       '"./icons/app-icon.png"',
       '"./icons/apple-touch-icon.png"',

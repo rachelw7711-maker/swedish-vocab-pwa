@@ -38,7 +38,7 @@ const MAX_SPELLING_ATTEMPTS = 3;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
-const APP_BOOT_VERSION = "stable-start-20260710-11";
+const APP_BOOT_VERSION = "stable-start-20260711-01";
 const SHADOWING_STANDARD_AUDIO_BUCKET = "shadowing-standard-audio";
 const SHADOWING_RECORDINGS_BUCKET = "shadowing-recordings";
 const DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -376,6 +376,10 @@ const els = {
   profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
   profileSettingsHint: document.querySelector("#profileSettingsHint"),
   profileStartCard: document.querySelector("#profileStartCard"),
+  profileGuestButton: document.querySelector("#profileGuestButton"),
+  profileSettingsToggle: document.querySelector("#profileSettingsToggle"),
+  profileSettingsMenu: document.querySelector("#profileSettingsMenu"),
+  topbarLibraryBack: document.querySelector(".topbar-library-back"),
   topbarAuthButton: document.querySelector("#topbarAuthButton"),
   profileLoginButton: document.querySelector("#profileLoginButton"),
   profileSignupButton: document.querySelector("#profileSignupButton"),
@@ -2359,6 +2363,12 @@ function getAuthDisplayEmail(user) {
   return clean(user?.email || user?.phone || "") || "Inte inloggad";
 }
 
+function getAuthDisplayName(user) {
+  const metadata = user?.user_metadata || {};
+  const fullName = clean(metadata.full_name || `${metadata.first_name || ""} ${metadata.last_name || ""}`);
+  return fullName || clean(user?.email || "").split("@")[0] || "du";
+}
+
 function setAuthMessage(message = "") {
   state.auth.message = clean(message);
   if (els.authMessage) els.authMessage.textContent = state.auth.message;
@@ -2376,7 +2386,7 @@ function renderAuthState() {
     els.topbarAuthButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.profileLoginButton) {
-    els.profileLoginButton.textContent = state.auth.loading ? "Läser..." : "Logga in";
+    els.profileLoginButton.textContent = "Logga in";
     els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.profileLogoutButton) {
@@ -2386,7 +2396,7 @@ function renderAuthState() {
     els.profileLogoutButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.profileAccountName) {
-    els.profileAccountName.textContent = state.auth.loading ? "Läser profil..." : "Huijing Wang";
+    els.profileAccountName.textContent = state.auth.loading ? "Läser profil..." : `Hej, ${getAuthDisplayName(user)}`;
   }
   if (els.profilePlanBadge) {
     els.profilePlanBadge.textContent = "Premium";
@@ -7182,13 +7192,14 @@ function activateView(viewId) {
   if (viewId !== "historyView") closeShadowingPlayback();
   state.activeView = viewId;
   document.body.dataset.activeView = state.activeView;
+  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "historyView"].includes(state.activeView);
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === state.activeView);
   });
   document.querySelectorAll(".view").forEach((view) => {
     view.classList.toggle("active", view.id === state.activeView);
   });
-  window.scrollTo(0, 0);
+  resetViewportScroll();
   renderActiveView();
 }
 
@@ -7197,6 +7208,7 @@ function forceHomeView({ resetScroll = true } = {}) {
   closeShadowingPlayback();
   state.activeView = "homeView";
   document.body.dataset.activeView = "homeView";
+  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = true;
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === "homeView");
   });
@@ -7211,6 +7223,11 @@ function resetViewportScroll() {
   window.scrollTo(0, 0);
   document.documentElement.scrollTop = 0;
   document.body.scrollTop = 0;
+  const main = document.querySelector("main");
+  if (main) {
+    main.scrollTop = 0;
+    main.scrollLeft = 0;
+  }
 }
 
 function closeTransientOverlays() {
@@ -7308,6 +7325,7 @@ function bindEvents() {
         closeShadowingPlayback();
         state.activeView = "libraryView";
         document.body.dataset.activeView = "libraryView";
+        if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = true;
         document.querySelectorAll(".tab").forEach((tab) => {
           tab.classList.toggle("active", tab.dataset.view === "libraryView");
         });
@@ -8002,6 +8020,18 @@ function bindEvents() {
   els.profileSignupButton?.addEventListener("click", () => {
     openAuthDialog("signup");
   });
+  els.profileGuestButton?.addEventListener("click", () => activateView("homeView"));
+  els.profileSettingsToggle?.addEventListener("click", () => {
+    const nextOpen = Boolean(els.profileSettingsMenu?.hidden);
+    if (els.profileSettingsMenu) els.profileSettingsMenu.hidden = !nextOpen;
+    els.profileSettingsToggle.setAttribute("aria-expanded", String(nextOpen));
+  });
+  document.addEventListener("click", (event) => {
+    if (!els.profileSettingsMenu || els.profileSettingsMenu.hidden) return;
+    if (event.target.closest("#profileSettingsMenu") || event.target.closest("#profileSettingsToggle")) return;
+    els.profileSettingsMenu.hidden = true;
+    els.profileSettingsToggle?.setAttribute("aria-expanded", "false");
+  });
   els.profileStartCard?.addEventListener("click", () => {
     openAuthDialog("signup");
   });
@@ -8146,13 +8176,105 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js?v=54", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=56", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
 }
 
+function setupLayoutDiagnostics(force = false) {
+  if (document.getElementById("layoutDiagnostics")) return;
+  if (!force && new URLSearchParams(location.search).get("debug") !== "layout") {
+    const brand = document.querySelector(".brand-lockup");
+    if (!brand) return;
+    let taps = 0;
+    let resetTimer = 0;
+    brand.addEventListener("click", () => {
+      taps += 1;
+      clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => {
+        taps = 0;
+      }, 2500);
+      if (taps >= 5) setupLayoutDiagnostics(true);
+    });
+    return;
+  }
+
+  const safeAreaProbe = document.createElement("div");
+  safeAreaProbe.setAttribute("aria-hidden", "true");
+  safeAreaProbe.style.cssText =
+    "position:fixed;left:0;bottom:0;width:0;height:0;padding-bottom:env(safe-area-inset-bottom);visibility:hidden;pointer-events:none";
+  document.body.append(safeAreaProbe);
+
+  const panel = document.createElement("pre");
+  panel.id = "layoutDiagnostics";
+  panel.style.cssText =
+    "position:fixed;inset:8px;z-index:2147483647;margin:0;padding:12px;overflow:auto;background:rgba(0,0,0,.9);color:#fff;font:11px/1.35 ui-monospace,monospace;white-space:pre-wrap;user-select:text;-webkit-user-select:text";
+  document.body.append(panel);
+
+  const snapshots = {};
+  const selectors = {
+    html: document.documentElement,
+    body: document.body,
+    root: document.getElementById("root"),
+    appShell: document.querySelector(".app-shell"),
+    startupSplash: document.querySelector(".startup-splash"),
+    appContent: document.querySelector("main"),
+    bottomNav: document.querySelector(".tabbar"),
+  };
+
+  const measure = (label) => {
+    const elements = {};
+    for (const [name, element] of Object.entries(selectors)) {
+      if (!element) continue;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      elements[name] = {
+        rect: {
+          top: Number(rect.top.toFixed(2)),
+          bottom: Number(rect.bottom.toFixed(2)),
+          height: Number(rect.height.toFixed(2)),
+        },
+        computed: {
+          height: style.height,
+          minHeight: style.minHeight,
+          paddingBottom: style.paddingBottom,
+          marginBottom: style.marginBottom,
+          bottom: style.bottom,
+          position: style.position,
+          backgroundColor: style.backgroundColor,
+        },
+      };
+    }
+    snapshots[label] = {
+      viewport: {
+        innerHeight: window.innerHeight,
+        clientHeight: document.documentElement.clientHeight,
+        visualViewportHeight: window.visualViewport?.height ?? null,
+        screenHeight: window.screen.height,
+        devicePixelRatio: window.devicePixelRatio,
+        safeAreaInsetBottom: parseFloat(getComputedStyle(safeAreaProbe).paddingBottom) || 0,
+        standalone: window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches,
+      },
+      elements,
+    };
+    panel.textContent = JSON.stringify(snapshots, null, 2);
+  };
+
+  measure("loading");
+  const observer = new MutationObserver(() => {
+    if (document.body.dataset.appReady === "ready") {
+      requestAnimationFrame(() => measure("ready"));
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { attributes: true, attributeFilter: ["data-app-ready"] });
+  window.addEventListener("resize", () => measure("resize"), { passive: true });
+  window.visualViewport?.addEventListener("resize", () => measure("visualViewportResize"), { passive: true });
+}
+
 async function bootstrapApp() {
+  const authCallbackLaunch = isSupabaseAuthCallbackLocation();
   closeRestoredDialogsImmediately();
   try {
     if (localStorage.getItem("swedish-vocab-pwa.appBootVersion") !== APP_BOOT_VERSION) {
@@ -8214,14 +8336,18 @@ async function bootstrapApp() {
     startupLoadingTimedOut = false;
     normalizeStartupLocation();
     cleanupLegacyViewState();
-    if (isStandalonePwaLaunch()) {
+    if (authCallbackLaunch && state.auth.user?.id) {
+      activateView("profileView");
+    } else if (isStandalonePwaLaunch()) {
       forceStartsideOnPwaLaunch();
+    } else {
+      enforceStartsideStartup({ resetScroll: true });
     }
     startAutoEnrichFromUrl();
-    enforceStartsideStartup({ resetScroll: true });
     document.body.dataset.appReady = "ready";
     void registerServiceWorker();
   }
 }
 
+setupLayoutDiagnostics();
 void bootstrapApp();
