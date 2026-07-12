@@ -336,25 +336,6 @@
             <section class="panel shelf-return-panel">
               <button class="secondary-button" type="button" data-return-view="libraryView">Till Bibliotek</button>
             </section>
-            <section class="panel shadowing-summary">
-              <div class="toolbar">
-                <div>
-                  <p class="section-kicker">Shadowing</p>
-                  <h2>Shadowing</h2>
-                </div>
-              </div>
-              <div class="shadowing-mode-tabs" aria-label="Shadowing-läge">
-                <button class="shadowing-mode-tab active" type="button">💬 Dialog</button>
-                <button class="shadowing-mode-tab" type="button" disabled>📰 Nyheter <span>Snart</span></button>
-                <button class="shadowing-mode-tab" type="button" disabled>📖 Läsning <span>Snart</span></button>
-                <button class="shadowing-mode-tab" type="button" disabled>📝 Prov <span>Snart</span></button>
-              </div>
-              <div class="shadowing-stage-bar" id="shadowingStageBar">
-                <div id="shadowingLevelButtons" class="shadowing-stage-buttons" aria-label="Shadowing levels"></div>
-                <span class="shadowing-level-badge" id="shadowingLevelBadge">Level 1 Listen</span>
-              </div>
-            </section>
-
             <section class="panel shadowing-editor">
               <div class="toolbar">
                 <div>
@@ -369,8 +350,8 @@
                 <textarea id="shadowingSwedishInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
               </label>
               <div class="practice-actions shadowing-module-actions">
-                <button class="secondary-button" id="newShadowingBtn" type="button">Nya ord</button>
-                <button class="primary-button" id="generateShadowingAudioBtn" type="button">Läs upp</button>
+                <button class="secondary-button" id="newShadowingBtn" type="button">🗑️ Rensa text</button>
+                <button class="primary-button" id="generateShadowingAudioBtn" type="button">▶️ Shadowing</button>
               </div>
               <button class="primary-button visually-hidden" id="saveShadowingBtn" type="button">Spara</button>
               <section class="shadowing-preview-panel visually-hidden" id="shadowingPreviewPanel" hidden>
@@ -429,6 +410,7 @@
               <button class="secondary-button visually-hidden" id="shadowingToggleContinuousBtn" type="button">连续播放</button>
               <button class="primary-button visually-hidden" id="shadowingCompareBtn" type="button">Compare</button>
               <div class="shadowing-progress">
+                <input id="shadowingAudioProgress" type="range" min="0" max="0" step="0.1" value="0" aria-label="Standardljudets position" />
                 <span id="shadowingTime">0:00 / 0:00</span>
                 <span class="visually-hidden" id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
               </div>

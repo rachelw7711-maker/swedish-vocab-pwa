@@ -296,6 +296,7 @@ let shadowingRecordChunks = [];
 let shadowingRecordingStartedAt = 0;
 let shadowingComparisonQueued = false;
 let shadowingSpeechUtterance = null;
+let shadowingSpeechCharacterIndex = 0;
 const shadowingSignedUrlCache = new Map();
 
 function isLocalDevelopmentOrigin() {
@@ -444,6 +445,7 @@ const els = {
   shadowingClearRecordingBtn: document.querySelector("#shadowingClearRecordingBtn"),
   shadowingLevelButtons: document.querySelector("#shadowingLevelButtons"),
   shadowingTime: document.querySelector("#shadowingTime"),
+  shadowingAudioProgress: document.querySelector("#shadowingAudioProgress"),
   shadowingLoopRange: document.querySelector("#shadowingLoopRange"),
   shadowingRecordingPanel: document.querySelector("#shadowingRecordingPanel"),
   shadowingRecordingStatus: document.querySelector("#shadowingRecordingStatus"),
@@ -2324,6 +2326,8 @@ function renderStudyStats() {
   const reviewSession = readDailySession("review", state.dailyStudy);
   const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
   const todayReview = Math.min(Number(state.dailyProgress?.dueReviewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
+  const availableNew = Math.max((state.dailyStudy.newWordIds || []).length - newSession.completedWordIds.length, 0);
+  const availableReview = Math.max((state.dailyStudy.reviewWordIds || []).length - reviewSession.completedWordIds.length, 0);
   const streak = state.studyStats?.current_streak || 0;
   const mastered = state.words.filter((word) => word.learned).length;
   const completedTotal = todayNew;
@@ -2331,10 +2335,10 @@ function renderStudyStats() {
   els.studyReviewCount.textContent = `${todayReview}/${DAILY_NEW_WORD_LIMIT}`;
   els.studyStreakCount.textContent = streak;
   els.studyMasteredCount.textContent = mastered;
-  els.entryNewCount.textContent = `${todayNew}/${DAILY_NEW_WORD_LIMIT}`;
-  els.entryReviewCount.textContent = `${todayReview}/${DAILY_NEW_WORD_LIMIT}`;
-  if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = todayNew >= DAILY_NEW_WORD_LIMIT || newSession.completed;
-  if (els.startReviewStudyBtn) els.startReviewStudyBtn.disabled = todayReview === 0 || reviewSession.completed;
+  els.entryNewCount.textContent = `${availableNew} ord idag`;
+  els.entryReviewCount.textContent = `${availableReview} ord idag`;
+  if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = availableNew === 0 || newSession.completed;
+  if (els.startReviewStudyBtn) els.startReviewStudyBtn.disabled = availableReview === 0 || reviewSession.completed;
   els.completeTodayCount.textContent = `${completedTotal} klara idag`;
   els.completeMasteredCount.textContent = `${mastered} lärda ord`;
   els.completeStreakCount.textContent = `${streak} dagar i rad`;
@@ -2761,7 +2765,7 @@ function openMissingSearchDetail(query) {
 
 function findBestSearchMatch() {
   const query = state.query.toLowerCase();
-  const visibleWords = getVisibleWords();
+  const visibleWords = getLibraryWordsForDisplay().filter((word) => wordMatchesQuery(word, query));
   const exactWord = visibleWords.find((word) => clean(word.swedish).toLowerCase() === query);
   if (exactWord) return { word: exactWord, mode: "library" };
   if (visibleWords.length > 0) return { word: visibleWords[0], mode: "library" };
@@ -2846,6 +2850,7 @@ function renderPinnedNotebookBooks() {
       const button = document.createElement("button");
       button.className = "book-card";
       button.type = "button";
+      button.disabled = true;
       if (book.id === "all") button.dataset.fixedBook = "all";
       else if (book.action) button.dataset.quickAction = book.action;
       else button.dataset.notebook = book.id;
@@ -3518,8 +3523,43 @@ function renderShadowingTextLines(text, className) {
   const lines = splitShadowingDisplayLines(text);
   const fallback = clean(text) || "—";
   return (lines.length ? lines : [fallback])
-    .map((line) => `<span class="${className}">${escapeHtml(line)}</span>`)
+    .map((line, index) => `<span class="${className}" data-shadowing-line="${index}">${escapeHtml(line)}</span>`)
     .join("");
+}
+
+function activeShadowingLineIndex(item) {
+  const lines = splitShadowingDisplayLines(item?.swedish);
+  if (lines.length <= 1) return 0;
+  if (shadowingSpeechUtterance) {
+    let cursor = 0;
+    for (let index = 0; index < lines.length; index += 1) {
+      cursor += lines[index].length + 1;
+      if (shadowingSpeechCharacterIndex < cursor) return index;
+    }
+    return lines.length - 1;
+  }
+  const duration = Number(shadowingAudio.duration || 0);
+  if (!duration) return 0;
+  return Math.min(lines.length - 1, Math.floor((shadowingAudio.currentTime / duration) * lines.length));
+}
+
+function updateShadowingActiveLine(item) {
+  if (!els.shadowingSubtitle || !item) return;
+  const activeIndex = activeShadowingLineIndex(item);
+  const lines = [...els.shadowingSubtitle.querySelectorAll(".shadowing-subtitle-line")];
+  lines.forEach((line, index) => line.classList.toggle("active", index === activeIndex && state.shadowingPlaybackState === "playing"));
+  const activeLine = lines[activeIndex];
+  if (activeLine && state.shadowingPlaybackState === "playing") {
+    activeLine.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+function updateShadowingProgressControl() {
+  if (!els.shadowingAudioProgress) return;
+  const duration = Number(shadowingAudio.duration || 0);
+  els.shadowingAudioProgress.max = String(duration || 0);
+  els.shadowingAudioProgress.value = String(Math.min(Number(shadowingAudio.currentTime || 0), duration || 0));
+  els.shadowingAudioProgress.disabled = !duration;
 }
 
 function revokeShadowingRecordingObjectUrl() {
@@ -3857,6 +3897,8 @@ function updateShadowingPlaybackUI() {
   if (els.generateShadowingAudioBtn) els.generateShadowingAudioBtn.disabled = !item && !pendingText;
   if (els.downloadShadowingStandardBtn) els.downloadShadowingStandardBtn.disabled = !item || !hasStandardAudio;
   if (els.downloadShadowingRecordingBtn) els.downloadShadowingRecordingBtn.disabled = !item || !hasRecording;
+  updateShadowingProgressControl();
+  updateShadowingActiveLine(item);
 }
 
 function renderShadowing() {
@@ -3922,6 +3964,7 @@ function renderShadowingPlayer() {
       els.shadowingSubtitle.innerHTML = "<strong>Inget träningsinnehåll ännu.</strong><span>Klistra in text ovan och fortsätt för att skapa första träningskortet.</span>";
     }
     if (els.shadowingTime) els.shadowingTime.textContent = "0:00 / 0:00";
+    updateShadowingProgressControl();
     if (els.shadowingLoopRange) els.shadowingLoopRange.textContent = "A-B: 0:00 - 0:00";
     if (els.shadowingRecordingPanel) els.shadowingRecordingPanel.hidden = true;
     if (els.shadowingRecordingPlayer) {
@@ -3953,6 +3996,7 @@ function renderShadowingPlayer() {
     els.shadowingSubtitle.innerHTML = subtitlesHidden
       ? "<strong>字幕已隐藏</strong><span>切换级别或打开字幕查看文本。</span>"
       : `<strong>${renderShadowingTextLines(item.swedish, "shadowing-subtitle-line")}</strong><span>${renderShadowingTextLines(item.chinese, "shadowing-translation-line")}</span>`;
+    updateShadowingActiveLine(item);
   }
   if (els.shadowingAudioHint) {
     const audioLabel = item.standard_audio_path ? "Storage standard audio" : item.tts_status === "generating" ? "Genererar standardljud..." : "Ingen standardljud ännu";
@@ -4139,9 +4183,16 @@ function speakShadowingText(text, { onEnd } = {}) {
   const utterance = new SpeechSynthesisUtterance(input);
   utterance.lang = "sv-SE";
   utterance.rate = 0.88;
+  shadowingSpeechCharacterIndex = 0;
+  utterance.onboundary = (event) => {
+    if (shadowingSpeechUtterance !== utterance || !Number.isFinite(event.charIndex)) return;
+    shadowingSpeechCharacterIndex = event.charIndex;
+    renderShadowingPlayer();
+  };
   utterance.onend = () => {
     if (shadowingSpeechUtterance !== utterance) return;
     shadowingSpeechUtterance = null;
+    shadowingSpeechCharacterIndex = 0;
     state.shadowingPlaybackState = "paused";
     updateShadowingPlaybackUI();
     if (typeof onEnd === "function") onEnd();
@@ -4149,6 +4200,7 @@ function speakShadowingText(text, { onEnd } = {}) {
   utterance.onerror = () => {
     if (shadowingSpeechUtterance !== utterance) return;
     shadowingSpeechUtterance = null;
+    shadowingSpeechCharacterIndex = 0;
     state.shadowingPlaybackState = "paused";
     updateShadowingPlaybackUI();
   };
@@ -4162,6 +4214,7 @@ function speakShadowingText(text, { onEnd } = {}) {
 function stopShadowingSpeech() {
   if (!("speechSynthesis" in window)) return;
   shadowingSpeechUtterance = null;
+  shadowingSpeechCharacterIndex = 0;
   speechSynthesis.cancel();
 }
 
@@ -4248,7 +4301,7 @@ async function generateStandardShadowingAudio() {
     }
   } finally {
     if (els.generateShadowingAudioBtn) {
-      els.generateShadowingAudioBtn.textContent = "Läs upp";
+      els.generateShadowingAudioBtn.textContent = "▶️ Shadowing";
       updateShadowingPlaybackUI();
     }
   }
@@ -5985,7 +6038,12 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
   const existing = readDailyStudy();
   const storedLearnSession = readLearnDailySession(date);
   const candidates = eligibleStudyWords(scope);
-  const reviewCandidatesAll = eligibleReviewWords(scope);
+  const scheduledReviewCandidates = eligibleReviewWords(scope);
+  const reviewCandidatesAll = scheduledReviewCandidates.length > 0
+    ? scheduledReviewCandidates
+    : getLibraryWordsForDisplay().filter(
+        (word) => studyScopeMatches(word, scope) && !isWordInLearnedNotebook(word) && hasWordStudyHistory(word) && studyDateValue(word) < date,
+      );
   const todayNewWordIds = uniqueIds(state.dailyProgress?.todayNewWordIds || []);
   const todayNewCount = Number(state.dailyProgress?.todayNewCount || todayNewWordIds.length || 0) || 0;
   const remainingNewLimit = Math.max(DAILY_NEW_WORD_LIMIT - todayNewCount, 0);
@@ -6000,9 +6058,12 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
   const activeLearnWordIds = storedLearnSession
     ? storedLearnSession.wordIds.filter((id) => availableWordIds.has(id))
     : existingNewWordIds;
-  const reviewWordIds = uniqueIds(state.dailyProgress?.dueReviewWordIds || [])
+  const scheduledReviewWordIds = uniqueIds(state.dailyProgress?.dueReviewWordIds || [])
     .filter((id) => reviewCandidatesAll.some((word) => word.id === id))
     .slice(0, DAILY_NEW_WORD_LIMIT);
+  const reviewWordIds = scheduledReviewWordIds.length > 0
+    ? scheduledReviewWordIds
+    : pickDailyReviewWordIds(reviewCandidatesAll, new Set(), samePlan ? existing.reviewWordIds : []);
   const newWordIds = activeLearnWordIds.length > 0
     ? activeLearnWordIds
     : pickDailyNewWordIds(
@@ -7492,12 +7553,17 @@ function bindEvents() {
   });
 
   els.newShadowingBtn?.addEventListener("click", () => {
-    if (!clean(els.shadowingSwedishInput?.value)) {
-      els.shadowingSwedishInput?.focus();
-      return;
-    }
-    state.shadowingUnknownExpanded = !state.shadowingUnknownExpanded;
+    if (els.shadowingSwedishInput) els.shadowingSwedishInput.value = "";
+    state.shadowingFlowStep = "paste";
+    state.shadowingFlowText = "";
+    state.shadowingFlowWordCount = 0;
+    state.shadowingFlowReadTimeText = "";
+    state.shadowingFlowUnknownWords = [];
+    state.shadowingFlowSelectedUnknownWords = [];
+    state.shadowingUnknownExpanded = false;
     renderShadowingFlow();
+    updateShadowingPlaybackUI();
+    els.shadowingSwedishInput?.focus();
   });
   els.saveShadowingBtn?.addEventListener("click", saveShadowingItemFromForm);
   els.shadowingContinueBtn?.addEventListener("click", () => {
@@ -7517,6 +7583,16 @@ function bindEvents() {
       console.error("[Shadowing] Generate standard audio failed", error);
       alert(error.message || "Kunde inte generera standardljud.");
     });
+  });
+  els.shadowingAudioProgress?.addEventListener("input", (event) => {
+    const nextTime = Number(event.target.value || 0);
+    if (!Number.isFinite(nextTime) || !Number.isFinite(shadowingAudio.duration)) return;
+    state.shadowingSeeking = true;
+    shadowingAudio.currentTime = Math.min(Math.max(nextTime, 0), shadowingAudio.duration);
+    renderShadowingPlayer();
+  });
+  els.shadowingAudioProgress?.addEventListener("change", () => {
+    state.shadowingSeeking = false;
   });
   els.downloadShadowingStandardBtn?.addEventListener("click", () => {
     downloadStandardShadowingAudio().catch((error) => {

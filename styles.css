@@ -533,7 +533,8 @@ main {
   flex-direction: column;
   min-height: 0;
   gap: 12px;
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: 0;
   scroll-padding-bottom: 0;
 }
@@ -545,7 +546,7 @@ main {
 .library-hero {
   display: grid;
   gap: 4px;
-  padding: 12px 4px 2px;
+  padding: 12px 0 2px;
   background: transparent;
 }
 
@@ -1115,6 +1116,16 @@ main {
   display: none;
 }
 
+#notebookPinnedBookList {
+  margin-top: 18px;
+}
+
+#notebookView #createNotebookPanel,
+#notebookView #bookListPanel,
+#notebookView .notebook-scroll-area {
+  display: none;
+}
+
 body[data-active-view="notebookView"] main,
 body[data-active-view="historyView"] main {
   overflow: hidden;
@@ -1565,6 +1576,9 @@ body[data-active-view="historyView"] main {
   border: 1px solid rgba(55, 65, 72, 0.08);
   border-radius: 16px;
   background: var(--surface-soft);
+  max-height: 280px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .shadowing-subtitle strong {
@@ -1575,6 +1589,9 @@ body[data-active-view="historyView"] main {
 .shadowing-subtitle-line,
 .shadowing-translation-line {
   display: block;
+  border-radius: 8px;
+  padding: 3px 6px;
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
 
 .shadowing-subtitle-line + .shadowing-subtitle-line,
@@ -1592,6 +1609,11 @@ body[data-active-view="historyView"] main {
   color: var(--ink);
   font-size: inherit;
   line-height: inherit;
+}
+
+.shadowing-subtitle strong .shadowing-subtitle-line.active {
+  background: rgba(111, 143, 128, 0.16);
+  color: var(--accent-strong);
 }
 
 .shadowing-subtitle.shadowing-subtitles-hidden strong,
@@ -1644,12 +1666,16 @@ body[data-active-view="historyView"] main {
 }
 
 .shadowing-progress {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  gap: 7px;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.shadowing-progress input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-strong);
 }
 
 .shadowing-item-card {
@@ -4680,7 +4706,7 @@ dialog::backdrop {
 
 @media (min-width: 560px) {
   .library-hero {
-    padding-inline: 2px;
+    padding-inline: 0;
   }
 
   .library-shelf {
