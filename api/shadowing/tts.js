@@ -7,6 +7,7 @@ const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || process.env.SPEEC
 const AZURE_SPEECH_VOICE = process.env.AZURE_SPEECH_VOICE || "sv-SE-SofieNeural";
 const AZURE_SPEECH_DIALOGUE_VOICE_A = process.env.AZURE_SPEECH_DIALOGUE_VOICE_A || AZURE_SPEECH_VOICE;
 const AZURE_SPEECH_DIALOGUE_VOICE_B = process.env.AZURE_SPEECH_DIALOGUE_VOICE_B || "sv-SE-MattiasNeural";
+const AZURE_SPEECH_VOICES = new Set(["sv-SE-SofieNeural", "sv-SE-MattiasNeural"]);
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5";
 const ELEVENLABS_LANGUAGE_CODE = process.env.ELEVENLABS_LANGUAGE_CODE || "sv";
@@ -100,16 +101,17 @@ async function synthesizeAzureTurn(text, voice) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-async function synthesizeWithAzure(text) {
+async function synthesizeWithAzure(text, requestedVoice = "") {
   const turns = dialogueTurns(text);
   const dialogue = turns.length >= 2;
+  const selectedVoice = AZURE_SPEECH_VOICES.has(requestedVoice) ? requestedVoice : AZURE_SPEECH_VOICE;
   const audioBuffer = dialogue
     ? Buffer.concat(await Promise.all(turns.map((turn) => synthesizeAzureTurn(turn.text, turn.voice))))
-    : await synthesizeAzureTurn(text, AZURE_SPEECH_VOICE);
+    : await synthesizeAzureTurn(text, selectedVoice);
   return {
     audioBuffer,
     provider: "azure-speech",
-    voiceId: dialogue ? `${AZURE_SPEECH_DIALOGUE_VOICE_A}+${AZURE_SPEECH_DIALOGUE_VOICE_B}` : AZURE_SPEECH_VOICE,
+    voiceId: dialogue ? `${AZURE_SPEECH_DIALOGUE_VOICE_A}+${AZURE_SPEECH_DIALOGUE_VOICE_B}` : selectedVoice,
     modelId: "azure-speech-tts",
     languageCode: "sv-SE",
   };
@@ -148,7 +150,7 @@ async function synthesizeWithElevenLabs(text, voice) {
 async function synthesizeSwedishSpeech(text, voice) {
   if (AZURE_SPEECH_KEY && AZURE_SPEECH_REGION) {
     try {
-      return await synthesizeWithAzure(text);
+      return await synthesizeWithAzure(text, voice);
     } catch (error) {
       if (!ELEVENLABS_API_KEY) throw error;
       console.warn("[Shadowing TTS] Azure Speech failed. Falling back to ElevenLabs.", error);

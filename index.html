@@ -235,7 +235,10 @@
 
         <section id="wordLibraryView" class="view word-library-view">
           <section class="panel export-panel" aria-label="Exportera ordlista">
-            <div><h2>Exportera ordlista</h2></div>
+            <div class="export-panel-header">
+              <h2>Exportera ordlista</h2>
+              <button class="icon-button" id="closeLibraryBtn" type="button" title="Stäng ordlista">×</button>
+            </div>
             <div class="export-controls">
               <label class="field-label">
                 Ordklass
@@ -294,7 +297,6 @@
             <h2>Ordlista</h2>
             <div class="practice-actions">
               <button class="primary-button" id="addWordBtn" type="button">Lägg till ord</button>
-              <button class="icon-button" id="closeLibraryBtn" type="button" title="Stäng ordlista">×</button>
             </div>
           </section>
           <section class="word-list" id="wordList" aria-live="polite"></section>
@@ -460,6 +462,13 @@
                   <h2>Practice</h2>
                   <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
+                <label class="shadowing-voice-control">
+                  Röst
+                  <select id="shadowingVoiceSelect">
+                    <option value="sv-SE-SofieNeural">Sofie</option>
+                    <option value="sv-SE-MattiasNeural">Mattias</option>
+                  </select>
+                </label>
               </div>
               <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
               <div class="shadowing-controls">
@@ -478,7 +487,18 @@
               <button class="primary-button visually-hidden" id="shadowingCompareBtn" type="button">Compare</button>
               <div class="shadowing-progress">
                 <input id="shadowingAudioProgress" type="range" min="0" max="0" step="0.1" value="0" aria-label="Standardljudets position" />
-                <span id="shadowingTime">0:00 / 0:00</span>
+                <div class="shadowing-progress-meta">
+                  <span id="shadowingTime">0:00 / 0:00</span>
+                  <label>
+                    Hastighet
+                    <select id="shadowingPlaybackRate">
+                      <option value="0.75">0,75×</option>
+                      <option value="1" selected>1×</option>
+                      <option value="1.25">1,25×</option>
+                      <option value="1.5">1,5×</option>
+                    </select>
+                  </label>
+                </div>
                 <span class="visually-hidden" id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
               </div>
               <section class="shadowing-recording-panel" id="shadowingRecordingPanel" hidden>
@@ -491,7 +511,7 @@
                 <audio class="shadowing-recording-audio" id="shadowingRecordingPlayer" controls hidden></audio>
                 <div class="practice-actions">
                   <button class="secondary-button" id="shadowingPlayRecordingBtn" type="button">Lyssna</button>
-                  <button class="secondary-button" id="shadowingClearRecordingBtn" type="button">Rensa</button>
+                  <button class="secondary-button" id="shadowingClearRecordingBtn" type="button">🗑️ Rensa</button>
                 </div>
               </section>
             </section>

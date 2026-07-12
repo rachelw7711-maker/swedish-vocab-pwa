@@ -446,6 +446,8 @@ const els = {
   shadowingLevelButtons: document.querySelector("#shadowingLevelButtons"),
   shadowingTime: document.querySelector("#shadowingTime"),
   shadowingAudioProgress: document.querySelector("#shadowingAudioProgress"),
+  shadowingPlaybackRate: document.querySelector("#shadowingPlaybackRate"),
+  shadowingVoiceSelect: document.querySelector("#shadowingVoiceSelect"),
   shadowingLoopRange: document.querySelector("#shadowingLoopRange"),
   shadowingRecordingPanel: document.querySelector("#shadowingRecordingPanel"),
   shadowingRecordingStatus: document.querySelector("#shadowingRecordingStatus"),
@@ -2516,6 +2518,14 @@ async function submitAuthForm(event) {
     email,
     options: {
       emailRedirectTo: redirectTo,
+      shouldCreateUser: state.auth.mode === "signup",
+      data: state.auth.mode === "signup"
+        ? {
+            first_name: clean(els.authFirstNameInput?.value || ""),
+            last_name: clean(els.authLastNameInput?.value || ""),
+            full_name: clean(`${els.authFirstNameInput?.value || ""} ${els.authLastNameInput?.value || ""}`),
+          }
+        : undefined,
     },
   });
   state.auth.busy = false;
@@ -3664,6 +3674,12 @@ function populateShadowingForm(item) {
   els.shadowingAudioFileInput.value = "";
   els.shadowingCategoryInput.value = item.category || "Ungrouped";
   els.shadowingLevelInput.value = String(normalizeShadowingLevel(item.level));
+  if (els.shadowingVoiceSelect) {
+    const voice = clean(item.tts_voice_id);
+    els.shadowingVoiceSelect.value = [...els.shadowingVoiceSelect.options].some((option) => option.value === voice)
+      ? voice
+      : "sv-SE-SofieNeural";
+  }
   revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = "";
   state.shadowingRecordingMimeType = "";
@@ -3888,6 +3904,7 @@ function updateShadowingPlaybackUI() {
   if (els.shadowingToggleContinuousBtn) els.shadowingToggleContinuousBtn.classList.toggle("active", state.shadowingContinuous);
   if (els.shadowingToggleSubtitlesBtn) els.shadowingToggleSubtitlesBtn.classList.toggle("active", !state.shadowingShowSubtitles);
   if (els.shadowingRecordBtn) els.shadowingRecordBtn.disabled = !item || !navigator.mediaDevices?.getUserMedia || Boolean(shadowingRecorder);
+  if (els.shadowingRecordBtn) els.shadowingRecordBtn.textContent = shadowingRecorder ? "Spelar in…" : "Spela in";
   if (els.shadowingPlayRecordingBtn) els.shadowingPlayRecordingBtn.disabled = !item || !hasRecording;
   if (els.shadowingExportStandardPlayBtn) els.shadowingExportStandardPlayBtn.disabled = !item || !canPlayStandard;
   if (els.shadowingExportRecordingPlayBtn) els.shadowingExportRecordingPlayBtn.disabled = !item || !hasRecording;
@@ -4011,8 +4028,9 @@ function renderShadowingPlayer() {
   if (els.shadowingRecordingPanel) {
     els.shadowingRecordingPanel.hidden = !(state.shadowingRecordingUrl || shadowingRecorder);
     if (els.shadowingRecordingStatus) {
-      els.shadowingRecordingStatus.hidden = !state.shadowingRecordingUrl;
-      els.shadowingRecordingStatus.textContent = "Audio";
+      els.shadowingRecordingStatus.hidden = !state.shadowingRecordingUrl && !shadowingRecorder;
+      els.shadowingRecordingStatus.textContent = shadowingRecorder ? "● Spelar in…" : "Audio";
+      els.shadowingRecordingStatus.classList.toggle("recording", Boolean(shadowingRecorder));
     }
     if (els.shadowingRecordingPlayer) {
       els.shadowingRecordingPlayer.hidden = !(state.shadowingRecordingUrl || shadowingRecorder);
@@ -4100,8 +4118,8 @@ async function saveShadowingItemFromForm() {
     standard_audio_size_bytes: existing?.standard_audio_size_bytes || null,
     standard_audio_duration_ms: existing?.standard_audio_duration_ms || null,
     tts_provider: existing?.tts_provider || "elevenlabs",
-    tts_voice_id: existing?.tts_voice_id || "",
-    tts_voice_name: existing?.tts_voice_name || "",
+    tts_voice_id: clean(els.shadowingVoiceSelect?.value) || existing?.tts_voice_id || "",
+    tts_voice_name: els.shadowingVoiceSelect?.selectedOptions?.[0]?.textContent || existing?.tts_voice_name || "",
     tts_model_id: existing?.tts_model_id || "",
     tts_settings: existing?.tts_settings || {},
     tts_status: existing?.tts_status || "pending",
@@ -4252,7 +4270,7 @@ async function generateStandardShadowingAudio() {
       },
       body: JSON.stringify({
         text,
-        voiceId: item.tts_voice_id || DEFAULT_ELEVENLABS_VOICE_ID,
+        voiceId: clean(els.shadowingVoiceSelect?.value) || item.tts_voice_id || DEFAULT_ELEVENLABS_VOICE_ID,
         itemId: item.id,
       }),
     });
@@ -4631,18 +4649,23 @@ function stopShadowingRecording() {
 
 async function clearShadowingRecording() {
   const itemId = state.shadowingRecordingItemId || state.selectedShadowingId;
-  const recording = getLatestShadowingRecording(itemId);
-  if (recording?.id) {
+  const recordings = (state.shadowingRecordings || []).filter((row) => row.shadowing_item_id === itemId);
+  await Promise.all(recordings.map(async (recording) => {
     const descriptor = recordingAudioDescriptor(recording);
     await remoteDb.deleteShadowingRecording(recording.id).catch((error) => console.warn("[Shadowing] Remote recording delete failed", error));
     if (descriptor?.bucket && descriptor?.path) {
       await remoteDb.deleteShadowingAudio(descriptor).catch((error) => console.warn("[Shadowing] Recording audio delete failed", error));
       shadowingSignedUrlCache.delete(`${descriptor.bucket}:${descriptor.path}`);
     }
-    state.shadowingRecordings = (state.shadowingRecordings || []).filter((row) => row.id !== recording.id);
-    if (remotePhase4Snapshot?.shadowingRecordings) {
-      remotePhase4Snapshot.shadowingRecordings = remotePhase4Snapshot.shadowingRecordings.filter((row) => row.id !== recording.id);
-    }
+  }));
+  const removedIds = new Set(recordings.map((recording) => recording.id));
+  state.shadowingRecordings = (state.shadowingRecordings || []).filter(
+    (row) => row.shadowing_item_id !== itemId && !removedIds.has(row.id),
+  );
+  if (remotePhase4Snapshot?.shadowingRecordings) {
+    remotePhase4Snapshot.shadowingRecordings = remotePhase4Snapshot.shadowingRecordings.filter(
+      (row) => row.shadowing_item_id !== itemId && !removedIds.has(row.id),
+    );
   }
   revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = "";
@@ -4654,6 +4677,7 @@ async function clearShadowingRecording() {
   if (els.shadowingRecordingPlayer) {
     els.shadowingRecordingPlayer.pause();
     els.shadowingRecordingPlayer.removeAttribute("src");
+    els.shadowingRecordingPlayer.load();
     els.shadowingRecordingPlayer.hidden = true;
   }
   updateShadowingPlaybackUI();
@@ -7598,6 +7622,19 @@ function bindEvents() {
   });
   els.shadowingAudioProgress?.addEventListener("change", () => {
     state.shadowingSeeking = false;
+  });
+  els.shadowingPlaybackRate?.addEventListener("change", (event) => {
+    const rate = Number(event.target.value || 1);
+    const playbackRate = Number.isFinite(rate) ? rate : 1;
+    shadowingAudio.playbackRate = playbackRate;
+    shadowingRecordingAudio.playbackRate = playbackRate;
+    if (els.shadowingRecordingPlayer) els.shadowingRecordingPlayer.playbackRate = playbackRate;
+  });
+  els.shadowingVoiceSelect?.addEventListener("change", () => {
+    const item = getSelectedShadowingItem();
+    if (!item) return;
+    item.tts_voice_id = els.shadowingVoiceSelect.value;
+    item.tts_voice_name = els.shadowingVoiceSelect.selectedOptions?.[0]?.textContent || "";
   });
   els.downloadShadowingStandardBtn?.addEventListener("click", () => {
     downloadStandardShadowingAudio().catch((error) => {
