@@ -350,8 +350,10 @@ main {
 .tab {
   display: grid;
   justify-items: center;
+  justify-content: center;
   align-content: center;
-  gap: 2px;
+  grid-template-columns: auto auto;
+  gap: 7px;
   min-width: 0;
   height: var(--tabbar-height);
   padding: 0 6px;
@@ -379,7 +381,7 @@ main {
 }
 
 .tab-icon {
-  display: none;
+  display: inline-grid;
   flex: 0 0 20px;
   place-items: center;
   width: 18px;
@@ -404,17 +406,25 @@ main {
 
 .tab-label {
   position: relative;
-  padding-bottom: 0;
+  padding-bottom: 5px;
   line-height: 1;
 }
 
 .tab.active {
-  color: var(--ink);
-  background: #e5f1eb;
+  color: var(--accent-strong);
+  background: transparent;
 }
 
 .tab.active .tab-label::after {
-  display: none;
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 24px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: translateX(-50%);
 }
 
 .tab.active .tab-icon,
@@ -546,10 +556,11 @@ main {
 
 .library-hero-copy h2 {
   margin: 0;
-  color: #193126;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 2rem;
-  line-height: 1.08;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.98rem;
+  font-weight: 720;
+  line-height: 1.2;
 }
 
 .library-hero-copy p {
@@ -601,7 +612,7 @@ main {
   place-items: center;
   width: 76px;
   height: 104px;
-  border-radius: 14px 0 0 14px;
+  border-radius: 14px;
   overflow: hidden;
   box-shadow:
     0 16px 32px rgba(33, 38, 45, 0.18),
@@ -609,11 +620,11 @@ main {
 }
 
 .library-book-cover svg {
-  width: 36px;
-  height: 36px;
+  width: 39px;
+  height: 39px;
   fill: none;
   stroke: rgba(255, 255, 255, 0.94);
-  stroke-width: 1.5;
+  stroke-width: 1.25;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -720,6 +731,7 @@ main {
 
 .library-book-meta span {
   color: var(--muted);
+  font-size: 0.72rem;
   line-height: 1.4;
 }
 
@@ -774,6 +786,8 @@ main {
 .profile-signed-out-panel {
   display: grid;
   gap: 18px;
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .profile-start-card,
@@ -1073,6 +1087,7 @@ body[data-active-view="historyView"] main {
 .profile-shell {
   min-height: 100%;
   padding: 4px 4px 24px;
+  align-items: start;
 }
 
 .profile-welcome-brand {
