@@ -2508,7 +2508,7 @@ function closeAuthDialog() {
 }
 
 function getAuthRedirectUrl() {
-  return isLocalDevelopmentHost() ? AUTH_REDIRECT_URL : `${window.location.origin}/`;
+  return isLocalDevelopmentOrigin() ? AUTH_REDIRECT_URL : `${window.location.origin}/`;
 }
 
 function withAuthTimeout(request, timeoutMs = 15000) {
@@ -8230,6 +8230,8 @@ function bindEvents() {
   els.authForm?.addEventListener("submit", (event) => {
     submitAuthForm(event).catch((error) => {
       console.error("[Min Ordbok] Auth submit failed", error);
+      state.auth.busy = false;
+      renderAuthState();
       setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
     });
   });

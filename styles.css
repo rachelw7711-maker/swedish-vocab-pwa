@@ -1646,8 +1646,11 @@ body[data-active-view="historyView"] main {
 }
 
 .shadowing-player {
+  position: relative;
+  z-index: 4;
   display: grid;
   gap: 18px;
+  overflow: visible;
 }
 
 .shadowing-controls button {
@@ -1763,7 +1766,11 @@ body[data-active-view="historyView"] main {
   display: grid;
   gap: 7px;
   width: min(250px, calc(100vw - 56px));
+  max-height: min(330px, 52dvh);
   padding: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(55, 65, 72, 0.12);
   border-radius: 12px;
   background: #fff;
