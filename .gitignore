@@ -20,6 +20,8 @@ icons/*
 !icons/maskable-icon.png
 !icons/enkel-symbol.png
 !icons/home-hero-illustration.png
+!icons/library-covers/
+!icons/library-covers/*
 public/icons/*
 !public/icons/app-icon.png
 !public/icons/apple-touch-icon.png
