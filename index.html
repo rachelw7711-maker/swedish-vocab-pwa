@@ -462,13 +462,18 @@
                   <h2>Practice</h2>
                   <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
-                <label class="shadowing-voice-control">
-                  Röst
+                <details class="shadowing-voice-control">
+                  <summary aria-label="Välj uppläsningsröst" title="Välj uppläsningsröst">🗣️</summary>
                   <select id="shadowingVoiceSelect">
                     <option value="sv-SE-SofieNeural">Sofie</option>
                     <option value="sv-SE-MattiasNeural">Mattias</option>
+                    <option value="sv-SE-HilleviNeural">Hillevi</option>
+                    <option value="en-US-AvaMultilingualNeural">Ava · flerspråkig</option>
+                    <option value="en-US-AndrewMultilingualNeural">Andrew · flerspråkig</option>
+                    <option value="en-US-EmmaMultilingualNeural">Emma · flerspråkig</option>
+                    <option value="en-US-BrianMultilingualNeural">Brian · flerspråkig</option>
                   </select>
-                </label>
+                </details>
               </div>
               <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
               <div class="shadowing-controls">
@@ -599,9 +604,15 @@
           </div>
           <section class="auth-dialog-body">
             <div class="auth-social-row" aria-label="Snabbval">
-              <button type="button" aria-label="Apple" disabled></button>
-              <button type="button" aria-label="Google" disabled>G</button>
-              <button type="button" aria-label="Facebook" disabled>f</button>
+              <button type="button" aria-label="Fortsätt med Apple" data-auth-provider="apple">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.33-.07 2.26.73 3.04.79 1.17-.24 2.29-.93 3.54-.84 1.5.12 2.63.71 3.38 1.8-3.09 1.85-2.36 5.92.48 7.06-.57 1.5-1.31 2.99-2.44 4.17ZM12.03 7.25C11.88 5.02 13.69 3.18 15.77 3c.29 2.58-2.34 4.5-3.74 4.25Z" /></svg>
+              </button>
+              <button type="button" aria-label="Fortsätt med Google" data-auth-provider="google">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285f4" d="M21.35 12.2c0-.64-.06-1.25-.17-1.84H12v3.47h5.25a4.49 4.49 0 0 1-1.95 2.94v2.25h3.16c1.85-1.7 2.89-4.22 2.89-6.82Z"/><path fill="#34a853" d="M12 21.72c2.64 0 4.86-.88 6.48-2.38l-3.16-2.45c-.88.59-2 .94-3.32.94-2.55 0-4.71-1.72-5.48-4.03H3.26v2.53A9.78 9.78 0 0 0 12 21.72Z"/><path fill="#fbbc05" d="M6.52 13.8a5.88 5.88 0 0 1 0-3.76V7.51H3.26a9.79 9.79 0 0 0 0 8.82l3.26-2.53Z"/><path fill="#ea4335" d="M12 6.01c1.44 0 2.72.5 3.74 1.46l2.81-2.81A9.42 9.42 0 0 0 12 2.12a9.78 9.78 0 0 0-8.74 5.39l3.26 2.53C7.29 7.73 9.45 6.01 12 6.01Z"/></svg>
+              </button>
+              <button type="button" aria-label="Fortsätt med Facebook" data-auth-provider="facebook">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877f2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.7 4.53-4.7 1.31 0 2.69.24 2.69.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.88v2.27h3.32l-.53 3.49h-2.79V24C19.61 23.1 24 18.1 24 12.07Z"/><path fill="#fff" d="m16.68 15.56.53-3.49h-3.32V9.8c0-.95.46-1.88 1.95-1.88h1.51V4.95s-1.38-.24-2.69-.24c-2.74 0-4.53 1.67-4.53 4.7v2.66H7.08v3.49h3.05V24a12 12 0 0 0 3.76 0v-8.44h2.79Z"/></svg>
+              </button>
             </div>
             <div class="auth-signup-fields" id="authSignupFields" hidden>
               <label class="field-label">

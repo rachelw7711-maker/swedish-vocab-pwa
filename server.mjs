@@ -17,7 +17,15 @@ const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || process.env.SPEEC
 const AZURE_SPEECH_VOICE = process.env.AZURE_SPEECH_VOICE || "sv-SE-SofieNeural";
 const AZURE_SPEECH_DIALOGUE_VOICE_A = process.env.AZURE_SPEECH_DIALOGUE_VOICE_A || AZURE_SPEECH_VOICE;
 const AZURE_SPEECH_DIALOGUE_VOICE_B = process.env.AZURE_SPEECH_DIALOGUE_VOICE_B || "sv-SE-MattiasNeural";
-const AZURE_SPEECH_VOICES = new Set(["sv-SE-SofieNeural", "sv-SE-MattiasNeural"]);
+const AZURE_SPEECH_VOICES = new Set([
+  "sv-SE-SofieNeural",
+  "sv-SE-MattiasNeural",
+  "sv-SE-HilleviNeural",
+  "en-US-AvaMultilingualNeural",
+  "en-US-AndrewMultilingualNeural",
+  "en-US-EmmaMultilingualNeural",
+  "en-US-BrianMultilingualNeural",
+]);
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5";

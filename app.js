@@ -42,6 +42,7 @@ const APP_BOOT_VERSION = "stable-start-20260711-01";
 const SHADOWING_STANDARD_AUDIO_BUCKET = "shadowing-standard-audio";
 const SHADOWING_RECORDINGS_BUCKET = "shadowing-recordings";
 const DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
+const AUTH_REDIRECT_URL = "https://swedish-vocab-pwa.vercel.app/";
 const LEGACY_VIEW_STATE_KEYS = [
   "currentPage",
   "activeView",
@@ -2456,6 +2457,9 @@ function renderAuthState() {
     els.submitAuthBtn.disabled = state.auth.loading || state.auth.busy;
     els.submitAuthBtn.textContent = state.auth.busy ? "Skickar..." : state.auth.mode === "signup" ? "Skapa konto" : "Skicka länk";
   }
+  document.querySelectorAll("[data-auth-provider]").forEach((button) => {
+    button.disabled = state.auth.loading || state.auth.busy;
+  });
 }
 
 async function refreshAuthState({ reloadData = false } = {}) {
@@ -2503,6 +2507,24 @@ function closeAuthDialog() {
   els.authDialog.close();
 }
 
+function getAuthRedirectUrl() {
+  return isLocalDevelopmentHost() ? AUTH_REDIRECT_URL : `${window.location.origin}/`;
+}
+
+async function signInWithAuthProvider(provider) {
+  if (!provider || state.auth.loading || state.auth.busy) return;
+  state.auth.busy = true;
+  setAuthMessage("");
+  renderAuthState();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: getAuthRedirectUrl() },
+  });
+  state.auth.busy = false;
+  renderAuthState();
+  if (error) setAuthMessage(error.message || "Kunde inte starta inloggningen.");
+}
+
 async function submitAuthForm(event) {
   event.preventDefault();
   const email = clean(els.authEmailInput?.value || "");
@@ -2513,7 +2535,7 @@ async function submitAuthForm(event) {
   state.auth.busy = true;
   setAuthMessage("");
   renderAuthState();
-  const redirectTo = `${window.location.origin}${window.location.pathname}`;
+  const redirectTo = getAuthRedirectUrl();
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
@@ -7631,6 +7653,7 @@ function bindEvents() {
     if (els.shadowingRecordingPlayer) els.shadowingRecordingPlayer.playbackRate = playbackRate;
   });
   els.shadowingVoiceSelect?.addEventListener("change", () => {
+    els.shadowingVoiceSelect.closest("details")?.removeAttribute("open");
     const item = getSelectedShadowingItem();
     if (!item) return;
     item.tts_voice_id = els.shadowingVoiceSelect.value;
@@ -8135,6 +8158,16 @@ function bindEvents() {
   els.authSignupTab?.addEventListener("click", () => {
     setAuthMode("signup");
     setAuthMessage("");
+  });
+  els.authDialog?.addEventListener("click", (event) => {
+    const provider = event.target.closest("[data-auth-provider]")?.dataset.authProvider;
+    if (!provider) return;
+    signInWithAuthProvider(provider).catch((error) => {
+      console.error("[Min Ordbok] OAuth action failed", error);
+      state.auth.busy = false;
+      renderAuthState();
+      setAuthMessage(error.message || "Kunde inte starta inloggningen.");
+    });
   });
   els.profileSignupButton?.addEventListener("click", () => {
     openAuthDialog("signup");
