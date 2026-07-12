@@ -8286,7 +8286,10 @@ async function registerServiceWorker() {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(
       registrations
-        .filter((registration) => registration.active?.scriptURL && !registration.active.scriptURL.endsWith("/sw.js"))
+        .filter(
+          (registration) =>
+            registration.active?.scriptURL && !new URL(registration.active.scriptURL).pathname.endsWith("/sw.js"),
+        )
         .map((registration) => registration.unregister()),
     );
     let refreshing = false;
