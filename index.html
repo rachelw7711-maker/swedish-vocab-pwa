@@ -416,7 +416,7 @@
               <input type="hidden" id="shadowingItemId" />
               <label class="field-label">
                 Text
-                <textarea id="shadowingSwedishInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
+                <textarea id="shadowingSwedishInput" class="shadowing-prepare-textarea" rows="6" placeholder="Klistra in svensk text här."></textarea>
               </label>
               <div class="practice-actions shadowing-module-actions">
                 <button class="secondary-button" id="newShadowingBtn" type="button">🗑️ Rensa text</button>
@@ -463,8 +463,17 @@
                   <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
                 <details class="shadowing-voice-control">
-                  <summary aria-label="Välj uppläsningsröst" title="Välj uppläsningsröst">🗣️</summary>
-                  <select id="shadowingVoiceSelect">
+                  <summary aria-label="Välj uppläsningsröst" title="Välj uppläsningsröst">🗣️ Röst</summary>
+                  <div class="shadowing-voice-options" role="listbox" aria-label="Uppläsningsröster">
+                    <button type="button" data-shadowing-voice="sv-SE-SofieNeural">Sofie</button>
+                    <button type="button" data-shadowing-voice="sv-SE-MattiasNeural">Mattias</button>
+                    <button type="button" data-shadowing-voice="sv-SE-HilleviNeural">Hillevi</button>
+                    <button type="button" data-shadowing-voice="en-US-AvaMultilingualNeural">Ava · flerspråkig</button>
+                    <button type="button" data-shadowing-voice="en-US-AndrewMultilingualNeural">Andrew · flerspråkig</button>
+                    <button type="button" data-shadowing-voice="en-US-EmmaMultilingualNeural">Emma · flerspråkig</button>
+                    <button type="button" data-shadowing-voice="en-US-BrianMultilingualNeural">Brian · flerspråkig</button>
+                  </div>
+                  <select class="visually-hidden" id="shadowingVoiceSelect" aria-hidden="true" tabindex="-1">
                     <option value="sv-SE-SofieNeural">Sofie</option>
                     <option value="sv-SE-MattiasNeural">Mattias</option>
                     <option value="sv-SE-HilleviNeural">Hillevi</option>

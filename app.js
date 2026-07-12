@@ -2511,6 +2511,15 @@ function getAuthRedirectUrl() {
   return isLocalDevelopmentHost() ? AUTH_REDIRECT_URL : `${window.location.origin}/`;
 }
 
+function withAuthTimeout(request, timeoutMs = 15000) {
+  return Promise.race([
+    request,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error("Anslutningen tog för lång tid. Försök igen.")), timeoutMs);
+    }),
+  ]);
+}
+
 async function signInWithAuthProvider(provider) {
   if (!provider || state.auth.loading || state.auth.busy) return;
   state.auth.busy = true;
@@ -2536,32 +2545,39 @@ async function submitAuthForm(event) {
   setAuthMessage("");
   renderAuthState();
   const redirectTo = getAuthRedirectUrl();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: redirectTo,
-      shouldCreateUser: state.auth.mode === "signup",
-      data: state.auth.mode === "signup"
-        ? {
-            first_name: clean(els.authFirstNameInput?.value || ""),
-            last_name: clean(els.authLastNameInput?.value || ""),
-            full_name: clean(`${els.authFirstNameInput?.value || ""} ${els.authLastNameInput?.value || ""}`),
-          }
-        : undefined,
-    },
-  });
-  state.auth.busy = false;
-  renderAuthState();
-  if (error) {
+  try {
+    const { error } = await withAuthTimeout(
+      supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: redirectTo,
+          shouldCreateUser: state.auth.mode === "signup",
+          data: state.auth.mode === "signup"
+            ? {
+                first_name: clean(els.authFirstNameInput?.value || ""),
+                last_name: clean(els.authLastNameInput?.value || ""),
+                full_name: clean(`${els.authFirstNameInput?.value || ""} ${els.authLastNameInput?.value || ""}`),
+              }
+            : undefined,
+        },
+      }),
+    );
+    if (error) {
+      setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
+      return;
+    }
+    setAuthMessage(
+      state.auth.mode === "signup"
+        ? "Vi har skickat en bekräftelselänk till din e-post."
+        : "Vi har skickat en inloggningslänk till din e-post.",
+    );
+    if (els.authEmailInput) els.authEmailInput.value = email;
+  } catch (error) {
     setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
-    return;
+  } finally {
+    state.auth.busy = false;
+    renderAuthState();
   }
-  setAuthMessage(
-    state.auth.mode === "signup"
-      ? "Vi har skickat en bekräftelselänk till din e-post."
-      : "Vi har skickat en inloggningslänk till din e-post.",
-  );
-  if (els.authEmailInput) els.authEmailInput.value = email;
 }
 
 async function handleAuthButtonClick() {
@@ -3701,6 +3717,7 @@ function populateShadowingForm(item) {
     els.shadowingVoiceSelect.value = [...els.shadowingVoiceSelect.options].some((option) => option.value === voice)
       ? voice
       : "sv-SE-SofieNeural";
+    syncShadowingVoiceOptions();
   }
   revokeShadowingRecordingObjectUrl();
   state.shadowingRecordingUrl = "";
@@ -3717,6 +3734,15 @@ function populateShadowingForm(item) {
   state.shadowingFlowSelectedUnknownWords = state.shadowingFlowUnknownWords.map((entry) => entry.value);
   updateShadowingAudioHint(item.audio_file_name ? `Uppladdad fil: ${item.audio_file_name}` : item.audio || item.audio_source ? "Extern ljudkälla." : "Ingen ljudkälla ännu.");
   renderShadowingFlow();
+}
+
+function syncShadowingVoiceOptions() {
+  const selectedVoice = els.shadowingVoiceSelect?.value || "sv-SE-SofieNeural";
+  document.querySelectorAll("[data-shadowing-voice]").forEach((button) => {
+    const active = button.dataset.shadowingVoice === selectedVoice;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
 }
 
 function updateShadowingAudioHint(message = "") {
@@ -7654,11 +7680,19 @@ function bindEvents() {
   });
   els.shadowingVoiceSelect?.addEventListener("change", () => {
     els.shadowingVoiceSelect.closest("details")?.removeAttribute("open");
+    syncShadowingVoiceOptions();
     const item = getSelectedShadowingItem();
     if (!item) return;
     item.tts_voice_id = els.shadowingVoiceSelect.value;
     item.tts_voice_name = els.shadowingVoiceSelect.selectedOptions?.[0]?.textContent || "";
   });
+  document.querySelector(".shadowing-voice-options")?.addEventListener("click", (event) => {
+    const voice = event.target.closest("[data-shadowing-voice]")?.dataset.shadowingVoice;
+    if (!voice || !els.shadowingVoiceSelect) return;
+    els.shadowingVoiceSelect.value = voice;
+    els.shadowingVoiceSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  syncShadowingVoiceOptions();
   els.downloadShadowingStandardBtn?.addEventListener("click", () => {
     downloadStandardShadowingAudio().catch((error) => {
       console.error("[Shadowing] Standard audio download failed", error);

@@ -1393,8 +1393,8 @@ body[data-active-view="historyView"] main {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  min-height: 140px;
-  max-height: 220px;
+  min-height: 116px;
+  max-height: 180px;
   overflow-x: hidden;
   overflow-y: auto;
   overflow-wrap: anywhere;
@@ -1732,15 +1732,21 @@ body[data-active-view="historyView"] main {
 }
 
 .shadowing-voice-control summary {
-  display: grid;
-  width: 42px;
+  display: inline-flex;
+  width: auto;
+  min-width: 92px;
   height: 42px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid rgba(55, 65, 72, 0.1);
-  border-radius: 50%;
-  background: #fff;
+  border-radius: 14px;
+  background: #e5f4ee;
+  color: #23604d;
   box-shadow: var(--soft-shadow);
-  font-size: 1.15rem;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  font-weight: 720;
   cursor: pointer;
   list-style: none;
 }
@@ -1749,20 +1755,37 @@ body[data-active-view="historyView"] main {
   display: none;
 }
 
-.shadowing-voice-control select {
+.shadowing-voice-options {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
   z-index: 5;
-  width: min(230px, calc(100vw - 56px));
-  min-height: 42px;
-  padding: 0 10px;
+  display: grid;
+  gap: 7px;
+  width: min(250px, calc(100vw - 56px));
+  padding: 10px;
   border: 1px solid rgba(55, 65, 72, 0.12);
   border-radius: 12px;
   background: #fff;
-  color: var(--ink);
   box-shadow: 0 14px 34px rgba(31, 42, 48, 0.16);
+}
+
+.shadowing-voice-options button {
+  min-height: 42px;
+  border: 1px solid rgba(112, 118, 128, 0.12);
+  border-radius: 12px;
+  background: #f7faf8;
+  color: #24312d;
+  padding: 0 12px;
   font-size: 0.86rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.shadowing-voice-options button.active {
+  border-color: rgba(44, 113, 92, 0.22);
+  background: #e5f4ee;
+  color: #23604d;
 }
 
 .shadowing-item-card {
@@ -3027,7 +3050,16 @@ h2 {
 }
 
 .word-library-view > .toolbar .practice-actions {
+  width: auto;
   margin-left: auto;
+}
+
+#addWordBtn {
+  width: auto;
+  min-width: 0;
+  max-width: 140px;
+  padding-inline: 14px;
+  white-space: nowrap;
 }
 
 .export-controls {
@@ -3787,6 +3819,7 @@ dialog:not([open]) {
   max-height: calc(100dvh - 16px);
   padding: 0;
   overflow: hidden;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   background: var(--surface-solid);
@@ -4359,6 +4392,7 @@ dialog::backdrop {
   height: 100%;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -4405,6 +4439,14 @@ dialog::backdrop {
   color: var(--ink);
   padding: 12px;
   outline: 0;
+  font-size: 16px;
+}
+
+.word-form label,
+.word-form section,
+.word-form .compact-grid {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .word-form textarea {
@@ -4586,6 +4628,12 @@ dialog::backdrop {
   .toolbar .practice-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .word-library-view > .toolbar .practice-actions {
+    width: auto;
+    margin-left: auto;
+    justify-content: flex-end;
   }
 
   .word-card {
