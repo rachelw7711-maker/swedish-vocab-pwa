@@ -1037,14 +1037,19 @@ async function persistDailyStudyPlan(plan = state.dailyStudy || readDailyStudy()
 function applyRemoteStudyState(plan, snapshot = remotePhase4Snapshot) {
   if (!snapshot?.enabled || !plan) return plan;
   const remoteSessions = remoteStudySessionState(snapshot);
+  const studyReadyWordIds = new Set(
+    getLibraryWordsForDisplay()
+      .filter(isStudyReadyWord)
+      .map((word) => word.id),
+  );
   const sessionIds = {};
   (snapshot.studySessions || []).forEach((session) => {
     if (session.mode) sessionIds[session.mode] = session.id;
   });
-  const remoteNewWordIds = uniqueIds(remoteSessions.new?.wordIds || []);
-  const remoteReviewWordIds = uniqueIds(remoteSessions.review?.wordIds || []);
-  const nextNewWordIds = remoteNewWordIds.length ? remoteNewWordIds : uniqueIds(plan.newWordIds);
-  const nextReviewWordIds = remoteReviewWordIds.length ? remoteReviewWordIds : uniqueIds(plan.reviewWordIds);
+  const remoteNewWordIds = uniqueIds(remoteSessions.new?.wordIds || []).filter((id) => studyReadyWordIds.has(id));
+  const remoteReviewWordIds = uniqueIds(remoteSessions.review?.wordIds || []).filter((id) => studyReadyWordIds.has(id));
+  const nextNewWordIds = uniqueIds([...remoteNewWordIds, ...plan.newWordIds]).slice(0, DAILY_NEW_WORD_LIMIT);
+  const nextReviewWordIds = uniqueIds([...remoteReviewWordIds, ...plan.reviewWordIds]).slice(0, DAILY_NEW_WORD_LIMIT);
   const completedNewWordIds = uniqueIds([
     ...uniqueIds(plan.completedNewWordIds),
     ...uniqueIds(remoteSessions.new?.completedWordIds || []),
@@ -2362,7 +2367,7 @@ function renderStudyStats() {
   els.studyStreakCount.textContent = streak;
   els.studyMasteredCount.textContent = mastered;
   els.entryNewCount.textContent = `${availableNew} ord idag`;
-  els.entryReviewCount.textContent = `${availableReview} ord idag`;
+  els.entryReviewCount.textContent = `${availableReview} ord kvar idag`;
   if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = availableNew === 0 || newSession.completed;
   if (els.startReviewStudyBtn) els.startReviewStudyBtn.disabled = availableReview === 0 || reviewSession.completed;
   els.completeTodayCount.textContent = `${completedTotal} klara idag`;
@@ -6106,7 +6111,13 @@ function studyScopeMatches(word, scope = state.studyScope) {
 }
 
 function eligibleStudyWords(scope = state.studyScope) {
-  return getLibraryWordsForDisplay().filter((word) => !isWordInLearnedNotebook(word) && studyScopeMatches(word, scope));
+  return getLibraryWordsForDisplay().filter(
+    (word) => isStudyReadyWord(word) && !isWordInLearnedNotebook(word) && studyScopeMatches(word, scope),
+  );
+}
+
+function isStudyReadyWord(word) {
+  return Boolean(word?.id && clean(word.swedish) && clean(word.chinese));
 }
 
 function hasWordStudyHistory(word) {
@@ -6123,6 +6134,7 @@ function eligibleReviewWords(scope = state.studyScope) {
   const today = todayKey();
   const dueIds = new Set(state.dailyProgress?.dueReviewWordIds || []);
   return getLibraryWordsForDisplay().filter((word) => {
+    if (!isStudyReadyWord(word)) return false;
     if (!studyScopeMatches(word, scope)) return false;
     if (isWordInLearnedNotebook(word)) return false;
     if (word.last_review_date === today) return false;
@@ -6311,7 +6323,7 @@ function getSessionQueue(mode) {
   const completed = new Set(getCompletedSessionIds(mode));
   return getSessionIds(mode)
     .map((id) => getLibraryWordsForDisplay().find((word) => word.id === id))
-    .filter((word) => word && (mode === "review" || !isWordInLearnedNotebook(word)) && !completed.has(word.id));
+    .filter((word) => word && isStudyReadyWord(word) && (mode === "review" || !isWordInLearnedNotebook(word)) && !completed.has(word.id));
 }
 
 function repairSessionPlanIfNeeded(mode) {
