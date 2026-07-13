@@ -292,6 +292,7 @@ main {
 }
 
 .topbar-auth-button[data-signed-in="true"] {
+  position: relative;
   min-width: 42px;
   width: 42px;
   padding: 0;
@@ -299,6 +300,22 @@ main {
   background: #e5f4ee;
   color: var(--accent-strong);
   font-size: 1.1rem;
+}
+
+.topbar-auth-button[data-signed-in="true"]::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #2f946d;
+}
+
+body[data-active-view="profileView"] .topbar-auth-button {
+  display: none;
 }
 
 .brand-lockup {

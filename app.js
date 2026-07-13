@@ -300,6 +300,7 @@ let shadowingRecordingStartedAt = 0;
 let shadowingComparisonQueued = false;
 let shadowingSpeechUtterance = null;
 let shadowingSpeechCharacterIndex = 0;
+let authUiSubscription = null;
 const shadowingSignedUrlCache = new Map();
 
 function isLocalDevelopmentOrigin() {
@@ -2387,7 +2388,13 @@ function renderStudyStats() {
 
 function setupHomeGreeting() {
   if (!els.homeGreeting) return;
-  els.homeGreeting.innerHTML = "<span>Hej!</span><span>Bra jobbat idag.</span>";
+  const isSignedIn = Boolean(state.auth.user?.id);
+  const name = isSignedIn ? getAuthDisplayName(state.auth.user) : "";
+  const title = document.createElement("span");
+  const subtitle = document.createElement("span");
+  title.textContent = name ? `Hej, ${name}!` : "Hej!";
+  subtitle.textContent = isSignedIn ? "Dina studier synkas." : "Bra jobbat idag.";
+  els.homeGreeting.replaceChildren(title, subtitle);
 }
 
 function renderProfileView() {
@@ -2404,6 +2411,11 @@ function getAuthDisplayName(user) {
   return fullName || clean(user?.email || "").split("@")[0] || "du";
 }
 
+function getAuthAvatarLabel(user) {
+  const name = getAuthDisplayName(user);
+  return clean(name).charAt(0).toLocaleUpperCase("sv-SE") || "👤";
+}
+
 function setAuthMessage(message = "") {
   state.auth.message = clean(message);
   if (els.authMessage) els.authMessage.textContent = state.auth.message;
@@ -2417,10 +2429,12 @@ function renderAuthState() {
   if (els.profileSettingsToggle) els.profileSettingsToggle.hidden = !isSignedIn;
   if (els.topbarAuthButton) {
     els.topbarAuthButton.dataset.signedIn = String(isSignedIn);
-    els.topbarAuthButton.textContent = state.auth.loading ? "..." : isSignedIn ? "👤" : "Logga in";
+    els.topbarAuthButton.textContent = state.auth.loading ? "..." : isSignedIn ? getAuthAvatarLabel(user) : "Logga in";
     els.topbarAuthButton.setAttribute("aria-label", isSignedIn ? "Öppna profil" : "Logga in");
+    els.topbarAuthButton.title = isSignedIn ? `Inloggad som ${getAuthDisplayEmail(user)}` : "Logga in";
     els.topbarAuthButton.disabled = state.auth.loading || state.auth.busy;
   }
+  setupHomeGreeting();
   if (els.profileLoginButton) {
     els.profileLoginButton.textContent = "Logga in";
     els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
@@ -2513,6 +2527,16 @@ async function refreshAuthState({ reloadData = false } = {}) {
   if (reloadData) {
     await loadData();
   }
+}
+
+function setupAuthUiSync() {
+  if (authUiSubscription || !supabase?.auth) return;
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    state.auth.user = session?.user || null;
+    state.auth.loading = false;
+    renderAuthState();
+  });
+  authUiSubscription = data?.subscription || true;
 }
 
 function setAuthMode(mode = "login") {
@@ -8465,7 +8489,7 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js?v=56", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=57", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
@@ -8579,6 +8603,7 @@ async function bootstrapApp() {
   bindEvents();
   setupShadowingAudio();
   setupHomeGreeting();
+  setupAuthUiSync();
   setupInstallPrompt();
   setupCrossOriginTransfer();
   await refreshAuthState();

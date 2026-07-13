@@ -11,11 +11,29 @@ if (!globalThis.supabase?.createClient) {
   throw new Error("[Min Ordbok] Supabase client library is not loaded.");
 }
 
+const supabaseProjectRef = (() => {
+  try {
+    return new URL(supabaseUrl).hostname.split(".")[0] || "spraklab";
+  } catch {
+    return "spraklab";
+  }
+})();
+
+const authStorage = (() => {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+})();
+
 export const supabase = globalThis.supabase.createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storage: authStorage,
+    storageKey: `sb-${supabaseProjectRef}-auth-token`,
   },
 });
 
@@ -114,10 +132,10 @@ export async function syncAuthState() {
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user?.id) {
-    currentUser = null;
+    currentUser = currentSession?.user || currentUser || null;
     return {
       session: currentSession,
-      user: null,
+      user: currentUser,
       accessToken: currentSession?.access_token || "",
     };
   }
