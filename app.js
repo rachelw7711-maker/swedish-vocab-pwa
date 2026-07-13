@@ -5462,7 +5462,6 @@ function closeWordDialogWithoutSaving() {
   state.wordDialogSnapshot = "";
   state.wordDialogReturnView = "";
   state.wordDialogSourceDetailId = "";
-  forceHomeView({ resetScroll: true });
 }
 
 function requestCloseWordDialog() {
