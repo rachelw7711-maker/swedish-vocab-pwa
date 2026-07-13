@@ -925,8 +925,23 @@ export async function ensureStudySession({ plan, mode, wordIds = [] } = {}) {
       })
       .select()
       .single();
-    if (error) throw error;
-    session = data;
+    if (error?.code === "23505") {
+      const { data: concurrent, error: concurrentReadError } = await supabase
+        .from(TABLES.studySessions)
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("study_plan_id", remotePlan.id)
+        .eq("mode", mode)
+        .order("started_at", { ascending: false })
+        .limit(1);
+      if (concurrentReadError) throw concurrentReadError;
+      session = concurrent?.[0] || null;
+    } else if (error) {
+      throw error;
+    } else {
+      session = data;
+    }
+    if (!session) throw new Error("Kunde inte skapa studiesessionen.");
   }
 
   const rows = unique(wordIds).map((wordId, position) => ({
@@ -1080,6 +1095,28 @@ export async function deleteShadowingItem(itemId) {
 }
 
 async function writeShadowingRecording(userId, recording = {}) {
+  const requestedAttemptNo = Number(recording.attempt_no || recording.attemptNo || 1) || 1;
+  let existingAttemptNo = 0;
+  if (recording.id) {
+    const { data: existingRecording, error: existingRecordingError } = await supabase
+      .from(TABLES.shadowingRecordings)
+      .select("attempt_no")
+      .eq("user_id", userId)
+      .eq("id", recording.id)
+      .maybeSingle();
+    if (existingRecordingError) throw existingRecordingError;
+    existingAttemptNo = Number(existingRecording?.attempt_no || 0);
+  }
+  const { data: latestAttempts, error: latestAttemptError } = await supabase
+    .from(TABLES.shadowingRecordings)
+    .select("attempt_no")
+    .eq("user_id", userId)
+    .eq("shadowing_item_id", recording.shadowing_item_id)
+    .is("deleted_at", null)
+    .order("attempt_no", { ascending: false })
+    .limit(1);
+  if (latestAttemptError) throw latestAttemptError;
+  const nextAttemptNo = existingAttemptNo || Math.max(requestedAttemptNo, Number(latestAttempts?.[0]?.attempt_no || 0) + 1);
   const row = {
     id: recording.id || undefined,
     user_id: userId,
@@ -1089,7 +1126,7 @@ async function writeShadowingRecording(userId, recording = {}) {
     audio_mime_type: clean(recording.audio_mime_type || recording.mimeType),
     audio_size_bytes: Number(recording.audio_size_bytes || recording.size || 0) || null,
     audio_duration_ms: Number(recording.audio_duration_ms || recording.durationMs || 0) || null,
-    attempt_no: Number(recording.attempt_no || recording.attemptNo || 1) || 1,
+    attempt_no: nextAttemptNo,
     level: recording.level == null ? null : Number(recording.level),
     notes: clean(recording.notes),
     comparison_status: clean(recording.comparison_status) || "none",
@@ -1097,11 +1134,28 @@ async function writeShadowingRecording(userId, recording = {}) {
     recorded_at: millisToIso(recording.recorded_at) || new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from(TABLES.shadowingRecordings)
     .upsert(row, { onConflict: "id" })
     .select()
     .single();
+  if (error?.code === "23505") {
+    const { data: retryAttempts, error: retryReadError } = await supabase
+      .from(TABLES.shadowingRecordings)
+      .select("attempt_no")
+      .eq("user_id", userId)
+      .eq("shadowing_item_id", recording.shadowing_item_id)
+      .is("deleted_at", null)
+      .order("attempt_no", { ascending: false })
+      .limit(1);
+    if (retryReadError) throw retryReadError;
+    row.attempt_no = Number(retryAttempts?.[0]?.attempt_no || 0) + 1;
+    ({ data, error } = await supabase
+      .from(TABLES.shadowingRecordings)
+      .upsert(row, { onConflict: "id" })
+      .select()
+      .single());
+  }
   if (error) throw error;
   return { enabled: true, recording: fromShadowingRecordingRow(data) };
 }

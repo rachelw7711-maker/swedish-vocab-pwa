@@ -3357,12 +3357,14 @@ function findBestSearchMatch() {
     .filter((word) => wordMatchesExactSearchForm(word, query))
     .sort((a, b) => exactSearchRank(a, query) - exactSearchRank(b, query))[0];
   if (exactForm) return { word: exactForm, mode: "library" };
-  if (visibleWords.length > 0) return { word: visibleWords[0], mode: "library" };
 
   const dictionaryMatches = getDictionaryMatches();
-  const exactDictionary = dictionaryMatches.find((word) => clean(word.swedish).toLowerCase() === query);
+  const exactDictionary = dictionaryMatches.find((word) => normalizeSearchTerm(word.swedish) === query);
   if (exactDictionary) return { word: exactDictionary, mode: "dictionary" };
-  if (dictionaryMatches.length > 0) return { word: dictionaryMatches[0], mode: "dictionary" };
+  const exactDictionaryForm = dictionaryMatches
+    .filter((word) => wordMatchesExactSearchForm(word, query))
+    .sort((a, b) => exactSearchRank(a, query) - exactSearchRank(b, query))[0];
+  if (exactDictionaryForm) return { word: exactDictionaryForm, mode: "dictionary" };
   return null;
 }
 
@@ -4084,6 +4086,15 @@ function recordingAudioDescriptor(recording = getLatestShadowingRecording(state.
     path: recording.audio_path,
     mimeType: recording.audio_mime_type || "audio/webm",
   };
+}
+
+function shadowingRecordingExtension(mimeType = "") {
+  const mime = clean(mimeType).toLowerCase().split(";")[0];
+  if (mime === "audio/mp4" || mime === "audio/x-m4a") return "m4a";
+  if (mime === "audio/mpeg") return "mp3";
+  if (mime === "audio/ogg") return "ogg";
+  if (mime === "audio/wav" || mime === "audio/x-wav") return "wav";
+  return "webm";
 }
 
 function splitShadowingDisplayLines(text) {
@@ -5183,7 +5194,8 @@ async function startShadowingRecording() {
       remoteDb.getCurrentAccountId()
         .then((userId) => {
           if (!userId) throw new Error("Logga in för att spara inspelningen.");
-          const path = `${userId}/${selectedItem.id}/${timestamp}.webm`;
+          const extension = shadowingRecordingExtension(mime);
+          const path = `${userId}/${selectedItem.id}/${timestamp}.${extension}`;
           return remoteDb.saveShadowingRecordingWithAudio({
             bucket: SHADOWING_RECORDINGS_BUCKET,
             path,
@@ -8163,10 +8175,7 @@ function bindEvents() {
   els.closeExportPreviewBtn.addEventListener("click", closeExportPreview);
   els.closeExportPreviewActionBtn.addEventListener("click", closeExportPreview);
   els.resetDataBtn.addEventListener("click", () => {
-    resetAppData().catch((error) => {
-      console.error("[Min Ordbok] Reset failed", error);
-      alert(error.message || "Kunde inte återställa data.");
-    });
+    location.reload();
   });
 
   els.notebookSelect.addEventListener("change", (event) => {
