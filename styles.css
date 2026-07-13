@@ -279,16 +279,21 @@ main {
 
 .topbar-auth-button {
   display: inline-grid;
-  min-width: 82px;
-  height: 40px;
+  min-width: 68px;
+  height: 34px;
+  padding: 0 11px;
   place-items: center;
   border: 1px solid rgba(55, 65, 72, 0.1);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--ink);
-  font-weight: 780;
-  box-shadow: var(--soft-shadow);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 500;
   touch-action: manipulation;
+}
+
+body:not([data-active-view="homeView"]) .topbar-auth-button[data-signed-in="false"] {
+  display: none;
 }
 
 .topbar-auth-button[data-signed-in="true"] {

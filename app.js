@@ -2388,12 +2388,10 @@ function renderStudyStats() {
 
 function setupHomeGreeting() {
   if (!els.homeGreeting) return;
-  const isSignedIn = Boolean(state.auth.user?.id);
-  const name = isSignedIn ? getAuthDisplayName(state.auth.user) : "";
   const title = document.createElement("span");
   const subtitle = document.createElement("span");
-  title.textContent = name ? `Hej, ${name}!` : "Hej!";
-  subtitle.textContent = isSignedIn ? "Dina studier synkas." : "Bra jobbat idag.";
+  title.textContent = "Hej!";
+  subtitle.textContent = "Bra jobbat idag.";
   els.homeGreeting.replaceChildren(title, subtitle);
 }
 
@@ -2434,7 +2432,6 @@ function renderAuthState() {
     els.topbarAuthButton.title = isSignedIn ? `Inloggad som ${getAuthDisplayEmail(user)}` : "Logga in";
     els.topbarAuthButton.disabled = state.auth.loading || state.auth.busy;
   }
-  setupHomeGreeting();
   if (els.profileLoginButton) {
     els.profileLoginButton.textContent = "Logga in";
     els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
