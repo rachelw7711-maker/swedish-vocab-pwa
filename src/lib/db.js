@@ -1,4 +1,11 @@
 import { getAccessToken, getAuthState as getSharedAuthState, getCurrentUser as getSharedAuthUser, supabase, supabaseAnonKey, supabaseUrl } from "./supabase.js";
+import {
+  flushSyncOperations,
+  lastSuccessfulSync,
+  markSuccessfulSync,
+  pendingSyncCount,
+  runQueuedMutation,
+} from "./sync-outbox.js";
 
 const TABLES = {
   words: "words",
@@ -94,20 +101,28 @@ function readNoteSection(note, label) {
   return clean(text.match(pattern)?.[1]);
 }
 
-function userWordId(userId, wordId) {
-  return `${clean(userId) || DEFAULT_PROFILE_ID}:${clean(wordId)}`;
+function readUserWordMetadata(userRow = {}) {
+  const value = userRow?.personal_note;
+  if (!value || typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed?.schema === "spraklab-user-word-v1" ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 function normalizeWord(row, userRow = null) {
   const wordId = clean(row.id || row.word_id);
-  const bookNames = normalizeBookNames(firstDefined(userRow?.book_names, userRow?.bookNames));
+  const userMetadata = readUserWordMetadata(userRow);
+  const bookNames = normalizeBookNames(firstDefined(userRow?.book_names, userRow?.bookNames, userMetadata.book_names));
   const note = row.note || "";
   return {
     ...row,
     id: wordId,
     swedish: clean(row.swedish),
     pos: clean(firstDefined(row.pos, row.part_of_speech)) || "other",
-    pos_detail: clean(firstDefined(row.pos_detail, row.posDetail)),
+    pos_detail: clean(firstDefined(row.pos_detail, row.posDetail, readNoteSection(note, "Part of speech detail"))),
     chinese: clean(row.chinese),
     english: clean(firstDefined(row.english, readNoteSection(note, "Swedish explanation"))),
     forms: clean(firstDefined(row.forms, readNoteSection(note, "Forms"))),
@@ -115,20 +130,20 @@ function normalizeWord(row, userRow = null) {
     collocations: clean(firstDefined(row.collocations, readNoteSection(note, "Collocations"))),
     related_words: clean(firstDefined(row.related_words, row.relatedWords, readNoteSection(note, "Related words"))),
     tags: Array.isArray(row.tags) ? row.tags : clean(firstDefined(row.tags, readNoteSection(note, "Tags"), row.level)).split(",").map(clean).filter(Boolean),
-    notebook: clean(userRow?.notebook),
+    notebook: clean(firstDefined(userRow?.notebook, userMetadata.notebook)),
     book_names: bookNames,
     favorite: Boolean(userRow?.favorite ?? userRow?.is_favorite ?? row.favorite),
     status: clean(userRow?.status ?? row.status),
     learned: Boolean(userRow?.learned ?? userRow?.mastered ?? row.learned),
     review_count: Number(userRow?.review_count ?? row.review_count ?? 0) || 0,
-    wrong_count: Number(userRow?.wrong_count ?? row.wrong_count ?? 0) || 0,
+    wrong_count: Number(userRow?.wrong_count ?? userMetadata.wrong_count ?? row.wrong_count ?? 0) || 0,
     spelling_correct_count: Number(userRow?.spelling_correct_count ?? userRow?.learned_count ?? row.spelling_correct_count ?? 0) || 0,
-    first_studied_at: dateToMillis(userRow?.first_studied_at) || dateToMillis(userRow?.last_studied_at) || row.first_studied_at || null,
+    first_studied_at: dateToMillis(userRow?.first_studied_at) || dateToMillis(userMetadata.first_studied_at) || dateToMillis(userRow?.last_studied_at) || row.first_studied_at || null,
     last_studied_at: dateToMillis(userRow?.last_studied_at) || row.last_studied_at || null,
-    last_reviewed: dateToMillis(userRow?.last_reviewed ?? userRow?.last_reviewed_at) || row.last_reviewed || null,
-    last_study_date: clean(userRow?.last_study_date ?? row.last_study_date) || (userRow?.last_studied_at ? new Date(userRow.last_studied_at).toISOString().slice(0, 10) : ""),
-    last_review_date: clean(userRow?.last_review_date ?? row.last_review_date),
-    mastered_at: dateToMillis(userRow?.mastered_at) || row.mastered_at || null,
+    last_reviewed: dateToMillis(userRow?.last_reviewed ?? userRow?.last_reviewed_at ?? userMetadata.last_reviewed) || row.last_reviewed || null,
+    last_study_date: clean(userRow?.last_study_date ?? userMetadata.last_study_date ?? row.last_study_date) || (userRow?.last_studied_at ? new Date(userRow.last_studied_at).toISOString().slice(0, 10) : ""),
+    last_review_date: clean(userRow?.last_review_date ?? userMetadata.last_review_date ?? row.last_review_date),
+    mastered_at: dateToMillis(userRow?.mastered_at) || dateToMillis(userMetadata.mastered_at) || row.mastered_at || null,
     next_review_at: dateToMillis(userRow?.next_review_at) || Number(row.next_review_at ?? 0) || 0,
     created_at: row.created_at ?? null,
     updated_at: Number(userRow?.updated_at ?? row.updated_at ?? 0) || Date.now(),
@@ -207,6 +222,42 @@ export async function getCurrentAccountId() {
 
 export async function getCurrentAccessToken(options = {}) {
   return getAccessToken(options);
+}
+
+export async function getSyncStatus() {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false, pending: 0, lastSyncedAt: 0 };
+  return {
+    enabled: true,
+    pending: await pendingSyncCount(user.id).catch(() => 0),
+    lastSyncedAt: lastSuccessfulSync(user.id),
+  };
+}
+
+export async function recordSuccessfulSync() {
+  const user = await readCurrentUser();
+  if (!user?.id) return 0;
+  return markSuccessfulSync(user.id);
+}
+
+export async function flushPendingSync() {
+  const user = await readCurrentUser();
+  if (!user?.id) return { attempted: 0, completed: 0, failed: 0, pending: 0 };
+  return flushSyncOperations({
+    userId: user.id,
+    handlers: {
+      user_word_progress: ({ word }) => writeUserWordProgress(user.id, word),
+      user_preferences: ({ preferences }) => writeUserPreferences(user.id, preferences),
+      notebook_names: ({ names }) => writeRemoteNotebookNames(user.id, names),
+      study_plan: ({ plan }) => writeStudyPlan(user.id, plan),
+      study_session_item: (payload) => writeStudySessionItem(user.id, payload),
+      complete_study_session: (payload) => writeCompletedStudySession(user.id, payload),
+      study_history: ({ entry }) => writeStudyHistoryEntry(entry),
+      shadowing_item: ({ item }) => writeShadowingItem(user.id, item),
+      shadowing_recording: ({ recording }) => writeShadowingRecording(user.id, recording),
+      shadowing_recording_audio: (payload) => writeShadowingRecordingWithAudio(user.id, payload),
+    },
+  });
 }
 
 export async function ensureProfile() {
@@ -376,12 +427,6 @@ export async function loadRemoteLibrarySnapshot() {
   const words = wordRows.map((word) => normalizeWord(word, userRowsByWordId.get(clean(word.id))));
   const books = unique(sanitizedUserWordRows.flatMap((row) => [row.notebook, ...normalizeBookNames(row.book_names)]));
 
-  if (user?.id && wordRows.length > 0 && userWordRows.length === 0) {
-    void initializeUserWords(user.id, wordRows).catch((error) => {
-      console.warn("[Min Ordbok] Failed to initialize user words.", error);
-    });
-  }
-
   return {
     words,
     books,
@@ -419,81 +464,71 @@ async function cleanupSourceDerivedUserBooks(userId, currentRows = [], sanitized
   }
 }
 
-async function initializeUserWords(userId, wordRows = []) {
-  const rows = wordRows.map((word) => ({
-    id: userWordId(userId, word.id),
-    user_id: userId,
-    word_id: word.id,
-    status: "new",
-  }));
-  await upsertRows(TABLES.userWords, rows);
-}
-
 function toUserWordRow(userId, word) {
   if (!userId || !word?.id) return null;
   const status = clean(word.status) || (word.learned ? "mastered" : word.first_studied_at || word.last_study_date ? "learning" : "new");
   return {
-    id: userWordId(userId, word.id),
     user_id: userId,
     word_id: word.id,
-    favorite: Boolean(word.favorite),
-    status,
-    learned: Boolean(word.learned),
-    notebook: clean(word.notebook),
-    review_count: Number(word.review_count || 0) || 0,
-    wrong_count: Number(word.wrong_count || 0) || 0,
-    spelling_correct_count: Number(word.spelling_correct_count || 0) || 0,
-    first_studied_at: word.first_studied_at || null,
-    last_studied_at: word.last_studied_at || null,
-    last_reviewed: word.last_reviewed || null,
-    last_study_date: clean(word.last_study_date),
-    last_review_date: clean(word.last_review_date),
-    mastered_at: word.mastered_at || null,
-    next_review_at: word.next_review_at ?? null,
-    updated_at: new Date().toISOString(),
-  };
-}
-
-function toUserWordProgressRow(userId, word) {
-  if (!userId || !word?.id) return null;
-  const status = clean(word.status) || (word.learned ? "mastered" : word.first_studied_at || word.last_study_date ? "learning" : "new");
-  return {
-    user_id: userId,
-    word_id: word.id,
+    is_favorite: Boolean(word.favorite),
     status,
     mastered: Boolean(word.learned),
     learned_count: Number(word.spelling_correct_count || 0) || 0,
     review_count: Number(word.review_count || 0) || 0,
     last_studied_at: millisToIso(word.last_studied_at) || null,
     next_review_at: millisToIso(word.next_review_at) || null,
+    personal_note: JSON.stringify({
+      schema: "spraklab-user-word-v1",
+      notebook: clean(word.notebook),
+      book_names: normalizeBookNames(word.book_names),
+      wrong_count: Number(word.wrong_count || 0) || 0,
+      first_studied_at: Number(word.first_studied_at || 0) || null,
+      last_reviewed: Number(word.last_reviewed || 0) || null,
+      last_study_date: clean(word.last_study_date),
+      last_review_date: clean(word.last_review_date),
+      mastered_at: Number(word.mastered_at || 0) || null,
+    }),
     updated_at: new Date().toISOString(),
   };
 }
 
-function toWordRow(word) {
+function toUserWordProgressRow(userId, word) {
+  return toUserWordRow(userId, word);
+}
+
+function toWordRow(word, userId = null) {
   if (!word?.id) return null;
+  const note = [
+    ["Part of speech detail", clean(word.pos_detail)],
+    ["Swedish explanation", clean(word.english)],
+    ["Forms", clean(word.forms)],
+    ["Collocations", clean(word.collocations)],
+    ["Related words", clean(word.related_words)],
+    ["Tags", Array.isArray(word.tags) ? word.tags.join(", ") : ""],
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join("\n\n");
   return {
     id: word.id,
     swedish: clean(word.swedish),
-    pos: clean(word.pos) || "other",
-    pos_detail: clean(word.pos_detail),
+    lemma: clean(word.swedish),
+    part_of_speech: clean(word.pos) || "other",
     chinese: clean(word.chinese),
-    english: clean(word.english),
-    forms: clean(word.forms),
-    example: clean(word.example),
-    collocations: clean(word.collocations),
-    related_words: clean(word.related_words),
-    tags: Array.isArray(word.tags) ? word.tags : [],
-    notebook: clean(word.notebook),
+    example_sv: clean(word.example),
+    note,
+    level: clean(word.tags?.[0]),
+    source: "user",
+    created_by: userId,
     updated_at: new Date().toISOString(),
   };
 }
 
-async function upsertRows(table, rows) {
+async function upsertRows(table, rows, { onConflict = "id", ignoreDuplicates = false } = {}) {
   const cleanRows = rows.filter(Boolean);
   for (let index = 0; index < cleanRows.length; index += PAGE_SIZE) {
     const batch = cleanRows.slice(index, index + PAGE_SIZE);
-    const { error } = await supabase.from(table).upsert(batch, { onConflict: "id" });
+    const { error } = await supabase.from(table).upsert(batch, { onConflict, ignoreDuplicates, defaultToNull: false });
     if (error) throw error;
   }
 }
@@ -514,9 +549,9 @@ export async function syncRemoteWordChanges({ previousWords = [], nextWords = []
     const previous = previousById.get(clean(word.id));
     return !previous || wordContentSignature(previous) !== wordContentSignature(word);
   });
-  await upsertRows(TABLES.words, contentChangedWords.map(toWordRow));
+  await upsertRows(TABLES.words, contentChangedWords.map((word) => toWordRow(word, user?.id || null)));
   if (user?.id) {
-    await upsertRows(TABLES.userWords, changedWords.map((word) => toUserWordRow(user.id, word)));
+    await upsertRows(TABLES.userWords, changedWords.map((word) => toUserWordRow(user.id, word)), { onConflict: "user_id,word_id" });
   }
   return {
     enabled: true,
@@ -525,26 +560,26 @@ export async function syncRemoteWordChanges({ previousWords = [], nextWords = []
   };
 }
 
-export async function upsertUserWordProgress(word = {}) {
-  const user = await readCurrentUser();
-  if (!user?.id || !word?.id) return { enabled: false, word: null };
-  await ensureProfile();
-  const row = toUserWordProgressRow(user.id, word);
-  const { data: existing, error: readError } = await supabase
+async function writeUserWordProgress(userId, word = {}) {
+  const row = toUserWordProgressRow(userId, word);
+  const { data, error } = await supabase
     .from(TABLES.userWords)
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("word_id", word.id)
-    .maybeSingle();
-  if (readError) throw readError;
-  const query = existing?.id
-    ? supabase.from(TABLES.userWords).update(row).eq("id", existing.id)
-    : supabase.from(TABLES.userWords).insert(row);
-  const { data, error } = await query
+    .upsert(row, { onConflict: "user_id,word_id" })
     .select()
     .single();
   if (error) throw error;
   return { enabled: true, word: data };
+}
+
+export async function upsertUserWordProgress(word = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id || !word?.id) return { enabled: false, word: null };
+  await ensureProfile();
+  const payload = { word };
+  return runQueuedMutation("user_word_progress", payload, {
+    userId: user.id,
+    handler: ({ word: queuedWord }) => writeUserWordProgress(user.id, queuedWord),
+  });
 }
 
 export async function loadDailyWordProgress({ date = todayKey() } = {}) {
@@ -607,14 +642,11 @@ export async function loadDailyWordProgress({ date = todayKey() } = {}) {
   };
 }
 
-export async function syncRemoteNotebookNames() {
-  const user = await readCurrentUser();
-  if (!user?.id) return { enabled: false };
-  const names = unique([...arguments].flat().flatMap((value) => Array.isArray(value) ? value : [value]));
+async function writeRemoteNotebookNames(userId, names = []) {
   const { data: existing, error: readError } = await supabase
     .from(TABLES.notebooks)
     .select("id,name,deleted_at")
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
   if (readError) throw readError;
 
   const existingByName = new Map((existing || []).map((row) => [clean(row.name).toLocaleLowerCase("sv-SE"), row]));
@@ -622,8 +654,8 @@ export async function syncRemoteNotebookNames() {
     const key = clean(name).toLocaleLowerCase("sv-SE");
     const existingRow = existingByName.get(key);
     return {
-      id: existingRow?.id,
-      user_id: user.id,
+      ...(existingRow?.id ? { id: existingRow.id } : {}),
+      user_id: userId,
       name: clean(name),
       sort_order: index,
       archived: false,
@@ -647,6 +679,16 @@ export async function syncRemoteNotebookNames() {
   return { enabled: true, notebooks: rows.length, archived: staleIds.length };
 }
 
+export async function syncRemoteNotebookNames() {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false };
+  const names = unique([...arguments].flat().flatMap((value) => Array.isArray(value) ? value : [value]));
+  return runQueuedMutation("notebook_names", { names }, {
+    userId: user.id,
+    handler: ({ names: queuedNames }) => writeRemoteNotebookNames(user.id, queuedNames),
+  });
+}
+
 export async function ensureRemoteNotebookNames(names = []) {
   const user = await readCurrentUser();
   if (!user?.id) return { enabled: false };
@@ -663,7 +705,7 @@ export async function ensureRemoteNotebookNames(names = []) {
     const key = clean(name).toLocaleLowerCase("sv-SE");
     const existingRow = existingByName.get(key);
     return {
-      id: existingRow?.id,
+      ...(existingRow?.id ? { id: existingRow.id } : {}),
       user_id: user.id,
       name,
       sort_order: index,
@@ -750,11 +792,9 @@ export async function loadRemotePhase4Snapshot({ date = todayKey(), scope = "all
   };
 }
 
-export async function upsertUserPreferences(preferences = {}) {
-  const user = await readCurrentUser();
-  if (!user?.id) return { enabled: false };
+async function writeUserPreferences(userId, preferences = {}) {
   const row = {
-    user_id: user.id,
+    user_id: userId,
     study_scope: clean(preferences.studyScope || preferences.study_scope) || "all",
     selected_notebook_id: preferences.selected_notebook_id || null,
     selected_notebook_name: clean(preferences.selectedNotebookName || preferences.selected_notebook_name),
@@ -774,12 +814,19 @@ export async function upsertUserPreferences(preferences = {}) {
   return { enabled: true, preferences: fromUserPreferencesRow(data) };
 }
 
-export async function upsertStudyPlan(plan = {}) {
+export async function upsertUserPreferences(preferences = {}) {
   const user = await readCurrentUser();
-  if (!user?.id) return { enabled: false, plan: null };
+  if (!user?.id) return { enabled: false };
+  return runQueuedMutation("user_preferences", { preferences }, {
+    userId: user.id,
+    handler: ({ preferences: queuedPreferences }) => writeUserPreferences(user.id, queuedPreferences),
+  });
+}
+
+async function writeStudyPlan(userId, plan = {}) {
   const row = {
     id: plan.id || undefined,
-    user_id: user.id,
+    user_id: userId,
     plan_date: plan.date || plan.plan_date || todayKey(),
     scope: clean(plan.scope) || "all",
     target_new_count: Number(plan.target_new_count ?? plan.targetNewCount ?? plan.newWordIds?.length ?? 0) || 0,
@@ -794,6 +841,15 @@ export async function upsertStudyPlan(plan = {}) {
     .single();
   if (error) throw error;
   return { enabled: true, plan: data };
+}
+
+export async function upsertStudyPlan(plan = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false, plan: null };
+  return runQueuedMutation("study_plan", { plan }, {
+    userId: user.id,
+    handler: ({ plan: queuedPlan }) => writeStudyPlan(user.id, queuedPlan),
+  });
 }
 
 export async function ensureStudySession({ plan, mode, wordIds = [] } = {}) {
@@ -846,9 +902,7 @@ export async function ensureStudySession({ plan, mode, wordIds = [] } = {}) {
   return { enabled: true, plan: remotePlan, session, items };
 }
 
-export async function saveStudySessionItem({ sessionId, wordId, status = "completed", spellingPassed = false, isCorrect = null, answer = "", collocationAnswer = "" } = {}) {
-  const user = await readCurrentUser();
-  if (!user?.id || !sessionId || !wordId) return { enabled: false };
+async function writeStudySessionItem(userId, { sessionId, wordId, status = "completed", spellingPassed = false, isCorrect = null, answer = "", collocationAnswer = "" } = {}) {
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from(TABLES.studySessionItems)
@@ -863,7 +917,7 @@ export async function saveStudySessionItem({ sessionId, wordId, status = "comple
       collocation_answer: clean(collocationAnswer),
       updated_at: now,
     })
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("study_session_id", sessionId)
     .eq("word_id", wordId)
     .select()
@@ -872,9 +926,16 @@ export async function saveStudySessionItem({ sessionId, wordId, status = "comple
   return { enabled: true, item: data };
 }
 
-export async function completeStudySession(sessionId, status = "completed") {
+export async function saveStudySessionItem(payload = {}) {
   const user = await readCurrentUser();
-  if (!user?.id || !sessionId) return { enabled: false };
+  if (!user?.id || !payload.sessionId || !payload.wordId) return { enabled: false };
+  return runQueuedMutation("study_session_item", payload, {
+    userId: user.id,
+    handler: (queuedPayload) => writeStudySessionItem(user.id, queuedPayload),
+  });
+}
+
+async function writeCompletedStudySession(userId, { sessionId, status = "completed" } = {}) {
   const { error } = await supabase
     .from(TABLES.studySessions)
     .update({
@@ -882,18 +943,26 @@ export async function completeStudySession(sessionId, status = "completed") {
       completed_at: status === "completed" ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     })
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("id", sessionId);
   if (error) throw error;
   return { enabled: true };
 }
 
-export async function appendStudyHistory(action, word, context = {}) {
+export async function completeStudySession(sessionId, status = "completed") {
   const user = await readCurrentUser();
-  if (!user?.id || !word?.id) return { enabled: false };
-  const entry = {
+  if (!user?.id || !sessionId) return { enabled: false };
+  const payload = { sessionId, status };
+  return runQueuedMutation("complete_study_session", payload, {
+    userId: user.id,
+    handler: (queuedPayload) => writeCompletedStudySession(user.id, queuedPayload),
+  });
+}
+
+function studyHistoryEntry(userId, action, word, context = {}) {
+  return {
     id: context.id || undefined,
-    user_id: user.id,
+    user_id: userId,
     word_id: word.id,
     study_session_id: context.studySessionId || null,
     study_session_item_id: context.studySessionItemId || null,
@@ -907,19 +976,33 @@ export async function appendStudyHistory(action, word, context = {}) {
     },
     created_at: millisToIso(context.created_at) || new Date().toISOString(),
   };
-  const { data, error } = await supabase
-    .from(TABLES.studyHistory)
-    .insert(entry)
-    .select()
-    .single();
-  if (error) throw error;
-  return { enabled: true, history: fromStudyHistoryRow(data) };
 }
 
-export async function upsertShadowingItem(item = {}) {
+async function writeStudyHistoryEntry(entry) {
+  const { data, error } = await supabase
+    .from(TABLES.studyHistory)
+    .upsert(entry, { onConflict: "id", ignoreDuplicates: true })
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return { enabled: true, history: data ? fromStudyHistoryRow(data) : null };
+}
+
+export async function appendStudyHistory(action, word, context = {}) {
   const user = await readCurrentUser();
-  if (!user?.id) return { enabled: false };
-  const row = toShadowingItemRow(user.id, item);
+  if (!user?.id || !word?.id) return { enabled: false };
+  const entry = {
+    ...studyHistoryEntry(user.id, action, word, context),
+  };
+  return runQueuedMutation("study_history", { entry }, {
+    id: entry.id,
+    userId: user.id,
+    handler: ({ entry: queuedEntry }) => writeStudyHistoryEntry(queuedEntry),
+  });
+}
+
+async function writeShadowingItem(userId, item = {}) {
+  const row = toShadowingItemRow(userId, item);
   const { data, error } = await supabase
     .from(TABLES.shadowingItems)
     .upsert(row, { onConflict: "id" })
@@ -927,6 +1010,15 @@ export async function upsertShadowingItem(item = {}) {
     .single();
   if (error) throw error;
   return { enabled: true, item: fromShadowingItemRow(data) };
+}
+
+export async function upsertShadowingItem(item = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false };
+  return runQueuedMutation("shadowing_item", { item }, {
+    userId: user.id,
+    handler: ({ item: queuedItem }) => writeShadowingItem(user.id, queuedItem),
+  });
 }
 
 export async function deleteShadowingItem(itemId) {
@@ -942,12 +1034,10 @@ export async function deleteShadowingItem(itemId) {
   return { enabled: true };
 }
 
-export async function upsertShadowingRecording(recording = {}) {
-  const user = await readCurrentUser();
-  if (!user?.id || !recording.shadowing_item_id) return { enabled: false };
+async function writeShadowingRecording(userId, recording = {}) {
   const row = {
     id: recording.id || undefined,
-    user_id: user.id,
+    user_id: userId,
     shadowing_item_id: recording.shadowing_item_id,
     audio_bucket: clean(recording.audio_bucket) || "shadowing-recordings",
     audio_path: clean(recording.audio_path || recording.audio || recording.dataUrl),
@@ -969,6 +1059,39 @@ export async function upsertShadowingRecording(recording = {}) {
     .single();
   if (error) throw error;
   return { enabled: true, recording: fromShadowingRecordingRow(data) };
+}
+
+export async function upsertShadowingRecording(recording = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id || !recording.shadowing_item_id) return { enabled: false };
+  return runQueuedMutation("shadowing_recording", { recording }, {
+    userId: user.id,
+    handler: ({ recording: queuedRecording }) => writeShadowingRecording(user.id, queuedRecording),
+  });
+}
+
+async function writeShadowingRecordingWithAudio(userId, payload = {}) {
+  const upload = await uploadShadowingAudio({
+    bucket: payload.bucket,
+    path: payload.path,
+    file: payload.file,
+    contentType: payload.contentType,
+    upsert: true,
+  });
+  return writeShadowingRecording(userId, {
+    ...(payload.recording || {}),
+    audio_bucket: upload.bucket,
+    audio_path: upload.path,
+  });
+}
+
+export async function saveShadowingRecordingWithAudio(payload = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id || !payload.file || !payload.recording?.shadowing_item_id) return { enabled: false };
+  return runQueuedMutation("shadowing_recording_audio", payload, {
+    userId: user.id,
+    handler: (queuedPayload) => writeShadowingRecordingWithAudio(user.id, queuedPayload),
+  });
 }
 
 export async function deleteShadowingRecording(recordingId) {

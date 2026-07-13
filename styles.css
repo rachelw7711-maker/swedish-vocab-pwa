@@ -1539,6 +1539,28 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   box-shadow: inset 0 0 0 2px #fff;
 }
 
+.profile-goal-tasks li.profile-goal-task-upcoming {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 0;
+  color: #a2aaa6;
+}
+
+.profile-goal-tasks li.profile-goal-task-upcoming::before {
+  display: none;
+}
+
+.profile-goal-task-upcoming small {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(126, 137, 132, 0.1);
+  color: #9aa29e;
+  font-size: 0.58rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
 .profile-entry-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

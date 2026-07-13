@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=125";
+import * as remoteDb from "./src/lib/db.js?v=126";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -24,6 +24,7 @@ const LOCAL_DAILY_STUDY_KEY = "swedish-vocab-pwa.dailyStudy";
 const LOCAL_DAILY_STUDY_SESSION_KEY = "swedish-vocab-pwa.dailyStudySession";
 const LOCAL_DAILY_REVIEW_SESSION_KEY = "swedish-vocab-pwa.dailyReviewSession";
 const LOCAL_LEARN_DAILY_SESSION_KEY = "swedish-vocab-pwa.learnDailySession";
+const LOCAL_DAILY_STUDY_STATE_KEY = "swedish-vocab-pwa.dailyStudyState";
 const LOCAL_WORD_PROGRESS_KEY = "swedish-vocab-pwa.wordProgress";
 const LOCAL_STUDY_STATS_KEY = "swedish-vocab-pwa.studyStats";
 const LOCAL_EFFECTIVE_STUDY_TIME_KEY = "swedish-vocab-pwa.effectiveStudyTime";
@@ -271,6 +272,11 @@ const state = {
     otpPending: false,
     otpEmail: "",
   },
+  sync: {
+    status: "idle",
+    pending: 0,
+    lastSyncedAt: 0,
+  },
   stopBatchEnrich: false,
   favoriteCategory: "all",
   exportPos: "all",
@@ -400,7 +406,6 @@ const els = {
   profileGoalNew: document.querySelector("#profileGoalNew"),
   profileGoalReview: document.querySelector("#profileGoalReview"),
   profileGoalShadowing: document.querySelector("#profileGoalShadowing"),
-  profileGoalReading: document.querySelector("#profileGoalReading"),
   profileWordCount: document.querySelector("#profileWordCount"),
   profileMasteredCount: document.querySelector("#profileMasteredCount"),
   profileTodayActivity: document.querySelector("#profileTodayActivity"),
@@ -816,10 +821,20 @@ function writeStudyStats(stats) {
 }
 
 function readDailyStudy() {
-  return state.dailyStudy || {};
+  const scopeKey = profileDataScopeKey();
+  if (state.dailyStudy?.date === todayKey() && state.dailyStudy?.dataScope === scopeKey) return state.dailyStudy;
+  try {
+    const rows = JSON.parse(localStorage.getItem(LOCAL_DAILY_STUDY_STATE_KEY) || "{}");
+    const stored = rows?.[scopeKey];
+    if (stored?.date === todayKey()) return stored;
+  } catch {
+    // Continue with a new in-memory plan if local storage is unavailable.
+  }
+  return {};
 }
 
 function writeDailyStudy(value) {
+  const scopeKey = profileDataScopeKey();
   state.dailyStudy = {
     date: value.date || todayKey(),
     scope: value.scope || state.studyScope || STUDY_SCOPE_ALL,
@@ -833,8 +848,17 @@ function writeDailyStudy(value) {
     completedAt: value.completedAt || null,
     remotePlanId: value.remotePlanId || value.remote_plan_id || null,
     remoteSessionIds: value.remoteSessionIds || value.remote_session_ids || {},
+    dataScope: scopeKey,
     updatedAt: Date.now(),
   };
+  try {
+    const rows = JSON.parse(localStorage.getItem(LOCAL_DAILY_STUDY_STATE_KEY) || "{}");
+    const nextRows = rows && typeof rows === "object" && !Array.isArray(rows) ? rows : {};
+    nextRows[scopeKey] = state.dailyStudy;
+    localStorage.setItem(LOCAL_DAILY_STUDY_STATE_KEY, JSON.stringify(nextRows));
+  } catch {
+    // Continue with in-memory study state if local storage is unavailable.
+  }
   writeLearnDailySession(state.dailyStudy);
 }
 
@@ -842,6 +866,8 @@ function readLearnDailySession(date = todayKey()) {
   try {
     const parsed = JSON.parse(localStorage.getItem(LOCAL_LEARN_DAILY_SESSION_KEY) || "null");
     if (!parsed || parsed.date !== date) return null;
+    const scopeKey = profileDataScopeKey();
+    if ((parsed.dataScope || "guest") !== scopeKey) return null;
     const wordIds = uniqueIds(parsed.wordIds);
     if (wordIds.length === 0) return null;
     return {
@@ -869,6 +895,7 @@ function writeLearnDailySession(plan = state.dailyStudy || {}) {
       LOCAL_LEARN_DAILY_SESSION_KEY,
       JSON.stringify({
         date,
+        dataScope: profileDataScopeKey(),
         scope: plan.scope || state.studyScope || STUDY_SCOPE_ALL,
         wordIds,
         completedWordIds,
@@ -886,7 +913,11 @@ function writeLearnDailySession(plan = state.dailyStudy || {}) {
 function readLocalWordProgressMap() {
   try {
     const parsed = JSON.parse(localStorage.getItem(LOCAL_WORD_PROGRESS_KEY) || "{}");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    if (parsed.__scopes && typeof parsed.__scopes === "object") {
+      return parsed.__scopes[profileDataScopeKey()] || {};
+    }
+    return profileDataScopeKey() === "guest" ? parsed : {};
   } catch {
     return {};
   }
@@ -894,7 +925,13 @@ function readLocalWordProgressMap() {
 
 function writeLocalWordProgressMap(progressMap) {
   try {
-    localStorage.setItem(LOCAL_WORD_PROGRESS_KEY, JSON.stringify(progressMap || {}));
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_WORD_PROGRESS_KEY) || "{}");
+    const existing = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    const scopes = existing.__scopes && typeof existing.__scopes === "object"
+      ? existing.__scopes
+      : { guest: existing };
+    scopes[profileDataScopeKey()] = progressMap || {};
+    localStorage.setItem(LOCAL_WORD_PROGRESS_KEY, JSON.stringify({ __scopes: scopes }));
   } catch {
     // Continue with in-memory progress if storage is unavailable.
   }
@@ -2498,27 +2535,12 @@ function isEffectiveStudyContext() {
   return isRecording || state.shadowingPlaybackState === "playing";
 }
 
-function isReadingCompletionAction(action) {
-  return ["reading_completed", "read_completed", "läsning_completed", "lasning_completed"].includes(clean(action).toLowerCase());
-}
-
 function validShadowingRecordings() {
   const seen = new Set();
   return (state.shadowingRecordings || []).filter((recording) => {
     const durationMs = Math.max(0, Number(recording.audio_duration_ms || 0) || 0);
     const key = clean(recording.id) || `${clean(recording.shadowing_item_id)}:${Number(recording.recorded_at || recording.created_at || 0) || 0}`;
     if (!key || durationMs <= 0 || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function readingCompletionRecords() {
-  const seen = new Set();
-  return (state.history || []).filter((entry) => {
-    if (!isReadingCompletionAction(entry.action)) return false;
-    const key = clean(entry.id) || `${clean(entry.action)}:${Number(entry.created_at || 0) || 0}`;
-    if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
@@ -2533,12 +2555,10 @@ function profileLearningSnapshot() {
     reviewCompletions += Math.max(0, Math.floor(Number(word.review_count || 0) || 0));
   });
   const shadowingRecords = validShadowingRecordings();
-  const readingRecords = readingCompletionRecords();
   const totalXP =
     studiedWordIds.size * 10 +
     reviewCompletions * 5 +
-    shadowingRecords.length * 30 +
-    readingRecords.length * 20;
+    shadowingRecords.length * 30;
   const level = Math.floor(totalXP / PROFILE_XP_PER_LEVEL) + 1;
   const currentLevelXP = totalXP % PROFILE_XP_PER_LEVEL;
   const remainingXP = PROFILE_XP_PER_LEVEL - currentLevelXP;
@@ -2559,9 +2579,6 @@ function profileLearningSnapshot() {
   const todayShadowing = shadowingRecords.filter(
     (recording) => localDateKeyForTimestamp(recording.recorded_at || recording.created_at) === today,
   ).length;
-  const todayReading = readingRecords.filter(
-    (entry) => localDateKeyForTimestamp(entry.created_at) === today,
-  ).length;
   const activeMinutes = Math.max(0, Math.floor(effectiveStudyTimeMs(today) / 60000));
   const progress = Math.min(100, (activeMinutes / PROFILE_DAILY_GOAL_MINUTES) * 100);
   return {
@@ -2575,7 +2592,6 @@ function profileLearningSnapshot() {
       newWords: todayNew >= DAILY_NEW_WORD_LIMIT,
       review: todayReview >= DAILY_NEW_WORD_LIMIT,
       shadowing: todayShadowing >= 1,
-      reading: todayReading >= 1,
     },
   };
 }
@@ -2598,7 +2614,6 @@ function renderProfileLearningCards() {
   setProfileGoalTask(els.profileGoalNew, snapshot.tasks.newWords);
   setProfileGoalTask(els.profileGoalReview, snapshot.tasks.review);
   setProfileGoalTask(els.profileGoalShadowing, snapshot.tasks.shadowing);
-  setProfileGoalTask(els.profileGoalReading, snapshot.tasks.reading);
   return snapshot;
 }
 
@@ -2637,13 +2652,64 @@ function setAuthMessage(message = "") {
   if (els.authMessage) els.authMessage.textContent = state.auth.message;
 }
 
+function formatProfileSyncTime(timestamp) {
+  const value = Number(timestamp || 0) || 0;
+  if (!value) return "Inte synkroniserat ännu";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Inte synkroniserat ännu";
+  const time = new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", minute: "2-digit" }).format(date);
+  const today = localDateKeyForTimestamp(Date.now());
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const dateKey = localDateKeyForTimestamp(value);
+  if (dateKey === today) return `Idag ${time}`;
+  if (dateKey === localDateKeyForTimestamp(yesterdayDate.getTime())) return `Igår ${time}`;
+  const calendarDate = new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  return `${calendarDate} ${time}`;
+}
+
+async function refreshProfileSyncSummary() {
+  const status = await remoteDb.getSyncStatus().catch(() => ({ enabled: false, pending: 0, lastSyncedAt: 0 }));
+  state.sync.pending = Number(status.pending || 0) || 0;
+  state.sync.lastSyncedAt = Number(status.lastSyncedAt || 0) || state.sync.lastSyncedAt || 0;
+  renderProfileSyncSummary();
+}
+
 function renderProfileSyncSummary() {
   if (!els.profileLastSyncValue) return;
   els.profileLastSyncValue.textContent = navigator.onLine === false
     ? "Offline"
-    : state.auth.loading
+    : state.auth.loading || state.sync.status === "syncing"
       ? "Synkroniserar..."
-      : "Inte synkroniserat ännu";
+      : state.sync.pending > 0
+        ? `${state.sync.pending} ändringar väntar`
+        : formatProfileSyncTime(state.sync.lastSyncedAt);
+}
+
+async function syncPendingUserData({ reloadData = false } = {}) {
+  if (!state.auth.user?.id || navigator.onLine === false || state.sync.status === "syncing") {
+    renderProfileSyncSummary();
+    return null;
+  }
+  state.sync.status = "syncing";
+  renderProfileSyncSummary();
+  try {
+    const result = await remoteDb.flushPendingSync();
+    state.dailyStudy = ensureDailyStudyPlan();
+    const remoteDailyStudy = await ensureRemoteDailyStudySessions(state.dailyStudy);
+    if (reloadData && result.completed > 0) await loadData();
+    if (result.failed === 0 && (result.completed > 0 || remoteDailyStudy)) {
+      await remoteDb.recordSuccessfulSync();
+    }
+    state.sync.status = result.failed > 0 ? "error" : "success";
+    await refreshProfileSyncSummary();
+    return result;
+  } catch (error) {
+    state.sync.status = "error";
+    await refreshProfileSyncSummary();
+    console.warn("[Min Ordbok] Pending sync failed.", error);
+    return null;
+  }
 }
 
 function renderAuthState() {
@@ -2735,17 +2801,25 @@ async function refreshAuthState({ reloadData = false } = {}) {
   state.auth.user = authState?.user || (await getCurrentUser().catch(() => null));
   state.auth.loading = false;
   renderAuthState();
+  await refreshProfileSyncSummary();
   if (reloadData) {
     await loadData();
+    await syncPendingUserData({ reloadData: true });
   }
 }
 
 function setupAuthUiSync() {
   if (authUiSubscription || !supabase?.auth) return;
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
     state.auth.user = session?.user || null;
     state.auth.loading = false;
+    if (!session?.user?.id) {
+      state.sync = { status: "idle", pending: 0, lastSyncedAt: 0 };
+    }
     renderAuthState();
+    if (session?.user?.id && ["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) {
+      queueMicrotask(() => void syncPendingUserData());
+    }
   });
   authUiSubscription = data?.subscription || true;
 }
@@ -4967,24 +5041,22 @@ async function startShadowingRecording() {
         .then((userId) => {
           if (!userId) throw new Error("Logga in för att spara inspelningen.");
           const path = `${userId}/${selectedItem.id}/${timestamp}.webm`;
-          return remoteDb.uploadShadowingAudio({
+          return remoteDb.saveShadowingRecordingWithAudio({
             bucket: SHADOWING_RECORDINGS_BUCKET,
             path,
             file: blob,
             contentType: mime,
-            upsert: true,
+            recording: {
+              id: createId(),
+              shadowing_item_id: selectedItem.id,
+              audio_mime_type: mime,
+              audio_size_bytes: blob.size,
+              audio_duration_ms: durationMs,
+              level: selectedItem.level,
+              attempt_no: (state.shadowingRecordings || []).filter((row) => row.shadowing_item_id === selectedItem.id).length + 1,
+            },
           });
         })
-        .then((upload) => remoteDb.upsertShadowingRecording({
-          shadowing_item_id: selectedItem.id,
-          audio_bucket: upload.bucket,
-          audio_path: upload.path,
-          audio_mime_type: mime,
-          audio_size_bytes: blob.size,
-          audio_duration_ms: durationMs,
-          level: selectedItem.level,
-          attempt_no: (state.shadowingRecordings || []).filter((row) => row.shadowing_item_id === selectedItem.id).length + 1,
-        }))
         .then((result) => {
           if (result?.recording) {
             state.shadowingRecordings = [
@@ -8663,12 +8735,7 @@ async function resetAppData() {
     await Promise.all(registrations.map((registration) => registration.unregister()));
   }
   if ("indexedDB" in window) {
-    await new Promise((resolve) => {
-      const request = indexedDB.deleteDatabase(DB_NAME);
-      request.onsuccess = resolve;
-      request.onerror = resolve;
-      request.onblocked = resolve;
-    });
+    await Promise.all([deleteDatabaseByName(DB_NAME), deleteDatabaseByName("spraklab-sync")]);
   }
   await shadowingStore.clearShadowingStore();
   await restoreBuiltInWordPacks();
@@ -8699,7 +8766,7 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js?v=57", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=58", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
@@ -8814,8 +8881,19 @@ async function bootstrapApp() {
   setupShadowingAudio();
   setupHomeGreeting();
   setupAuthUiSync();
-  window.addEventListener("online", renderProfileSyncSummary);
+  window.addEventListener("spraklab:sync-status", (event) => {
+    const detail = event.detail || {};
+    if (detail.userId && detail.userId !== state.auth.user?.id) return;
+    if (detail.status) state.sync.status = detail.status;
+    if (detail.pending !== undefined) state.sync.pending = Math.max(0, Number(detail.pending || 0) || 0);
+    if (detail.lastSyncedAt) state.sync.lastSyncedAt = Number(detail.lastSyncedAt) || state.sync.lastSyncedAt;
+    renderProfileSyncSummary();
+  });
+  window.addEventListener("online", () => void syncPendingUserData({ reloadData: true }));
   window.addEventListener("offline", renderProfileSyncSummary);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void syncPendingUserData();
+  });
   setupEffectiveStudyTimeTracking();
   setupInstallPrompt();
   setupCrossOriginTransfer();
@@ -8845,6 +8923,10 @@ async function bootstrapApp() {
 
   try {
     await loadData();
+    if (state.auth.user?.id && remotePhase4Snapshot?.enabled && lastWordLoadDebug.remoteReadOk) {
+      await remoteDb.recordSuccessfulSync();
+    }
+    await syncPendingUserData({ reloadData: true });
     await waitForImageReady(els.homeHeroImage);
   } catch (error) {
     console.error("[Min Ordbok] Startup failed", error);
