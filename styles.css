@@ -1356,6 +1356,222 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   gap: 7px;
 }
 
+.profile-subpage {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.profile-subpage[hidden] {
+  display: none;
+}
+
+.profile-main-panel {
+  padding: 2px 0 10px;
+}
+
+.profile-main-panel .profile-account-head {
+  gap: 14px;
+  padding: 8px 4px 12px;
+  border-bottom: 0;
+}
+
+.profile-main-panel .profile-avatar {
+  width: 56px;
+  height: 56px;
+  flex-basis: 56px;
+  background: linear-gradient(145deg, #e7f1ec, #c7ddd2);
+  color: var(--accent-strong);
+  font-size: 1.35rem;
+  font-weight: 720;
+}
+
+.profile-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profile-snapshot-card {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 108px;
+  padding: 18px;
+  border: 1px solid rgba(47, 71, 63, 0.06);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 24px rgba(31, 42, 48, 0.045);
+}
+
+.profile-snapshot-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+
+.profile-snapshot-card strong {
+  color: var(--accent-strong);
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.profile-entry-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  min-height: 82px;
+  padding: 16px 18px;
+  border: 1px solid rgba(47, 71, 63, 0.06);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(31, 42, 48, 0.045);
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.profile-entry-card > span:first-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.profile-entry-card strong {
+  font-size: 1rem;
+  font-weight: 730;
+}
+
+.profile-entry-card small,
+.profile-detail-card small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.profile-entry-card > span:last-child {
+  color: #819089;
+  font-size: 1.8rem;
+  font-weight: 320;
+}
+
+.profile-secondary-page {
+  padding: 2px 0 16px;
+}
+
+.profile-back-button {
+  justify-self: start;
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.profile-secondary-head {
+  display: grid;
+  gap: 5px;
+  padding: 0 4px 6px;
+}
+
+.profile-secondary-head h2,
+.profile-secondary-head p {
+  margin: 0;
+}
+
+.profile-secondary-head h2 {
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+}
+
+.profile-secondary-head > p:last-child {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.profile-secondary-page .profile-overview-card,
+.profile-detail-card,
+.profile-settings-list {
+  border: 1px solid rgba(47, 71, 63, 0.06);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 24px rgba(31, 42, 48, 0.045);
+}
+
+.profile-secondary-page .profile-overview-card {
+  padding: 18px;
+}
+
+.profile-detail-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+}
+
+.profile-detail-card > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.profile-detail-card > strong {
+  color: var(--ink);
+  font-size: 0.96rem;
+}
+
+.profile-settings-list {
+  display: grid;
+  overflow: hidden;
+}
+
+.profile-settings-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 58px;
+  padding: 0 18px;
+  border: 0;
+  border-bottom: 1px solid rgba(31, 42, 48, 0.08);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.profile-settings-list button:last-child {
+  border-bottom: 0;
+}
+
+.profile-settings-list button > :last-child {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 580;
+}
+
+.profile-settings-list .profile-settings-logout,
+.profile-settings-list .profile-settings-logout > :last-child {
+  color: #9a3328;
+}
+
+#profileView,
+#profileSignedInGrid,
+.profile-account-panel {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
 .shadowing-top-fixed {
   display: grid;
   gap: 10px;

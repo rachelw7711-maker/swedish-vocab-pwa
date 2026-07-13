@@ -374,8 +374,17 @@ const els = {
   submitAuthBtn: document.querySelector("#submitAuthBtn"),
   profileSignedOutCard: document.querySelector("#profileSignedOutCard"),
   profileSignedInGrid: document.querySelector("#profileSignedInGrid"),
+  profileMainPanel: document.querySelector("#profileMainPanel"),
+  profileStudiesPanel: document.querySelector("#profileStudiesPanel"),
+  profileSettingsPanel: document.querySelector("#profileSettingsPanel"),
+  profileAvatar: document.querySelector("#profileAvatar"),
   profileAccountName: document.querySelector("#profileAccountName"),
   profilePlanBadge: document.querySelector("#profilePlanBadge"),
+  profileLevelValue: document.querySelector("#profileLevelValue"),
+  profileDailyGoal: document.querySelector("#profileDailyGoal"),
+  profileWordCount: document.querySelector("#profileWordCount"),
+  profileMasteredCount: document.querySelector("#profileMasteredCount"),
+  profileTodayActivity: document.querySelector("#profileTodayActivity"),
   profileAccountEmail: document.querySelector("#profileAccountEmail"),
   profileAccountHint: document.querySelector("#profileAccountHint"),
   profileSyncStatus: document.querySelector("#profileSyncStatus"),
@@ -386,8 +395,6 @@ const els = {
   profileSettingsHint: document.querySelector("#profileSettingsHint"),
   profileStartCard: document.querySelector("#profileStartCard"),
   profileGuestButton: document.querySelector("#profileGuestButton"),
-  profileSettingsToggle: document.querySelector("#profileSettingsToggle"),
-  profileSettingsMenu: document.querySelector("#profileSettingsMenu"),
   topbarLibraryBack: document.querySelector(".topbar-library-back"),
   topbarAuthButton: document.querySelector("#topbarAuthButton"),
   profileLoginButton: document.querySelector("#profileLoginButton"),
@@ -2399,6 +2406,15 @@ function renderProfileView() {
   renderAuthState();
 }
 
+function showProfilePage(page = "main") {
+  const target = ["studies", "settings"].includes(page) ? page : "main";
+  if (els.profileMainPanel) els.profileMainPanel.hidden = target !== "main";
+  if (els.profileStudiesPanel) els.profileStudiesPanel.hidden = target !== "studies";
+  if (els.profileSettingsPanel) els.profileSettingsPanel.hidden = target !== "settings";
+  if (els.profileSignedInGrid) els.profileSignedInGrid.dataset.profilePage = target;
+  if (state.activeView === "profileView") resetViewportScroll();
+}
+
 function getAuthDisplayEmail(user) {
   return clean(user?.email || user?.phone || "") || "Inte inloggad";
 }
@@ -2422,9 +2438,11 @@ function setAuthMessage(message = "") {
 function renderAuthState() {
   const user = state.auth.user;
   const isSignedIn = Boolean(user?.id);
+  const mastered = state.words.filter((word) => word.learned).length;
+  const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
   if (els.profileSignedOutCard) els.profileSignedOutCard.hidden = isSignedIn;
   if (els.profileSignedInGrid) els.profileSignedInGrid.hidden = !isSignedIn;
-  if (els.profileSettingsToggle) els.profileSettingsToggle.hidden = !isSignedIn;
+  if (!isSignedIn) showProfilePage("main");
   if (els.topbarAuthButton) {
     els.topbarAuthButton.dataset.signedIn = String(isSignedIn);
     els.topbarAuthButton.textContent = state.auth.loading ? "..." : isSignedIn ? getAuthAvatarLabel(user) : "Logga in";
@@ -2437,7 +2455,7 @@ function renderAuthState() {
     els.profileLoginButton.disabled = state.auth.loading || state.auth.busy;
   }
   if (els.profileLogoutButton) {
-    const label = els.profileLogoutButton.querySelector("span:last-child");
+    const label = els.profileLogoutButton.querySelector("span:first-child");
     if (label) label.textContent = state.auth.loading ? "Läser..." : "Logga ut";
     else els.profileLogoutButton.textContent = state.auth.loading ? "Läser..." : "Logga ut";
     els.profileLogoutButton.disabled = state.auth.loading || state.auth.busy;
@@ -2446,6 +2464,7 @@ function renderAuthState() {
     const accountName = clean(user?.email || "").split("@")[0] || getAuthDisplayName(user);
     els.profileAccountName.textContent = state.auth.loading ? "Läser profil..." : `Hej, ${accountName}`;
   }
+  if (els.profileAvatar) els.profileAvatar.textContent = getAuthAvatarLabel(user);
   if (els.profilePlanBadge) {
     els.profilePlanBadge.textContent = "Fortsätt mot flytande svenska! 🇸🇪";
   }
@@ -2477,9 +2496,14 @@ function renderAuthState() {
     const streak = state.studyStats?.current_streak || 0;
     els.profileStudyStats.textContent = state.auth.loading ? "Laddar..." : `${streak} dagar i rad`;
   }
+  if (els.profileLevelValue) {
+    els.profileLevelValue.textContent = mastered >= 200 ? "Stark" : mastered >= 50 ? "På väg" : "Nybörjare";
+  }
+  if (els.profileDailyGoal) els.profileDailyGoal.textContent = `${todayNew}/${DAILY_NEW_WORD_LIMIT} ord`;
+  if (els.profileWordCount) els.profileWordCount.textContent = state.words.length;
+  if (els.profileMasteredCount) els.profileMasteredCount.textContent = mastered;
+  if (els.profileTodayActivity) els.profileTodayActivity.textContent = `${todayNew} nya ord`;
   if (els.profileStudyHint) {
-    const mastered = state.words.filter((word) => word.learned).length;
-    const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
     els.profileStudyHint.textContent = state.auth.loading
       ? "Hämtar statistik..."
       : `${mastered} lärda ord · ${todayNew} klara idag`;
@@ -7560,6 +7584,7 @@ function bindEvents() {
         state.selectedNotebook = "";
         resetListLimit("notebook");
       }
+      if (tab.dataset.view === "profileView") showProfilePage("main");
       activateView(tab.dataset.view);
     });
   });
@@ -8298,6 +8323,7 @@ function bindEvents() {
   });
   els.topbarAuthButton?.addEventListener("click", () => {
     if (state.auth.user?.id) {
+      showProfilePage("main");
       activateView("profileView");
       return;
     }
@@ -8326,16 +8352,13 @@ function bindEvents() {
     openAuthDialog("signup");
   });
   els.profileGuestButton?.addEventListener("click", () => activateView("homeView"));
-  els.profileSettingsToggle?.addEventListener("click", () => {
-    const nextOpen = Boolean(els.profileSettingsMenu?.hidden);
-    if (els.profileSettingsMenu) els.profileSettingsMenu.hidden = !nextOpen;
-    els.profileSettingsToggle.setAttribute("aria-expanded", String(nextOpen));
-  });
-  document.addEventListener("click", (event) => {
-    if (!els.profileSettingsMenu || els.profileSettingsMenu.hidden) return;
-    if (event.target.closest("#profileSettingsMenu") || event.target.closest("#profileSettingsToggle")) return;
-    els.profileSettingsMenu.hidden = true;
-    els.profileSettingsToggle?.setAttribute("aria-expanded", "false");
+  els.profileSignedInGrid?.addEventListener("click", (event) => {
+    const page = event.target.closest("[data-profile-page]")?.dataset.profilePage;
+    if (page) {
+      showProfilePage(page);
+      return;
+    }
+    if (event.target.closest("[data-profile-back]")) showProfilePage("main");
   });
   els.profileStartCard?.addEventListener("click", () => {
     openAuthDialog("signup");

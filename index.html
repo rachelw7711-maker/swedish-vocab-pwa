@@ -74,15 +74,6 @@
         </div>
         <button class="topbar-library-back" type="button" data-return-view="libraryView" hidden>Till Bibliotek</button>
         <button class="topbar-auth-button" id="topbarAuthButton" type="button" aria-label="Logga in">Logga in</button>
-        <button class="profile-settings-toggle" id="profileSettingsToggle" type="button" aria-label="Öppna inställningar" aria-expanded="false" hidden>•••</button>
-        <nav class="profile-settings-popover" id="profileSettingsMenu" aria-label="Profilinställningar" hidden>
-          <button type="button"><span aria-hidden="true">⚙️</span><span>Inställningar</span></button>
-          <button type="button"><span aria-hidden="true">☁️</span><span>Synkronisering</span></button>
-          <button type="button"><span aria-hidden="true">⬇️</span><span>Exportera data</span></button>
-          <button type="button"><span aria-hidden="true">🔊</span><span>Språk och röst</span></button>
-          <button type="button"><span aria-hidden="true">❓</span><span>Hjälp och support</span></button>
-          <button type="button" class="profile-menu-row--logout" id="profileLogoutButton"><span aria-hidden="true">↩️</span><span>Logga ut</span></button>
-        </nav>
       </header>
       <main>
         <section id="homeView" class="view active home-page">
@@ -329,28 +320,87 @@
             </section>
 
             <section id="profileSignedInGrid" class="profile-account-panel" hidden>
-              <header class="profile-account-head">
-                <div class="profile-account-copy">
-                  <h2 id="profileAccountName">Hej!</h2>
-                  <span id="profilePlanBadge">Fortsätt mot flytande svenska! 🇸🇪</span>
+              <section id="profileMainPanel" class="profile-subpage profile-main-panel">
+                <header class="profile-account-head">
+                  <span class="profile-avatar" id="profileAvatar" aria-hidden="true">S</span>
+                  <div class="profile-account-copy">
+                    <h2 id="profileAccountName">Hej!</h2>
+                    <span id="profilePlanBadge">Fortsätt mot flytande svenska! 🇸🇪</span>
+                  </div>
+                </header>
+
+                <div class="profile-snapshot-grid" aria-label="Profilöversikt">
+                  <article class="profile-snapshot-card">
+                    <span>Nivå</span>
+                    <strong id="profileLevelValue">På väg</strong>
+                  </article>
+                  <article class="profile-snapshot-card">
+                    <span>Dagens mål</span>
+                    <strong id="profileDailyGoal">0/10 ord</strong>
+                  </article>
                 </div>
-              </header>
-              <section class="profile-overview-card">
-                <p class="section-kicker">Din statistik</p>
-                <div class="profile-overview-grid">
-                  <article><strong>5944</strong><span>Ord</span></article>
-                  <article><strong id="profileStudyStats">0 dagar</strong><span>I rad</span></article>
-                  <article><strong id="profileSyncStatus">Aktiv</strong><span>Synk</span></article>
-                </div>
+
+                <button class="profile-entry-card" type="button" data-profile-page="studies">
+                  <span><strong>Mina studier</strong><small>Se din statistik, aktivitet och utveckling</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
+
+                <button class="profile-entry-card" type="button" data-profile-page="settings">
+                  <span><strong>Inställningar</strong><small>Appinställningar, språk, synkronisering och mer</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
               </section>
-              <section class="profile-overview-card profile-account-summary">
-                <p class="section-kicker">Konto</p>
-                <strong id="profileAccountEmail">Inte inloggad</strong>
-                <span id="profileSettingsSummary">Standardläge</span>
+
+              <section id="profileStudiesPanel" class="profile-subpage profile-secondary-page" hidden>
+                <button class="profile-back-button" type="button" data-profile-back>‹ Profil</button>
+                <header class="profile-secondary-head">
+                  <p class="section-kicker">Översikt</p>
+                  <h2>Mina studier</h2>
+                  <p>Din statistik, aktivitet och utveckling.</p>
+                </header>
+                <section class="profile-overview-card">
+                  <p class="section-kicker">Statistik</p>
+                  <div class="profile-overview-grid">
+                    <article><strong id="profileWordCount">0</strong><span>Ord</span></article>
+                    <article><strong id="profileStudyStats">0 dagar</strong><span>I rad</span></article>
+                    <article><strong id="profileMasteredCount">0</strong><span>Lärda</span></article>
+                  </div>
+                </section>
+                <section class="profile-detail-card">
+                  <span>Aktivitet idag</span>
+                  <strong id="profileTodayActivity">0 nya ord</strong>
+                  <small id="profileStudyHint">0 lärda ord · 0 klara idag</small>
+                </section>
+                <section class="profile-detail-card">
+                  <span>Utveckling och prestationer</span>
+                  <strong>Fortsätt bygga din svenska varje dag</strong>
+                  <small>Din aktivitet och dina lärda ord sparas i kontot.</small>
+                </section>
               </section>
+
+              <section id="profileSettingsPanel" class="profile-subpage profile-secondary-page" hidden>
+                <button class="profile-back-button" type="button" data-profile-back>‹ Profil</button>
+                <header class="profile-secondary-head">
+                  <p class="section-kicker">Konto</p>
+                  <h2>Inställningar</h2>
+                  <p>Appinställningar, språk, synkronisering och mer.</p>
+                </header>
+                <section class="profile-detail-card profile-account-summary">
+                  <span>Konto</span>
+                  <strong id="profileAccountEmail">Inte inloggad</strong>
+                  <small id="profileSettingsSummary">Standardläge</small>
+                </section>
+                <section class="profile-settings-list" aria-label="Inställningar">
+                  <button type="button"><span>Synkronisering</span><strong id="profileSyncStatus">Aktiv</strong></button>
+                  <button type="button"><span>Exportera data</span><span aria-hidden="true">›</span></button>
+                  <button type="button"><span>Språk och röst</span><span aria-hidden="true">›</span></button>
+                  <button type="button"><span>Hjälp och support</span><span aria-hidden="true">›</span></button>
+                  <button type="button" class="profile-settings-logout" id="profileLogoutButton"><span>Logga ut</span><span aria-hidden="true">›</span></button>
+                </section>
+              </section>
+
               <span id="profileAccountHint" class="visually-hidden">Logga in för att synka mellan enheter</span>
               <span id="profileSyncHint" class="visually-hidden">Dina data synkas via Supabase.</span>
-              <span id="profileStudyHint" class="visually-hidden">0 lärda ord · 0 klara idag</span>
               <span id="profileSettingsHint" class="visually-hidden">Synk, studieområde och ljudinställningar följer ditt konto.</span>
             </section>
           </section>
