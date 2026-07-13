@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=145" />
+    <link rel="stylesheet" href="/styles.css?v=146" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -333,23 +333,25 @@
                   <article class="profile-snapshot-card profile-level-card">
                     <span class="profile-card-label">Nivå</span>
                     <strong>Nivå <span id="profileLevelValue">1</span></strong>
-                    <span id="profileLevelProgress">0 / 1000 XP</span>
+                    <span class="profile-level-progress" id="profileLevelProgress">0 / 1000 XP</span>
                     <span class="profile-xp-track" aria-hidden="true"><span id="profileXpBar"></span></span>
                     <small>Nästa nivå: Nivå <span id="profileNextLevel">2</span></small>
                     <small><span id="profileRemainingXp">1000</span> XP kvar</small>
                   </article>
                   <article class="profile-snapshot-card profile-daily-goal-card">
                     <span class="profile-card-label">Dagens mål</span>
-                    <div class="profile-goal-summary">
-                      <span class="profile-goal-ring" id="profileGoalRing" aria-hidden="true"><span id="profileGoalPercent">0%</span></span>
-                      <strong id="profileDailyGoal">0 / 30 min</strong>
+                    <div class="profile-goal-content">
+                      <div class="profile-goal-summary">
+                        <span class="profile-goal-ring" id="profileGoalRing" aria-hidden="true"><span id="profileGoalPercent">0%</span></span>
+                        <strong id="profileDailyGoal">0 / 30 min</strong>
+                      </div>
+                      <ul class="profile-goal-tasks" aria-label="Dagens uppgifter">
+                        <li id="profileGoalNew">Nya ord</li>
+                        <li id="profileGoalReview">Repetition</li>
+                        <li id="profileGoalShadowing">Shadowing</li>
+                        <li class="profile-goal-task-upcoming" aria-disabled="true" aria-label="Läsning, snart"><span>Läsning</span></li>
+                      </ul>
                     </div>
-                    <ul class="profile-goal-tasks" aria-label="Dagens uppgifter">
-                      <li id="profileGoalNew">Nya ord</li>
-                      <li id="profileGoalReview">Repetition</li>
-                      <li id="profileGoalShadowing">Shadowing</li>
-                      <li class="profile-goal-task-upcoming"><span>Läsning</span><small>Snart</small></li>
-                    </ul>
                   </article>
                 </div>
 
@@ -974,6 +976,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=134" type="module"></script>
+    <script src="/app.js?v=135" type="module"></script>
   </body>
 </html>
