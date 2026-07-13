@@ -19,6 +19,7 @@ const TABLES = {
   shadowingItems: "shadowing_items",
   shadowingRecordings: "shadowing_recordings",
   userPreferences: "user_preferences",
+  effectiveStudyTime: "effective_study_time",
 };
 
 const PAGE_SIZE = 1000;
@@ -256,6 +257,7 @@ export async function flushPendingSync() {
       shadowing_item: ({ item }) => writeShadowingItem(user.id, item),
       shadowing_recording: ({ recording }) => writeShadowingRecording(user.id, recording),
       shadowing_recording_audio: (payload) => writeShadowingRecordingWithAudio(user.id, payload),
+      effective_study_time: (payload) => writeEffectiveStudyTime(payload),
     },
   });
 }
@@ -820,6 +822,49 @@ export async function upsertUserPreferences(preferences = {}) {
   return runQueuedMutation("user_preferences", { preferences }, {
     userId: user.id,
     handler: ({ preferences: queuedPreferences }) => writeUserPreferences(user.id, queuedPreferences),
+  });
+}
+
+export async function loadEffectiveStudyTime({ date = todayKey() } = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false, date, totalMs: 0, devices: [] };
+  const { data, error } = await supabase
+    .from(TABLES.effectiveStudyTime)
+    .select("device_id,active_ms,timezone,updated_at")
+    .eq("user_id", user.id)
+    .eq("study_date", date);
+  if (error) throw error;
+  const devices = (data || []).map((row) => ({
+    deviceId: clean(row.device_id),
+    activeMs: Math.max(0, Number(row.active_ms || 0) || 0),
+    timezone: clean(row.timezone) || "UTC",
+    updatedAt: dateToMillis(row.updated_at),
+  }));
+  return {
+    enabled: true,
+    date,
+    totalMs: devices.reduce((total, row) => total + row.activeMs, 0),
+    devices,
+  };
+}
+
+async function writeEffectiveStudyTime({ deviceId, date, activeMs, timezone } = {}) {
+  const { data, error } = await supabase.rpc("merge_effective_study_time", {
+    p_device_id: clean(deviceId),
+    p_study_date: clean(date),
+    p_active_ms: Math.max(0, Math.floor(Number(activeMs || 0) || 0)),
+    p_timezone: clean(timezone) || "UTC",
+  });
+  if (error) throw error;
+  return { enabled: true, activeMs: Math.max(0, Number(data || 0) || 0) };
+}
+
+export async function upsertEffectiveStudyTime(payload = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id || !payload.deviceId || !payload.date) return { enabled: false, activeMs: 0 };
+  return runQueuedMutation("effective_study_time", payload, {
+    userId: user.id,
+    handler: writeEffectiveStudyTime,
   });
 }
 

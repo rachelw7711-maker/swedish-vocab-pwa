@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=126";
+import * as remoteDb from "./src/lib/db.js?v=127";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -28,6 +28,7 @@ const LOCAL_DAILY_STUDY_STATE_KEY = "swedish-vocab-pwa.dailyStudyState";
 const LOCAL_WORD_PROGRESS_KEY = "swedish-vocab-pwa.wordProgress";
 const LOCAL_STUDY_STATS_KEY = "swedish-vocab-pwa.studyStats";
 const LOCAL_EFFECTIVE_STUDY_TIME_KEY = "swedish-vocab-pwa.effectiveStudyTime";
+const LOCAL_EFFECTIVE_STUDY_DEVICE_KEY = "swedish-vocab-pwa.effectiveStudyDeviceId";
 const LOCAL_STORAGE_SCHEMA_KEY = "swedish-vocab-pwa.storageSchemaVersion";
 const LOCAL_BACKUPS_KEY = "swedish-vocab-pwa.backups";
 const STORAGE_SCHEMA_VERSION = 1;
@@ -42,6 +43,7 @@ const PROFILE_DAILY_GOAL_MINUTES = 30;
 const EFFECTIVE_STUDY_TICK_MS = 15000;
 const EFFECTIVE_STUDY_IDLE_LIMIT_MS = 60000;
 const EFFECTIVE_STUDY_MAX_TICK_MS = 30000;
+const EFFECTIVE_STUDY_SYNC_INTERVAL_MS = 60000;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
@@ -316,6 +318,13 @@ let authUiSubscription = null;
 let effectiveStudyTimerId = null;
 let effectiveStudyLastTickAt = Date.now();
 let effectiveStudyLastInteractionAt = Date.now();
+let effectiveStudyLastDateKey = "";
+let effectiveStudySyncTimerId = null;
+let effectiveStudySyncPromise = null;
+let effectiveStudySyncRequested = false;
+let effectiveStudyCloudAccountId = "";
+let effectiveStudyEphemeralDeviceId = "";
+const effectiveStudyCloudRows = new Map();
 const shadowingSignedUrlCache = new Map();
 
 function isLocalDevelopmentOrigin() {
@@ -2134,6 +2143,7 @@ async function loadData() {
   await ensureRemoteDailyStudySessions(state.dailyStudy);
   state.shadowingRecordings = remotePhase4Snapshot?.shadowingRecordings || [];
   state.shadowing = mergeShadowingItemsForApp(remotePhase4Snapshot?.shadowingItems || []);
+  await refreshEffectiveStudyTimeCloud(todayKey());
   console.info("[Min Ordbok] Data init", {
     wordsLength: state.words.length,
     booksLength: getNotebooks().length,
@@ -2508,9 +2518,42 @@ function readEffectiveStudyTimeStore() {
   }
 }
 
+function effectiveStudyDeviceId() {
+  try {
+    const existing = clean(localStorage.getItem(LOCAL_EFFECTIVE_STUDY_DEVICE_KEY));
+    if (existing) return existing;
+    const value = globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(LOCAL_EFFECTIVE_STUDY_DEVICE_KEY, value);
+    return value;
+  } catch {
+    if (!effectiveStudyEphemeralDeviceId) {
+      effectiveStudyEphemeralDeviceId = globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    return effectiveStudyEphemeralDeviceId;
+  }
+}
+
+function effectiveStudyTimezone() {
+  try {
+    return clean(Intl.DateTimeFormat().resolvedOptions().timeZone) || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 function effectiveStudyTimeMs(date = todayKey(), scope = profileDataScopeKey()) {
-  const value = Number(readEffectiveStudyTimeStore()?.[scope]?.[date] || 0) || 0;
-  return Math.max(0, value);
+  const localMs = Math.max(0, Number(readEffectiveStudyTimeStore()?.[scope]?.[date] || 0) || 0);
+  const accountId = state.auth.user?.id || "";
+  if (!accountId || effectiveStudyCloudAccountId !== accountId) return localMs;
+  const cloudRows = effectiveStudyCloudRows.get(date);
+  if (!cloudRows) return localMs;
+  const currentDeviceId = effectiveStudyDeviceId();
+  let totalMs = 0;
+  cloudRows.forEach((activeMs, deviceId) => {
+    totalMs += deviceId === currentDeviceId ? Math.max(activeMs, localMs) : activeMs;
+  });
+  if (!cloudRows.has(currentDeviceId)) totalMs += localMs;
+  return Math.max(0, totalMs);
 }
 
 function addEffectiveStudyTime(elapsedMs, date = todayKey(), scope = profileDataScopeKey()) {
@@ -2526,6 +2569,83 @@ function addEffectiveStudyTime(elapsedMs, date = todayKey(), scope = profileData
   } catch {
     // Keep the profile usable if storage is unavailable.
   }
+  scheduleEffectiveStudyTimeSync();
+}
+
+async function refreshEffectiveStudyTimeCloud(date = todayKey()) {
+  const accountId = state.auth.user?.id || "";
+  if (!accountId || navigator.onLine === false) return null;
+  try {
+    const snapshot = await remoteDb.loadEffectiveStudyTime({ date });
+    if (!snapshot?.enabled || state.auth.user?.id !== accountId) return snapshot;
+    effectiveStudyCloudAccountId = accountId;
+    effectiveStudyCloudRows.set(
+      date,
+      new Map((snapshot.devices || []).map((row) => [clean(row.deviceId), Math.max(0, Number(row.activeMs || 0) || 0)])),
+    );
+    if (state.activeView === "profileView") renderProfileLearningCards();
+    return snapshot;
+  } catch (error) {
+    console.warn("[SpråkLab] Could not load cloud study time.", error);
+    return null;
+  }
+}
+
+function scheduleEffectiveStudyTimeSync(delay = EFFECTIVE_STUDY_SYNC_INTERVAL_MS) {
+  if (!state.auth.user?.id) return;
+  effectiveStudySyncRequested = true;
+  if (effectiveStudySyncTimerId || effectiveStudySyncPromise) return;
+  effectiveStudySyncTimerId = window.setTimeout(() => {
+    effectiveStudySyncTimerId = null;
+    void syncEffectiveStudyTime();
+  }, Math.max(0, delay));
+}
+
+async function syncEffectiveStudyTime({ refreshCloud = false } = {}) {
+  const accountId = state.auth.user?.id || "";
+  if (!accountId || navigator.onLine === false) return null;
+  if (effectiveStudySyncPromise) {
+    effectiveStudySyncRequested = true;
+    return effectiveStudySyncPromise;
+  }
+  if (effectiveStudySyncTimerId) {
+    window.clearTimeout(effectiveStudySyncTimerId);
+    effectiveStudySyncTimerId = null;
+  }
+  effectiveStudySyncRequested = false;
+  const date = todayKey();
+  const deviceId = effectiveStudyDeviceId();
+  const combinedMs = Math.max(0, Math.floor(effectiveStudyTimeMs(date, `user:${accountId}`) || 0));
+  const localDeviceMs = Math.max(
+    0,
+    Math.floor(Number(readEffectiveStudyTimeStore()?.[`user:${accountId}`]?.[date] || 0) || 0),
+  );
+  if (!localDeviceMs) {
+    if (refreshCloud) await refreshEffectiveStudyTimeCloud(date);
+    return { enabled: true, activeMs: 0 };
+  }
+  effectiveStudySyncPromise = remoteDb.upsertEffectiveStudyTime({
+    deviceId,
+    date,
+    activeMs: localDeviceMs,
+    timezone: effectiveStudyTimezone(),
+  }).then(async (result) => {
+    if (state.auth.user?.id !== accountId || !result?.enabled) return result;
+    effectiveStudyCloudAccountId = accountId;
+    const rows = effectiveStudyCloudRows.get(date) || new Map();
+    rows.set(deviceId, Math.max(localDeviceMs, Number(result.activeMs || 0) || 0));
+    effectiveStudyCloudRows.set(date, rows);
+    if (refreshCloud || combinedMs !== localDeviceMs) await refreshEffectiveStudyTimeCloud(date);
+    if (state.activeView === "profileView") renderProfileLearningCards();
+    return result;
+  }).catch((error) => {
+    console.warn("[SpråkLab] Effective study time is queued for a later sync.", error);
+    return null;
+  }).finally(() => {
+    effectiveStudySyncPromise = null;
+    if (effectiveStudySyncRequested) scheduleEffectiveStudyTimeSync(0);
+  });
+  return effectiveStudySyncPromise;
 }
 
 function isEffectiveStudyContext() {
@@ -2619,6 +2739,11 @@ function renderProfileLearningCards() {
 
 function tickEffectiveStudyTime({ allowHidden = false } = {}) {
   const now = Date.now();
+  const currentDateKey = todayKey();
+  if (effectiveStudyLastDateKey && effectiveStudyLastDateKey !== currentDateKey) {
+    void refreshEffectiveStudyTimeCloud(currentDateKey);
+  }
+  effectiveStudyLastDateKey = currentDateKey;
   const elapsed = now - effectiveStudyLastTickAt;
   effectiveStudyLastTickAt = now;
   if (elapsed <= 0 || elapsed > EFFECTIVE_STUDY_MAX_TICK_MS) return;
@@ -2638,12 +2763,19 @@ function setupEffectiveStudyTimeTracking() {
     document.addEventListener(type, markInteraction, { passive: true });
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) tickEffectiveStudyTime({ allowHidden: true });
+    if (document.hidden) {
+      tickEffectiveStudyTime({ allowHidden: true });
+      void syncEffectiveStudyTime();
+    }
     effectiveStudyLastTickAt = Date.now();
   });
-  window.addEventListener("pagehide", () => tickEffectiveStudyTime({ allowHidden: true }));
+  window.addEventListener("pagehide", () => {
+    tickEffectiveStudyTime({ allowHidden: true });
+    void syncEffectiveStudyTime();
+  });
   effectiveStudyLastTickAt = Date.now();
   effectiveStudyLastInteractionAt = Date.now();
+  effectiveStudyLastDateKey = todayKey();
   effectiveStudyTimerId = window.setInterval(tickEffectiveStudyTime, EFFECTIVE_STUDY_TICK_MS);
 }
 
@@ -2694,6 +2826,7 @@ async function syncPendingUserData({ reloadData = false } = {}) {
   state.sync.status = "syncing";
   renderProfileSyncSummary();
   try {
+    await syncEffectiveStudyTime();
     const result = await remoteDb.flushPendingSync();
     state.dailyStudy = ensureDailyStudyPlan();
     const remoteDailyStudy = await ensureRemoteDailyStudySessions(state.dailyStudy);
@@ -2701,6 +2834,7 @@ async function syncPendingUserData({ reloadData = false } = {}) {
     if (result.failed === 0 && (result.completed > 0 || remoteDailyStudy)) {
       await remoteDb.recordSuccessfulSync();
     }
+    await refreshEffectiveStudyTimeCloud(todayKey());
     state.sync.status = result.failed > 0 ? "error" : "success";
     await refreshProfileSyncSummary();
     return result;
@@ -2798,7 +2932,12 @@ async function refreshAuthState({ reloadData = false } = {}) {
     console.warn("[Min Ordbok] Failed to read auth state.", error);
     return { user: null };
   });
-  state.auth.user = authState?.user || (await getCurrentUser().catch(() => null));
+  const nextUser = authState?.user || (await getCurrentUser().catch(() => null));
+  if (effectiveStudyCloudAccountId && effectiveStudyCloudAccountId !== nextUser?.id) {
+    effectiveStudyCloudAccountId = "";
+    effectiveStudyCloudRows.clear();
+  }
+  state.auth.user = nextUser;
   state.auth.loading = false;
   renderAuthState();
   await refreshProfileSyncSummary();
@@ -2811,6 +2950,10 @@ async function refreshAuthState({ reloadData = false } = {}) {
 function setupAuthUiSync() {
   if (authUiSubscription || !supabase?.auth) return;
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (effectiveStudyCloudAccountId && effectiveStudyCloudAccountId !== session?.user?.id) {
+      effectiveStudyCloudAccountId = "";
+      effectiveStudyCloudRows.clear();
+    }
     state.auth.user = session?.user || null;
     state.auth.loading = false;
     if (!session?.user?.id) {
@@ -8766,7 +8909,7 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js?v=58", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=59", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
