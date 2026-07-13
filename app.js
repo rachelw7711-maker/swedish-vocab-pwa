@@ -6873,6 +6873,28 @@ async function startStudySession(mode) {
   state.activeLearning = mode;
   state.isLearningOpen = true;
   state.spellingPassed = false;
+  if (mode === "review" && isDailySessionCompleted(mode)) {
+    state.studySession = {
+      mode,
+      stage: "complete",
+      total,
+      completedAtStart: getCompletedSessionIds(mode).length,
+      wordId: null,
+      result: null,
+      spelling: createStudySpellingState(),
+      sessionCompleted: true,
+      remoteSessionId: state.dailyStudy?.remoteSessionIds?.[mode] || null,
+    };
+    els.studySessionDialog.hidden = false;
+    if (!els.studySessionDialog.open) els.studySessionDialog.showModal();
+    renderStudySession();
+    void ensureRemoteStudySession(mode).then((remoteSession) => {
+      if (state.studySession?.mode === mode && remoteSession?.id) {
+        state.studySession.remoteSessionId = remoteSession.id;
+      }
+    });
+    return;
+  }
   const remoteSession = await ensureRemoteStudySession(mode);
   state.studySession = {
     mode,
