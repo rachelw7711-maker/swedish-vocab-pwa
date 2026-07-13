@@ -330,13 +330,26 @@
                 </header>
 
                 <div class="profile-snapshot-grid" aria-label="Profilöversikt">
-                  <article class="profile-snapshot-card">
-                    <span>Nivå</span>
-                    <strong id="profileLevelValue">På väg</strong>
+                  <article class="profile-snapshot-card profile-level-card">
+                    <span class="profile-card-label">Nivå</span>
+                    <strong>Nivå <span id="profileLevelValue">1</span></strong>
+                    <span id="profileLevelProgress">0 / 1000 XP</span>
+                    <span class="profile-xp-track" aria-hidden="true"><span id="profileXpBar"></span></span>
+                    <small>Nästa nivå: Nivå <span id="profileNextLevel">2</span></small>
+                    <small><span id="profileRemainingXp">1000</span> XP kvar</small>
                   </article>
-                  <article class="profile-snapshot-card">
-                    <span>Dagens mål</span>
-                    <strong id="profileDailyGoal">0/10 ord</strong>
+                  <article class="profile-snapshot-card profile-daily-goal-card">
+                    <span class="profile-card-label">Dagens mål</span>
+                    <div class="profile-goal-summary">
+                      <span class="profile-goal-ring" id="profileGoalRing" aria-hidden="true"><span id="profileGoalPercent">0%</span></span>
+                      <strong id="profileDailyGoal">0 / 30 min</strong>
+                    </div>
+                    <ul class="profile-goal-tasks" aria-label="Dagens uppgifter">
+                      <li id="profileGoalNew">Nya ord</li>
+                      <li id="profileGoalReview">Repetition</li>
+                      <li id="profileGoalShadowing">Shadowing</li>
+                      <li id="profileGoalReading">Läsning</li>
+                    </ul>
                   </article>
                 </div>
 

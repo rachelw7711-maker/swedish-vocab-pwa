@@ -26,6 +26,7 @@ const LOCAL_DAILY_REVIEW_SESSION_KEY = "swedish-vocab-pwa.dailyReviewSession";
 const LOCAL_LEARN_DAILY_SESSION_KEY = "swedish-vocab-pwa.learnDailySession";
 const LOCAL_WORD_PROGRESS_KEY = "swedish-vocab-pwa.wordProgress";
 const LOCAL_STUDY_STATS_KEY = "swedish-vocab-pwa.studyStats";
+const LOCAL_EFFECTIVE_STUDY_TIME_KEY = "swedish-vocab-pwa.effectiveStudyTime";
 const LOCAL_STORAGE_SCHEMA_KEY = "swedish-vocab-pwa.storageSchemaVersion";
 const LOCAL_BACKUPS_KEY = "swedish-vocab-pwa.backups";
 const STORAGE_SCHEMA_VERSION = 1;
@@ -35,6 +36,11 @@ const STUDY_SCOPE_FAVORITES = "favorites";
 const STUDY_SCOPE_LEARNED = "learned";
 const DAILY_NEW_WORD_LIMIT = 10;
 const MAX_SPELLING_ATTEMPTS = 3;
+const PROFILE_XP_PER_LEVEL = 1000;
+const PROFILE_DAILY_GOAL_MINUTES = 30;
+const EFFECTIVE_STUDY_TICK_MS = 15000;
+const EFFECTIVE_STUDY_IDLE_LIMIT_MS = 60000;
+const EFFECTIVE_STUDY_MAX_TICK_MS = 30000;
 const STARTUP_LOADING_TIMEOUT_MS = 30000;
 const DEFAULT_STUDY_CATEGORIES = ["Ord om samhället", "viktiga verb"];
 const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1"]);
@@ -301,6 +307,9 @@ let shadowingComparisonQueued = false;
 let shadowingSpeechUtterance = null;
 let shadowingSpeechCharacterIndex = 0;
 let authUiSubscription = null;
+let effectiveStudyTimerId = null;
+let effectiveStudyLastTickAt = Date.now();
+let effectiveStudyLastInteractionAt = Date.now();
 const shadowingSignedUrlCache = new Map();
 
 function isLocalDevelopmentOrigin() {
@@ -381,7 +390,17 @@ const els = {
   profileAccountName: document.querySelector("#profileAccountName"),
   profilePlanBadge: document.querySelector("#profilePlanBadge"),
   profileLevelValue: document.querySelector("#profileLevelValue"),
+  profileLevelProgress: document.querySelector("#profileLevelProgress"),
+  profileXpBar: document.querySelector("#profileXpBar"),
+  profileNextLevel: document.querySelector("#profileNextLevel"),
+  profileRemainingXp: document.querySelector("#profileRemainingXp"),
   profileDailyGoal: document.querySelector("#profileDailyGoal"),
+  profileGoalRing: document.querySelector("#profileGoalRing"),
+  profileGoalPercent: document.querySelector("#profileGoalPercent"),
+  profileGoalNew: document.querySelector("#profileGoalNew"),
+  profileGoalReview: document.querySelector("#profileGoalReview"),
+  profileGoalShadowing: document.querySelector("#profileGoalShadowing"),
+  profileGoalReading: document.querySelector("#profileGoalReading"),
   profileWordCount: document.querySelector("#profileWordCount"),
   profileMasteredCount: document.querySelector("#profileMasteredCount"),
   profileTodayActivity: document.querySelector("#profileTodayActivity"),
@@ -2430,6 +2449,191 @@ function getAuthAvatarLabel(user) {
   return clean(name).charAt(0).toLocaleUpperCase("sv-SE") || "👤";
 }
 
+function localDateKeyForTimestamp(value) {
+  const timestamp = Number(value || 0) || 0;
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function profileDataScopeKey() {
+  return state.auth.user?.id ? `user:${state.auth.user.id}` : "guest";
+}
+
+function readEffectiveStudyTimeStore() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_EFFECTIVE_STUDY_TIME_KEY) || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function effectiveStudyTimeMs(date = todayKey(), scope = profileDataScopeKey()) {
+  const value = Number(readEffectiveStudyTimeStore()?.[scope]?.[date] || 0) || 0;
+  return Math.max(0, value);
+}
+
+function addEffectiveStudyTime(elapsedMs, date = todayKey(), scope = profileDataScopeKey()) {
+  const increment = Math.max(0, Math.min(Number(elapsedMs || 0) || 0, EFFECTIVE_STUDY_MAX_TICK_MS));
+  if (!increment) return;
+  const store = readEffectiveStudyTimeStore();
+  const scopeRows = store[scope] && typeof store[scope] === "object" ? store[scope] : {};
+  scopeRows[date] = Math.max(0, Number(scopeRows[date] || 0) || 0) + increment;
+  const recentDates = Object.keys(scopeRows).sort().slice(-31);
+  store[scope] = Object.fromEntries(recentDates.map((key) => [key, scopeRows[key]]));
+  try {
+    localStorage.setItem(LOCAL_EFFECTIVE_STUDY_TIME_KEY, JSON.stringify(store));
+  } catch {
+    // Keep the profile usable if storage is unavailable.
+  }
+}
+
+function isEffectiveStudyContext() {
+  if (state.isLearningOpen || state.currentQuiz) return true;
+  if (state.activeView !== "historyView") return false;
+  const isRecording = Boolean(shadowingRecorder && shadowingRecorder.state === "recording");
+  return isRecording || state.shadowingPlaybackState === "playing";
+}
+
+function isReadingCompletionAction(action) {
+  return ["reading_completed", "read_completed", "läsning_completed", "lasning_completed"].includes(clean(action).toLowerCase());
+}
+
+function validShadowingRecordings() {
+  const seen = new Set();
+  return (state.shadowingRecordings || []).filter((recording) => {
+    const durationMs = Math.max(0, Number(recording.audio_duration_ms || 0) || 0);
+    const key = clean(recording.id) || `${clean(recording.shadowing_item_id)}:${Number(recording.recorded_at || recording.created_at || 0) || 0}`;
+    if (!key || durationMs <= 0 || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function readingCompletionRecords() {
+  const seen = new Set();
+  return (state.history || []).filter((entry) => {
+    if (!isReadingCompletionAction(entry.action)) return false;
+    const key = clean(entry.id) || `${clean(entry.action)}:${Number(entry.created_at || 0) || 0}`;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function profileLearningSnapshot() {
+  const today = todayKey();
+  const studiedWordIds = new Set();
+  let reviewCompletions = 0;
+  state.words.forEach((word) => {
+    if (word?.id && (word.first_studied_at || word.last_study_date)) studiedWordIds.add(word.id);
+    reviewCompletions += Math.max(0, Math.floor(Number(word.review_count || 0) || 0));
+  });
+  const shadowingRecords = validShadowingRecordings();
+  const readingRecords = readingCompletionRecords();
+  const totalXP =
+    studiedWordIds.size * 10 +
+    reviewCompletions * 5 +
+    shadowingRecords.length * 30 +
+    readingRecords.length * 20;
+  const level = Math.floor(totalXP / PROFILE_XP_PER_LEVEL) + 1;
+  const currentLevelXP = totalXP % PROFILE_XP_PER_LEVEL;
+  const remainingXP = PROFILE_XP_PER_LEVEL - currentLevelXP;
+  const planIsToday = state.dailyStudy?.date === today;
+  const completedNewIds = planIsToday ? uniqueIds(state.dailyStudy?.completedNewWordIds || []) : [];
+  const completedReviewIds = planIsToday ? uniqueIds(state.dailyStudy?.completedReviewWordIds || []) : [];
+  const todayReviewedHistory = new Set(
+    (state.history || [])
+      .filter((entry) => entry.action === "reviewed" && localDateKeyForTimestamp(entry.created_at) === today)
+      .map((entry) => clean(entry.id) || `${clean(entry.word_id)}:${Number(entry.created_at || 0) || 0}`)
+      .filter(Boolean),
+  );
+  const todayNew = Math.max(
+    completedNewIds.length,
+    Math.max(0, Number(state.dailyProgress?.todayNewCount || 0) || 0),
+  );
+  const todayReview = Math.max(completedReviewIds.length, todayReviewedHistory.size);
+  const todayShadowing = shadowingRecords.filter(
+    (recording) => localDateKeyForTimestamp(recording.recorded_at || recording.created_at) === today,
+  ).length;
+  const todayReading = readingRecords.filter(
+    (entry) => localDateKeyForTimestamp(entry.created_at) === today,
+  ).length;
+  const activeMinutes = Math.max(0, Math.floor(effectiveStudyTimeMs(today) / 60000));
+  const progress = Math.min(100, (activeMinutes / PROFILE_DAILY_GOAL_MINUTES) * 100);
+  return {
+    totalXP,
+    level,
+    currentLevelXP,
+    remainingXP,
+    activeMinutes,
+    progress: Number.isFinite(progress) ? progress : 0,
+    tasks: {
+      newWords: todayNew >= DAILY_NEW_WORD_LIMIT,
+      review: todayReview >= DAILY_NEW_WORD_LIMIT,
+      shadowing: todayShadowing >= 1,
+      reading: todayReading >= 1,
+    },
+  };
+}
+
+function setProfileGoalTask(element, complete) {
+  if (!element) return;
+  element.classList.toggle("complete", complete);
+}
+
+function renderProfileLearningCards() {
+  const snapshot = profileLearningSnapshot();
+  if (els.profileLevelValue) els.profileLevelValue.textContent = snapshot.level;
+  if (els.profileLevelProgress) els.profileLevelProgress.textContent = `${snapshot.currentLevelXP} / ${PROFILE_XP_PER_LEVEL} XP`;
+  if (els.profileXpBar) els.profileXpBar.style.width = `${(snapshot.currentLevelXP / PROFILE_XP_PER_LEVEL) * 100}%`;
+  if (els.profileNextLevel) els.profileNextLevel.textContent = snapshot.level + 1;
+  if (els.profileRemainingXp) els.profileRemainingXp.textContent = snapshot.remainingXP;
+  if (els.profileDailyGoal) els.profileDailyGoal.textContent = `${snapshot.activeMinutes} / ${PROFILE_DAILY_GOAL_MINUTES} min`;
+  if (els.profileGoalPercent) els.profileGoalPercent.textContent = `${Math.round(snapshot.progress)}%`;
+  if (els.profileGoalRing) els.profileGoalRing.style.setProperty("--profile-goal-progress", `${snapshot.progress * 3.6}deg`);
+  setProfileGoalTask(els.profileGoalNew, snapshot.tasks.newWords);
+  setProfileGoalTask(els.profileGoalReview, snapshot.tasks.review);
+  setProfileGoalTask(els.profileGoalShadowing, snapshot.tasks.shadowing);
+  setProfileGoalTask(els.profileGoalReading, snapshot.tasks.reading);
+  return snapshot;
+}
+
+function tickEffectiveStudyTime({ allowHidden = false } = {}) {
+  const now = Date.now();
+  const elapsed = now - effectiveStudyLastTickAt;
+  effectiveStudyLastTickAt = now;
+  if (elapsed <= 0 || elapsed > EFFECTIVE_STUDY_MAX_TICK_MS) return;
+  if (!allowHidden && document.hidden) return;
+  if (now - effectiveStudyLastInteractionAt > EFFECTIVE_STUDY_IDLE_LIMIT_MS) return;
+  if (!isEffectiveStudyContext()) return;
+  addEffectiveStudyTime(elapsed);
+  if (state.activeView === "profileView") renderProfileLearningCards();
+}
+
+function setupEffectiveStudyTimeTracking() {
+  if (effectiveStudyTimerId) return;
+  const markInteraction = () => {
+    effectiveStudyLastInteractionAt = Date.now();
+  };
+  ["pointerdown", "keydown", "touchstart"].forEach((type) => {
+    document.addEventListener(type, markInteraction, { passive: true });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) tickEffectiveStudyTime({ allowHidden: true });
+    effectiveStudyLastTickAt = Date.now();
+  });
+  window.addEventListener("pagehide", () => tickEffectiveStudyTime({ allowHidden: true }));
+  effectiveStudyLastTickAt = Date.now();
+  effectiveStudyLastInteractionAt = Date.now();
+  effectiveStudyTimerId = window.setInterval(tickEffectiveStudyTime, EFFECTIVE_STUDY_TICK_MS);
+}
+
 function setAuthMessage(message = "") {
   state.auth.message = clean(message);
   if (els.authMessage) els.authMessage.textContent = state.auth.message;
@@ -2496,10 +2700,7 @@ function renderAuthState() {
     const streak = state.studyStats?.current_streak || 0;
     els.profileStudyStats.textContent = state.auth.loading ? "Laddar..." : `${streak} dagar i rad`;
   }
-  if (els.profileLevelValue) {
-    els.profileLevelValue.textContent = mastered >= 200 ? "Stark" : mastered >= 50 ? "På väg" : "Nybörjare";
-  }
-  if (els.profileDailyGoal) els.profileDailyGoal.textContent = `${todayNew}/${DAILY_NEW_WORD_LIMIT} ord`;
+  renderProfileLearningCards();
   if (els.profileWordCount) els.profileWordCount.textContent = state.words.length;
   if (els.profileMasteredCount) els.profileMasteredCount.textContent = mastered;
   if (els.profileTodayActivity) els.profileTodayActivity.textContent = `${todayNew} nya ord`;
@@ -8624,6 +8825,7 @@ async function bootstrapApp() {
   setupShadowingAudio();
   setupHomeGreeting();
   setupAuthUiSync();
+  setupEffectiveStudyTimeTracking();
   setupInstallPrompt();
   setupCrossOriginTransfer();
   await refreshAuthState();
