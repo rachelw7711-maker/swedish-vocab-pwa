@@ -6200,7 +6200,7 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
     ? scheduledReviewCandidates
     : studiedReviewCandidates.length > 0
       ? studiedReviewCandidates
-      : candidates;
+      : [];
   const todayNewWordIds = uniqueIds(state.dailyProgress?.todayNewWordIds || []);
   const todayNewCount = Number(state.dailyProgress?.todayNewCount || todayNewWordIds.length || 0) || 0;
   const remainingNewLimit = Math.max(DAILY_NEW_WORD_LIMIT - todayNewCount, 0);
