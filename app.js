@@ -405,13 +405,11 @@ const els = {
   profileMasteredCount: document.querySelector("#profileMasteredCount"),
   profileTodayActivity: document.querySelector("#profileTodayActivity"),
   profileAccountEmail: document.querySelector("#profileAccountEmail"),
-  profileAccountHint: document.querySelector("#profileAccountHint"),
   profileSyncStatus: document.querySelector("#profileSyncStatus"),
-  profileSyncHint: document.querySelector("#profileSyncHint"),
+  profileLastSyncValue: document.querySelector("#profileLastSyncValue"),
   profileStudyStats: document.querySelector("#profileStudyStats"),
   profileStudyHint: document.querySelector("#profileStudyHint"),
   profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
-  profileSettingsHint: document.querySelector("#profileSettingsHint"),
   profileStartCard: document.querySelector("#profileStartCard"),
   profileGuestButton: document.querySelector("#profileGuestButton"),
   topbarLibraryBack: document.querySelector(".topbar-library-back"),
@@ -2639,6 +2637,15 @@ function setAuthMessage(message = "") {
   if (els.authMessage) els.authMessage.textContent = state.auth.message;
 }
 
+function renderProfileSyncSummary() {
+  if (!els.profileLastSyncValue) return;
+  els.profileLastSyncValue.textContent = navigator.onLine === false
+    ? "Offline"
+    : state.auth.loading
+      ? "Synkroniserar..."
+      : "Inte synkroniserat ännu";
+}
+
 function renderAuthState() {
   const user = state.auth.user;
   const isSignedIn = Boolean(user?.id);
@@ -2679,23 +2686,10 @@ function renderAuthState() {
         ? getAuthDisplayEmail(user)
         : "Inte inloggad";
   }
-  if (els.profileAccountHint) {
-    els.profileAccountHint.textContent = state.auth.loading
-      ? "Kontrollerar konto..."
-      : isSignedIn
-        ? "Du är inloggad med Supabase Auth."
-        : "Logga in för att synka mellan enheter";
-  }
   if (els.profileSyncStatus) {
     els.profileSyncStatus.textContent = state.auth.loading ? "Kontrollerar..." : isSignedIn ? "Aktiv" : "Inte ansluten";
   }
-  if (els.profileSyncHint) {
-    els.profileSyncHint.textContent = state.auth.loading
-      ? "Kontrollerar synkstatus..."
-      : isSignedIn
-        ? "Molnsynk för ord, böcker, studier och Shadowing är aktiverad."
-        : "Logga in för att aktivera molnsynk och återställning mellan enheter.";
-  }
+  renderProfileSyncSummary();
   if (els.profileStudyStats) {
     const streak = state.studyStats?.current_streak || 0;
     els.profileStudyStats.textContent = state.auth.loading ? "Laddar..." : `${streak} dagar i rad`;
@@ -2713,11 +2707,6 @@ function renderAuthState() {
     els.profileSettingsSummary.textContent = state.auth.loading
       ? "Läser inställningar..."
       : `Studieområde: ${state.studyScope || STUDY_SCOPE_ALL}`;
-  }
-  if (els.profileSettingsHint) {
-    els.profileSettingsHint.textContent = state.auth.loading
-      ? "Dina inställningar läses in."
-      : "Synk, studieområde och ljudinställningar följer kontot.";
   }
   if (els.submitAuthBtn) {
     els.submitAuthBtn.disabled = state.auth.loading || state.auth.busy;
@@ -8825,6 +8814,8 @@ async function bootstrapApp() {
   setupShadowingAudio();
   setupHomeGreeting();
   setupAuthUiSync();
+  window.addEventListener("online", renderProfileSyncSummary);
+  window.addEventListener("offline", renderProfileSyncSummary);
   setupEffectiveStudyTimeTracking();
   setupInstallPrompt();
   setupCrossOriginTransfer();

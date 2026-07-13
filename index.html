@@ -362,6 +362,14 @@
                   <span><strong>Inställningar</strong><small>Appinställningar, språk, synkronisering och mer</small></span>
                   <span aria-hidden="true">›</span>
                 </button>
+
+                <article class="profile-sync-summary" aria-live="polite">
+                  <span class="profile-sync-icon" aria-hidden="true">☁️</span>
+                  <span class="profile-sync-copy">
+                    <strong>Senaste synkronisering</strong>
+                    <small id="profileLastSyncValue">Inte synkroniserat ännu</small>
+                  </span>
+                </article>
               </section>
 
               <section id="profileStudiesPanel" class="profile-subpage profile-secondary-page" hidden>
@@ -411,10 +419,6 @@
                   <button type="button" class="profile-settings-logout" id="profileLogoutButton"><span>Logga ut</span><span aria-hidden="true">›</span></button>
                 </section>
               </section>
-
-              <span id="profileAccountHint" class="visually-hidden">Logga in för att synka mellan enheter</span>
-              <span id="profileSyncHint" class="visually-hidden">Dina data synkas via Supabase.</span>
-              <span id="profileSettingsHint" class="visually-hidden">Synk, studieområde och ljudinställningar följer ditt konto.</span>
             </section>
           </section>
         </section>
