@@ -8909,7 +8909,7 @@ async function registerServiceWorker() {
       refreshing = true;
       location.replace("/");
     });
-    const registration = await navigator.serviceWorker.register("./sw.js?v=62", { scope: "./" });
+    const registration = await navigator.serviceWorker.register("./sw.js?v=63", { scope: "./" });
     await registration.update();
     if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }

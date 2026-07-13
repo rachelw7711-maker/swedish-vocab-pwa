@@ -324,7 +324,10 @@ body[data-active-view="profileView"] .topbar-auth-button {
 }
 
 body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="true"],
-body[data-active-view="libraryView"] .topbar-auth-button[data-signed-in="true"] {
+body[data-active-view="libraryView"] .topbar-auth-button[data-signed-in="true"],
+body[data-active-view="notebookView"] .topbar-auth-button[data-signed-in="true"],
+body[data-active-view="wordLibraryView"] .topbar-auth-button[data-signed-in="true"],
+body[data-active-view="historyView"] .topbar-auth-button[data-signed-in="true"] {
   display: none;
 }
 
