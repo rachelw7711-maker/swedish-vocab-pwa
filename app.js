@@ -624,6 +624,7 @@ let lastWordLoadDebug = {
 let remoteLibrarySnapshot = null;
 let remoteLibrarySnapshotLoaded = false;
 let remotePhase4Snapshot = null;
+let appInitializationComplete = false;
 
 async function ensureRemoteLibrarySnapshot() {
   if (!remoteLibrarySnapshotLoaded) {
@@ -2430,24 +2431,31 @@ function renderStudyStats() {
   const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
   const todayReview = Math.min(Number(state.dailyProgress?.dueReviewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
   const availableNew = Math.max((state.dailyStudy.newWordIds || []).length - newSession.completedWordIds.length, 0);
-  const availableReview = Math.max((state.dailyStudy.reviewWordIds || []).length - reviewSession.completedWordIds.length, 0);
+  const reviewTotal = (state.dailyStudy.reviewWordIds || []).length;
+  const completedReview = Math.min(reviewSession.completedWordIds.length, reviewTotal);
+  const availableReview = Math.max(reviewTotal - completedReview, 0);
   const streak = state.studyStats?.current_streak || 0;
   const mastered = state.words.filter((word) => word.learned).length;
   const completedTotal = todayNew;
   els.studyNewCount.textContent = `${todayNew}/${DAILY_NEW_WORD_LIMIT}`;
-  els.studyReviewCount.textContent = `${todayReview}/${DAILY_NEW_WORD_LIMIT}`;
+  els.studyReviewCount.textContent = `${completedReview}/${DAILY_NEW_WORD_LIMIT}`;
   els.studyStreakCount.textContent = streak;
   els.studyMasteredCount.textContent = mastered;
   els.entryNewCount.textContent = `${availableNew} ord idag`;
-  els.entryReviewCount.textContent = `${availableReview} ord kvar idag`;
+  els.entryReviewCount.textContent = reviewSession.completed && reviewTotal > 0
+    ? `${completedReview} av ${reviewTotal} klara idag`
+    : `${availableReview} ord kvar idag`;
   if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = availableNew === 0 || newSession.completed;
-  if (els.startReviewStudyBtn) els.startReviewStudyBtn.disabled = availableReview === 0 || reviewSession.completed;
+  if (els.startReviewStudyBtn) {
+    els.startReviewStudyBtn.disabled = reviewTotal === 0;
+    els.startReviewStudyBtn.textContent = reviewSession.completed && reviewTotal > 0 ? "Visa repetition" : "Börja repetera";
+  }
   els.completeTodayCount.textContent = `${completedTotal} klara idag`;
   els.completeMasteredCount.textContent = `${mastered} lärda ord`;
   els.completeStreakCount.textContent = `${streak} dagar i rad`;
   const parts = [
     `Nyord ${todayNew}/${DAILY_NEW_WORD_LIMIT}`,
-    todayReview > 0 ? `Repetition ${todayReview}/${DAILY_NEW_WORD_LIMIT}` : "No review scheduled today",
+    reviewTotal > 0 ? `Repetition ${completedReview}/${DAILY_NEW_WORD_LIMIT}` : "No review scheduled today",
     `Streak ${streak}`,
     `Lärt mig ${mastered}`,
   ];
@@ -2960,7 +2968,11 @@ function setupAuthUiSync() {
       state.sync = { status: "idle", pending: 0, lastSyncedAt: 0 };
     }
     renderAuthState();
-    if (session?.user?.id && ["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) {
+    if (
+      session?.user?.id &&
+      appInitializationComplete &&
+      ["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)
+    ) {
       queueMicrotask(() => void syncPendingUserData());
     }
   });
@@ -6683,6 +6695,9 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
     : [];
   const availableWordIds = new Set(candidates.map((word) => word.id));
   const samePlan = existing.date === date && existing.scope === scope;
+  const preservedCompletedReviewWordIds = samePlan
+    ? uniqueIds(existing.completedReviewWordIds).filter((id) => availableWordIds.has(id))
+    : [];
   const existingNewWordIds = samePlan
     ? uniqueIds(existing.newWordIds).filter((id) => availableWordIds.has(id))
     : [];
@@ -6693,11 +6708,15 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
     .filter((id) => reviewCandidatesAll.some((word) => word.id === id))
     .slice(0, DAILY_NEW_WORD_LIMIT);
   const pickedReviewWordIds = pickDailyReviewWordIds(reviewCandidatesAll, new Set(), samePlan ? existing.reviewWordIds : []);
-  const reviewWordIds = scheduledReviewWordIds.length > 0
+  const selectedReviewWordIds = scheduledReviewWordIds.length > 0
     ? scheduledReviewWordIds
     : pickedReviewWordIds.length > 0
       ? pickedReviewWordIds
       : reviewCandidatesAll.slice(0, DAILY_NEW_WORD_LIMIT).map((word) => word.id);
+  const reviewWordIds = uniqueIds([
+    ...preservedCompletedReviewWordIds,
+    ...selectedReviewWordIds,
+  ]).slice(0, DAILY_NEW_WORD_LIMIT);
   const newWordIds = activeLearnWordIds.length > 0
     ? activeLearnWordIds
     : pickDailyNewWordIds(
@@ -9105,6 +9124,7 @@ async function bootstrapApp() {
       enforceStartsideStartup({ resetScroll: true });
     }
     startAutoEnrichFromUrl();
+    appInitializationComplete = true;
     document.body.dataset.appReady = "ready";
     void registerServiceWorker();
   }
