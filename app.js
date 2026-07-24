@@ -135,6 +135,55 @@ const WORD_FORM_GROUPS_BY_POS = {
   perfekt_particip: "perfekt_particip",
 };
 
+// Display labels for structured word_forms rows, reused from the edit
+// dialog's field labels in index.html (#wordFormsFields) so the read-only
+// Grammatik section and the edit form always say the same thing.
+const WORD_FORM_LABELS = {
+  declension_group: "Böjningsklass",
+  singular_indefinite: "Obestämd singular",
+  singular_definite: "Bestämd singular",
+  plural_indefinite: "Obestämd plural",
+  plural_definite: "Bestämd plural",
+  infinitive: "Infinitiv",
+  present: "Presens",
+  preteritum: "Preteritum",
+  supinum: "Supinum",
+  imperative: "Imperativ",
+  verb_group: "Verbgrupp",
+  base_form: "Grundform",
+  neuter_form: "Neutrum (ett-ord)",
+  plural_form: "Plural",
+  definite_form: "Bestämd form",
+  comparative: "Komparativ",
+  superlative_indefinite: "Superlativ (obestämd)",
+  superlative_definite: "Superlativ (bestämd)",
+  superlative: "Superlativ",
+  subject_form: "Subjektsform",
+  object_form: "Objektsform",
+  possessive_en: "Possessiv (en-ord)",
+  possessive_ett: "Possessiv (ett-ord)",
+  possessive_plural: "Possessiv (plural)",
+  base_verb: "Grundverb",
+  participle_form: "Partikelform",
+  en_form: "En-form",
+  ett_form: "Ett-form",
+};
+
+// Line order per pos group for the read-only Grammatik display. `genus` is
+// deliberately left out of the noun list — it's applied to the word title
+// instead (see applyGenusToTitle) per Reviews/SPK-DIC-001_SprakLab_Word_Card
+// _Content_Standard_v1.0 §3: "Genus 必须与 lemma 一同醒目展示，如 en bok、
+// ett hus" — which leaves exactly the 4 declension forms as separate lines.
+const WORD_FORM_LINE_ORDER_BY_POS = {
+  noun: ["singular_indefinite", "singular_definite", "plural_indefinite", "plural_definite", "declension_group"],
+  verb: ["infinitive", "present", "preteritum", "supinum", "imperative", "verb_group"],
+  adjective: ["base_form", "neuter_form", "plural_form", "definite_form", "comparative", "superlative_indefinite", "superlative_definite"],
+  adverb: ["base_form", "comparative", "superlative"],
+  pronoun: ["subject_form", "object_form", "possessive_en", "possessive_ett", "possessive_plural"],
+  presens_particip: ["base_verb", "participle_form"],
+  perfekt_particip: ["base_verb", "en_form", "ett_form", "plural_form"],
+};
+
 const actionLabels = {
   created: "Skapad",
   updated: "Redigerad",
@@ -3589,6 +3638,7 @@ function createWordCard(word, mode = "library") {
     addStudyDetail(details, "Exempel", formatExampleForStudy(word.example));
     addStudyDetail(details, "Fraser", createStudyCollocationList(word.collocations, word.example));
     addStudyDetail(details, "Relaterade ord", createRelatedWordList(word.related_words));
+    enhanceGrammarSectionWithStructuredForms(card, word);
   } else if (mode === "search" || mode === "dictionary") {
     card.classList.add("compact-word-card");
     addCompactDetail(details, "Böjning", summarizeForms(word.forms));
@@ -3674,33 +3724,84 @@ function formatPosForStudy(word) {
   return [word.pos_detail, label.toLowerCase()].filter(Boolean).join(" ");
 }
 
+// Renders one line per grammar fact instead of joining everything into a
+// single run-on sentence (the old behavior — see Reviews/SPK-DIC-001
+// _SprakLab_Word_Card_Content_Standard_v1.0 §11: structured grammar
+// "不应全部塞入一个无结构文本字段"). This is the synchronous fallback,
+// built from the flat `word.forms` text so the Grammatik section never
+// renders empty while enhanceGrammarSectionWithStructuredForms's async
+// fetch of the real word_forms table is still in flight.
+function buildGrammarLinesFragment(lines) {
+  const container = document.createElement("div");
+  container.className = "grammar-lines";
+  lines.forEach(({ label, value }) => {
+    if (!clean(value)) return;
+    const line = document.createElement("p");
+    line.className = "grammar-line";
+    if (label) {
+      const strong = document.createElement("strong");
+      strong.textContent = `${label}: `;
+      line.append(strong);
+    }
+    line.append(document.createTextNode(value));
+    container.append(line);
+  });
+  return container;
+}
+
 function formatGrammarForStudy(word) {
   const items = splitForms(word.forms);
-  if (items.length === 0) return "Böjning saknas.";
-  if (word.pos === "verb") {
-    const forms = {
-      imperativ: "",
-      infinitiv: clean(word.swedish),
-      presens: "",
-      preteritum: "",
-      supinum: "",
-    };
-    items.forEach((item) => {
-      const [rawLabel, ...valueParts] = item.split(":");
-      if (valueParts.length === 0) return;
-      const label = rawLabel.trim().toLowerCase();
-      const value = valueParts.join(":").trim();
-      if (label.includes("imperativ")) forms.imperativ = value;
-      if (label.includes("infinitiv")) forms.infinitiv = value;
-      if (label.includes("presens")) forms.presens = value;
-      if (label.includes("preteritum")) forms.preteritum = value;
-      if (label.includes("supinum")) forms.supinum = value;
-    });
-    const ordered = [forms.imperativ && `${forms.imperativ}!`, forms.infinitiv, forms.presens, forms.preteritum, forms.supinum]
-      .filter(Boolean);
-    return ordered.length ? `${ordered.join("/")}.` : `${items.join("/")}.`;
+  if (items.length === 0) {
+    const fallback = document.createElement("p");
+    fallback.textContent = "Böjning saknas.";
+    return fallback;
   }
-  return `${items.map((item) => item.replace(/\s*:\s*/g, ": ")).join("/")}.`;
+  const lines = items.map((item) => {
+    const [rawLabel, ...valueParts] = item.split(":");
+    if (valueParts.length === 0) return { label: "", value: item.trim() };
+    return { label: rawLabel.trim(), value: valueParts.join(":").trim() };
+  });
+  return buildGrammarLinesFragment(lines);
+}
+
+// Upgrades the synchronous flat-text Grammatik fallback above with the
+// structured word_forms table once it loads (fetched after the card is
+// already visible, same pattern as the edit dialog's word_forms fetch —
+// see openWordDialog — so opening a word never waits on a network round
+// trip). No-ops silently for words that haven't been backfilled into
+// word_forms yet, leaving the flat-text fallback in place.
+function enhanceGrammarSectionWithStructuredForms(card, word) {
+  if (!word?.id) return;
+  const posGroup = WORD_FORM_GROUPS_BY_POS[word.pos];
+  if (!posGroup) return;
+  remoteDb.loadWordForms(word.id).then((forms) => {
+    if (!forms?.length || card.dataset.id !== word.id) return;
+    const byType = new Map(forms.map((f) => [f.form_type, clean(f.form_value)]));
+    const order = WORD_FORM_LINE_ORDER_BY_POS[posGroup] || [];
+    const lines = order
+      .filter((type) => byType.get(type))
+      .map((type) => ({ label: WORD_FORM_LABELS[type] || type, value: byType.get(type) }));
+    if (lines.length) {
+      const section = card.querySelector(".grammar-section");
+      section?.querySelector("p, .grammar-lines")?.remove();
+      section?.append(buildGrammarLinesFragment(lines));
+    }
+    if (posGroup === "noun") applyGenusToTitle(card, byType.get("genus"));
+  }).catch((error) => {
+    console.warn("[SpråkLab] Failed to load structured word_forms for", word.id, error);
+  });
+}
+
+// "en"/"ett" shown next to the lemma in the title, per SPK-DIC-001 §3:
+// "Genus 必须与 lemma 一同醒目展示，如 en bok、ett hus".
+function applyGenusToTitle(card, genus) {
+  if (!genus) return;
+  const title = card.querySelector("h3.word-title");
+  if (!title || title.dataset.genusApplied) return;
+  const article = genus === "ett-ord" ? "ett" : genus === "en-ord" ? "en" : "";
+  if (!article) return;
+  title.textContent = `${article} ${title.textContent}`;
+  title.dataset.genusApplied = "true";
 }
 
 function formatExampleForStudy(example) {

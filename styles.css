@@ -4718,6 +4718,25 @@ dialog:not([open]) {
   white-space: normal;
 }
 
+.grammar-lines {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.grammar-lines .grammar-line {
+  margin: 0;
+  font-style: normal;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.grammar-lines .grammar-line strong {
+  color: #353b39;
+  font-weight: 700;
+}
+
 .chinese-meaning-section p {
   color: #858b8a;
   font-size: 0.85rem;
