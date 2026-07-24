@@ -41,18 +41,17 @@ function normLemma(s) {
 
 // ---------------------------------------------------------------------------
 // 1. Load existing learning_objects for dedup — keyed by normalized swedish
-//    spelling ALONE, matching a real UNIQUE(swedish) constraint discovered
-//    live on production (name: words_swedish_key — a leftover from before
-//    the words -> learning_objects rename, present on the live table but
-//    declared NOWHERE in schema.sql or any tracked migration; schema.sql
-//    only shows a non-unique index). This means the "same spelling,
-//    different part of speech" homograph model that the Ordbok field spec
-//    / SPK-FND-003 assume (e.g. "vara" the noun vs "vara" the verb as two
-//    rows) is NOT actually supported by the live schema today — confirmed
-//    by hitting this exact collision while committing the 2026-07-24 pilot
-//    batch. Flagged to Rachel as an open architecture question rather than
-//    silently dropping or altering the constraint. Deduping on swedish
-//    alone here matches what the database will actually accept.
+//    spelling + part_of_speech, matching the real constraint on production:
+//    UNIQUE(swedish, part_of_speech), added by
+//    20260725010000_allow_homographs_by_pos.sql to replace an undocumented
+//    UNIQUE(swedish)-alone constraint (name: words_swedish_key, a leftover
+//    from before the words -> learning_objects rename). The swedish-alone
+//    version blocked legitimate homographs like "vara" the noun ("goods")
+//    vs "vara" the verb ("to be") — discovered by hitting that exact
+//    collision while committing the 2026-07-24 pilot batch, and confirmed
+//    as a real requirement by Reviews/SPK-DIC-001_SprakLab_Word_Card
+//    _Content_Standard_v1.0.docx §11 ("一个 lemma 可能具有多个词性或多个主要
+//    义项"). Deduping on swedish+pos here matches what the database accepts.
 // ---------------------------------------------------------------------------
 async function fetchExistingKeys() {
   const pageSize = 1000;
@@ -61,12 +60,12 @@ async function fetchExistingKeys() {
   for (;;) {
     const { data, error } = await supabase
       .from("learning_objects")
-      .select("swedish")
+      .select("swedish, part_of_speech")
       .range(from, from + pageSize - 1);
     if (error) throw new Error(`Supabase fetch failed: ${JSON.stringify(error)}`);
     if (!data || data.length === 0) break;
     for (const row of data) {
-      keys.add(normLemma(row.swedish));
+      keys.add(`${normLemma(row.swedish)}::${clean(row.part_of_speech).toLowerCase()}`);
     }
     if (data.length < pageSize) break;
     from += pageSize;
@@ -156,7 +155,8 @@ for (const entry of entries) {
     skippedInvalid.push(entry);
     continue;
   }
-  const key = normLemma(swedish);
+  const pos = (clean(entry.pos) || "other").toLowerCase();
+  const key = `${normLemma(swedish)}::${pos}`;
   if (existingKeys.has(key) || seenThisBatch.has(key)) {
     skippedDuplicate.push(entry);
     continue;
