@@ -112,9 +112,27 @@ const posLabels = {
   adverb: "Adverb",
   pronoun: "Pronomen",
   preposition: "Preposition",
+  conjunction: "Konjunktion",
+  presens_particip: "Presens particip",
+  perfekt_particip: "Perfekt particip",
   phrase: "Fras",
   abbreviation: "Förkortning",
   other: "Övrigt",
+};
+
+// Which structured word_forms fields apply to each part of speech, and what
+// group of inputs (data-pos-group in index.html's #wordFormsFields) should
+// be shown for it. Parts of speech not listed here fall back to the free
+// text "forms" textarea (data-pos-group="freetext") — see
+// Reviews/Ordbok-词条字段规范（按词性）.md for the field-by-field rationale.
+const WORD_FORM_GROUPS_BY_POS = {
+  noun: "noun",
+  verb: "verb",
+  adjective: "adjective",
+  adverb: "adverb",
+  pronoun: "pronoun",
+  presens_particip: "presens_particip",
+  perfekt_particip: "perfekt_particip",
 };
 
 const actionLabels = {
@@ -542,6 +560,9 @@ const els = {
   swedishInput: document.querySelector("#swedishInput"),
   posInput: document.querySelector("#posInput"),
   pos_detailInput: document.querySelector("#posDetailInput"),
+  ipaInput: document.querySelector("#ipaInput"),
+  cefrLevelInput: document.querySelector("#cefrLevelInput"),
+  wordFormsFields: document.querySelector("#wordFormsFields"),
   chineseInput: document.querySelector("#chineseInput"),
   englishInput: document.querySelector("#englishInput"),
   formsInput: document.querySelector("#formsInput"),
@@ -657,6 +678,8 @@ function normalizeWord(word) {
     swedish: clean(word.swedish),
     pos: word.pos || inferPos(tags[0]),
     pos_detail: normalizePosDetail(firstDefined(word.pos_detail, word.posDetail, legacyPosDetail(word))),
+    ipa: clean(word.ipa || ""),
+    cefr_level: clean(word.cefr_level || ""),
     chinese: clean(word.chinese),
     english: clean(word.english || ""),
     forms: clean(word.forms || ""),
@@ -5364,15 +5387,26 @@ async function saveWordFromForm() {
   const selectedNotebook = ensureNotebookOption(els.notebookInput.value);
   rememberNotebookName(selectedNotebook);
   const selectedBookNames = sameCategory(selectedNotebook, DEFAULT_NOTEBOOK) ? [] : [selectedNotebook];
+  // Structured word forms (comparative/participle/etc.) only apply to the
+  // parts of speech listed in WORD_FORM_GROUPS_BY_POS — for everything else
+  // the free-text "forms" textarea is the field of record, unchanged from
+  // before. When structured fields are in use, they generate the display
+  // text instead of reading the (hidden) textarea directly.
+  const wordFormValues = collectWordFormValues();
+  const formsText = WORD_FORM_GROUPS_BY_POS[els.posInput.value]
+    ? buildFormsSummaryText(wordFormValues)
+    : els.formsInput.value;
   const formValues = {
     ...existing,
     id: existing?.id || els.word_id.value || undefined,
     swedish: els.swedishInput.value,
     pos: els.posInput.value,
     pos_detail: els.pos_detailInput.value,
+    ipa: els.ipaInput.value,
+    cefr_level: els.cefrLevelInput.value,
     chinese: els.chineseInput.value,
     english: els.englishInput.value,
-    forms: els.formsInput.value,
+    forms: formsText,
     example: els.exampleInput.value,
     collocations: els.collocationsInput.value,
     related_words: els.related_wordsInput.value,
@@ -5385,6 +5419,9 @@ async function saveWordFromForm() {
 
   const words = (await readWords()).filter((item) => item.id !== word.id);
   await replaceWords([word, ...words]);
+  remoteDb.saveWordForms(word.id, wordFormValues).catch((error) => {
+    console.warn("[SpråkLab] Failed to save word_forms for", word.id, error);
+  });
   appendLocalHistory(action, word);
   state.selectedNotebook = word.notebook;
   await loadData();
@@ -5407,6 +5444,8 @@ function mergeWordFormValues(existing, formValues) {
   [
     "pos",
     "pos_detail",
+    "ipa",
+    "cefr_level",
     "chinese",
     "english",
     "forms",
@@ -5431,6 +5470,7 @@ function autofillWordFormFromPaste() {
   };
   setIfPresent(els.swedishInput, parsed.fields.swedish);
   if (parsed.fields.pos) els.posInput.value = parsed.fields.pos;
+  showWordFormGroupForPos(els.posInput.value);
   setIfPresent(els.pos_detailInput, parsed.fields.pos_detail);
   setIfPresent(els.chineseInput, parsed.fields.chinese);
   setIfPresent(els.englishInput, parsed.fields.english);
@@ -5678,6 +5718,13 @@ function parsePosField(value) {
     ["代词", "pronoun"],
     ["preposition", "preposition"],
     ["介词", "preposition"],
+    ["konjunktion", "conjunction"],
+    ["conjunction", "conjunction"],
+    ["连词", "conjunction"],
+    ["presens particip", "presens_particip"],
+    ["现在分词", "presens_particip"],
+    ["perfekt particip", "perfekt_particip"],
+    ["完成分词", "perfekt_particip"],
     ["fras", "phrase"],
     ["phrase", "phrase"],
     ["短语", "phrase"],
@@ -5859,6 +5906,91 @@ async function addDictionaryWordToLibrary(swedish) {
   alert(`Tillagt i ordlistan: ${word.swedish}`);
 }
 
+// Shows the structured word_forms input group matching the given part of
+// speech (index.html #wordFormsFields, groups tagged data-pos-group) and
+// hides every other group, including the free-text fallback used by parts
+// of speech with no structured forms (preposition/conjunction/phrase/
+// abbreviation/other). See WORD_FORM_GROUPS_BY_POS and
+// Reviews/Ordbok-词条字段规范（按词性）.md.
+function showWordFormGroupForPos(pos) {
+  if (!els.wordFormsFields) return;
+  const targetGroup = WORD_FORM_GROUPS_BY_POS[pos] || "freetext";
+  els.wordFormsFields.querySelectorAll(".word-forms-group").forEach((group) => {
+    group.hidden = group.dataset.posGroup !== targetGroup;
+  });
+}
+
+// Reads every [data-form-type] input inside the currently visible
+// word-forms group and returns the non-empty ones as
+// [{ form_type, form_value }, ...], ready to hand to remoteDb.saveWordForms.
+function collectWordFormValues() {
+  if (!els.wordFormsFields) return [];
+  const visibleGroup = els.wordFormsFields.querySelector(".word-forms-group:not([hidden])");
+  if (!visibleGroup) return [];
+  return [...visibleGroup.querySelectorAll("[data-form-type]")]
+    .map((input) => ({ form_type: input.dataset.formType, form_value: clean(input.value) }))
+    .filter((entry) => entry.form_value);
+}
+
+// Fills the [data-form-type] inputs in the currently visible word-forms
+// group from a [{ form_type, form_value }] list (as loaded from
+// remoteDb.loadWordForms). Inputs for form types not present in `forms`
+// are left blank.
+function populateWordFormFields(forms = []) {
+  if (!els.wordFormsFields) return;
+  const visibleGroup = els.wordFormsFields.querySelector(".word-forms-group:not([hidden])");
+  if (!visibleGroup) return;
+  const valueByType = new Map(forms.map((entry) => [entry.form_type, entry.form_value]));
+  visibleGroup.querySelectorAll("[data-form-type]").forEach((input) => {
+    input.value = valueByType.get(input.dataset.formType) || "";
+  });
+}
+
+// Builds the legacy flat "forms" summary text (the same "label: value" per
+// line format the old free-text Böjning textarea used) from structured
+// word-form values, so word.forms keeps working for every existing display
+// path (e.g. the word detail view's Grammatik section) without those paths
+// needing to know about word_forms yet.
+function buildFormsSummaryText(forms = []) {
+  const labelByType = WORD_FORM_TYPE_LABELS;
+  return forms
+    .filter((entry) => entry.form_value)
+    .map((entry) => `${labelByType[entry.form_type] || entry.form_type}: ${entry.form_value}`)
+    .join("\n");
+}
+
+const WORD_FORM_TYPE_LABELS = {
+  genus: "Genus",
+  declension_group: "Böjningsklass",
+  singular_indefinite: "Obestämd singular",
+  singular_definite: "Bestämd singular",
+  plural_indefinite: "Obestämd plural",
+  plural_definite: "Bestämd plural",
+  infinitive: "Infinitiv",
+  present: "Presens",
+  preteritum: "Preteritum",
+  supinum: "Supinum",
+  imperative: "Imperativ",
+  verb_group: "Verbgrupp",
+  base_form: "Grundform",
+  neuter_form: "Neutrum",
+  plural_form: "Plural",
+  definite_form: "Bestämd form",
+  comparative: "Komparativ",
+  superlative: "Superlativ",
+  superlative_indefinite: "Superlativ (obestämd)",
+  superlative_definite: "Superlativ (bestämd)",
+  subject_form: "Subjektsform",
+  object_form: "Objektsform",
+  possessive_en: "Possessiv (en-ord)",
+  possessive_ett: "Possessiv (ett-ord)",
+  possessive_plural: "Possessiv (plural)",
+  base_verb: "Grundverb",
+  participle_form: "Particip-form",
+  en_form: "En-form",
+  ett_form: "Ett-form",
+};
+
 function openWordDialog(word) {
   state.wordDialogReturnView = word?.id ? "" : state.activeView || "homeView";
   state.wordDialogSourceDetailId =
@@ -5872,6 +6004,8 @@ function openWordDialog(word) {
   els.swedishInput.value = word?.swedish || "";
   els.posInput.value = word?.pos || "verb";
   els.pos_detailInput.value = word?.pos_detail || "";
+  els.ipaInput.value = word?.ipa || "";
+  els.cefrLevelInput.value = word?.cefr_level || "";
   els.chineseInput.value = word?.chinese || "";
   els.englishInput.value = word?.english || "";
   els.formsInput.value = word?.forms || "";
@@ -5880,6 +6014,7 @@ function openWordDialog(word) {
   els.related_wordsInput.value = word?.related_words || "";
   els.noteInput.value = word?.note || "";
   els.pasteWordInfoInput.value = "";
+  showWordFormGroupForPos(els.posInput.value);
   const editableNotebook = isLearnedNotebook(word?.notebook || state.selectedNotebook)
     ? DEFAULT_NOTEBOOK
     : word?.notebook || state.selectedNotebook || DEFAULT_NOTEBOOK;
@@ -5891,6 +6026,21 @@ function openWordDialog(word) {
   els.dialog.showModal();
   autoResizeWordFormTextareas();
   els.swedishInput.focus();
+  // Structured word forms live in a separate table (word_forms) and are
+  // fetched per-word rather than bulk-loaded with the whole library (see
+  // src/lib/db.js loadWordForms) — fetch them now, after the dialog is
+  // already visible, so opening the dialog itself never waits on a network
+  // round trip. Re-take the dirty-check snapshot once fields are filled so
+  // simply opening a word with existing forms doesn't look "unsaved".
+  if (word?.id) {
+    remoteDb.loadWordForms(word.id).then((forms) => {
+      if (els.word_id.value !== word.id) return;
+      populateWordFormFields(forms);
+      state.wordDialogSnapshot = getWordDialogSnapshot();
+    }).catch((error) => {
+      console.warn("[SpråkLab] Failed to load word_forms for", word.id, error);
+    });
+  }
 }
 
 function autoResizeWordTextarea(textarea) {
@@ -5917,9 +6067,12 @@ function getWordDialogSnapshot() {
     swedish: els.swedishInput.value,
     pos: els.posInput.value,
     pos_detail: els.pos_detailInput.value,
+    ipa: els.ipaInput.value,
+    cefr_level: els.cefrLevelInput.value,
     chinese: els.chineseInput.value,
     english: els.englishInput.value,
     forms: els.formsInput.value,
+    wordForms: collectWordFormValues(),
     example: els.exampleInput.value,
     collocations: els.collocationsInput.value,
     related_words: els.related_wordsInput.value,
@@ -8509,6 +8662,7 @@ function bindEvents() {
       if (returnView) activateView(returnView || "homeView");
     }
   });
+  els.posInput.addEventListener("change", () => showWordFormGroupForPos(els.posInput.value));
   els.autofillWordBtn.addEventListener("click", autofillWordFormFromPaste);
   [
     els.pasteWordInfoInput,

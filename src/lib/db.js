@@ -8,7 +8,9 @@ import {
 } from "./sync-outbox.js";
 
 const TABLES = {
-  words: "words",
+  words: "learning_objects",
+  wordForms: "word_forms",
+  wordTranslations: "learning_object_translations",
   userWords: "user_words",
   profiles: "profiles",
   notebooks: "notebooks",
@@ -25,6 +27,14 @@ const TABLES = {
 const PAGE_SIZE = 1000;
 const DEFAULT_PROFILE_ID = "default";
 const DAILY_WORD_LIMIT = 10;
+
+// Native-language content lives in learning_object_translations, one row
+// per (learning_object_id, native_language). The app has no "choose your
+// native language" setting yet, so every read/write is pinned to 'zh' for
+// now — this is the single place that will need to change once a real
+// per-user native-language preference exists.
+// See: Reviews/词条数据结构设计草案（母语支持+词形结构化+Fraser-Uttryck）.md
+const DEFAULT_NATIVE_LANGUAGE = "zh";
 
 function clean(value) {
   return String(value || "").trim();
@@ -113,7 +123,7 @@ function readUserWordMetadata(userRow = {}) {
   }
 }
 
-function normalizeWord(row, userRow = null) {
+function normalizeWord(row, userRow = null, translationRow = null) {
   const wordId = clean(row.id || row.word_id);
   const userMetadata = readUserWordMetadata(userRow);
   const bookNames = normalizeBookNames(firstDefined(userRow?.book_names, userRow?.bookNames, userMetadata.book_names));
@@ -123,14 +133,41 @@ function normalizeWord(row, userRow = null) {
     id: wordId,
     swedish: clean(row.swedish),
     pos: clean(firstDefined(row.pos, row.part_of_speech)) || "other",
-    pos_detail: clean(firstDefined(row.pos_detail, row.posDetail, readNoteSection(note, "Part of speech detail"))),
-    chinese: clean(row.chinese),
-    english: clean(firstDefined(row.english, readNoteSection(note, "Swedish explanation"))),
-    forms: clean(firstDefined(row.forms, readNoteSection(note, "Forms"))),
-    example: clean(firstDefined(row.example, row.example_sv)),
-    collocations: clean(firstDefined(row.collocations, readNoteSection(note, "Collocations"))),
-    related_words: clean(firstDefined(row.related_words, row.relatedWords, readNoteSection(note, "Related words"))),
-    tags: Array.isArray(row.tags) ? row.tags : clean(firstDefined(row.tags, readNoteSection(note, "Tags"), row.level)).split(",").map(clean).filter(Boolean),
+    object_type: clean(row.object_type) || "word",
+    category: clean(row.category),
+    cefr_level: clean(row.cefr_level),
+    ipa: clean(row.ipa),
+    // NOTE ON THE FALLBACKS BELOW: pos_detail/forms/collocations/
+    // related_words/swedish_explanation are now real columns (added by
+    // supabase/migrations/20260719000100_learning_objects_phase1.sql) with
+    // a `not null default ''` — meaning they always exist and are never
+    // undefined/null, only possibly "". `firstDefined()` only skips
+    // undefined/null, NOT empty strings, so `firstDefined(row.forms,
+    // readNoteSection(...))` would always return `row.forms` even when it's
+    // "" — silently hiding every existing word's data, which still lives in
+    // `note` until each word is individually re-saved. Use `||` (which does
+    // treat "" as falsy) for these specifically instead.
+    pos_detail: clean(row.pos_detail) || clean(row.posDetail) || readNoteSection(note, "Part of speech detail"),
+    // Chinese meaning now lives in learning_object_translations (native
+    // language 'zh'); fall back to the legacy `chinese` column if no
+    // translation row was fetched/found yet, so older data keeps working.
+    chinese: clean(translationRow?.meaning) || clean(row.chinese),
+    // "english" is a historical misnomer kept as the JS-facing property
+    // name for now to avoid touching every app.js call site in this pass
+    // (see Reviews/词条数据结构设计草案…md) — the field has always held a
+    // Swedish-language explanation, never English. It's now stored in the
+    // dedicated `swedish_explanation` column; older rows that haven't been
+    // re-saved yet still have it packed inside `note` as a labeled section,
+    // so that's the fallback (there has never been a real `english` column
+    // on the live table — do not add row.english back as a source here).
+    english: clean(row.swedish_explanation) || readNoteSection(note, "Swedish explanation"),
+    forms: clean(row.forms) || readNoteSection(note, "Forms"),
+    example: clean(row.example) || clean(row.example_sv),
+    collocations: clean(row.collocations) || readNoteSection(note, "Collocations"),
+    related_words: clean(row.related_words) || clean(row.relatedWords) || readNoteSection(note, "Related words"),
+    tags: Array.isArray(row.tags) && row.tags.length
+      ? row.tags
+      : clean(readNoteSection(note, "Tags") || row.level).split(",").map(clean).filter(Boolean),
     notebook: clean(firstDefined(userRow?.notebook, userMetadata.notebook)),
     book_names: bookNames,
     favorite: Boolean(userRow?.favorite ?? userRow?.is_favorite ?? row.favorite),
@@ -416,6 +453,13 @@ export async function loadRemoteLibrarySnapshot() {
         return [];
       })
     : [];
+  // Native-language content (Chinese meaning today; more languages once a
+  // real native-language preference exists — see DEFAULT_NATIVE_LANGUAGE).
+  // Fetched as one bulk query rather than per-word to avoid N+1 requests.
+  const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch((error) => {
+    console.warn("[Min Ordbok] Failed to read learning_object_translations. Falling back to legacy chinese column.", error);
+    return [];
+  });
   const sourceBookNames = sourceBookNamesForRows(wordRows);
   const sanitizedUserWordRows = sanitizeUserWordRows(userWordRows, sourceBookNames);
 
@@ -426,7 +470,8 @@ export async function loadRemoteLibrarySnapshot() {
   }
 
   const userRowsByWordId = new Map(sanitizedUserWordRows.map((row) => [clean(row.word_id), row]));
-  const words = wordRows.map((word) => normalizeWord(word, userRowsByWordId.get(clean(word.id))));
+  const translationRowsByWordId = new Map(translationRows.map((row) => [clean(row.learning_object_id), row]));
+  const words = wordRows.map((word) => normalizeWord(word, userRowsByWordId.get(clean(word.id)), translationRowsByWordId.get(clean(word.id))));
   const books = unique(sanitizedUserWordRows.flatMap((row) => [row.notebook, ...normalizeBookNames(row.book_names)]));
 
   return {
@@ -498,30 +543,55 @@ function toUserWordProgressRow(userId, word) {
   return toUserWordRow(userId, word);
 }
 
+// Writes to `public.learning_objects`. This replaces a previous version of
+// this function that wrote a field set (lemma/part_of_speech/example_sv/
+// note/level/source/created_by) which — this is now confirmed directly
+// against the live database via `supabase db query --linked` — actually
+// matches the real table almost exactly, except `pos`/`example`/`english`
+// were never real column names on it (the real names are
+// part_of_speech/example_sv, and there was no english column at all; see
+// normalizeWord's comments). The field set below targets the columns that
+// were verified to exist live, plus the new columns added by
+// supabase/migrations/20260719000100_learning_objects_phase1.sql.
 function toWordRow(word, userId = null) {
   if (!word?.id) return null;
-  const note = [
-    ["Part of speech detail", clean(word.pos_detail)],
-    ["Swedish explanation", clean(word.english)],
-    ["Forms", clean(word.forms)],
-    ["Collocations", clean(word.collocations)],
-    ["Related words", clean(word.related_words)],
-    ["Tags", Array.isArray(word.tags) ? word.tags.join(", ") : ""],
-  ]
-    .filter(([, value]) => value)
-    .map(([label, value]) => `${label}: ${value}`)
-    .join("\n\n");
   return {
     id: word.id,
     swedish: clean(word.swedish),
-    lemma: clean(word.swedish),
     part_of_speech: clean(word.pos) || "other",
+    pos_detail: clean(word.pos_detail),
+    object_type: clean(word.object_type) || "word",
+    category: clean(word.category) || null,
+    cefr_level: clean(word.cefr_level) || null,
+    ipa: clean(word.ipa),
+    // `chinese` is kept in sync here for backward compatibility (older
+    // code paths / direct SQL still reading the legacy column) and is also
+    // written to learning_object_translations by toWordTranslationRow.
     chinese: clean(word.chinese),
+    swedish_explanation: clean(word.english),
     example_sv: clean(word.example),
-    note,
-    level: clean(word.tags?.[0]),
-    source: "user",
-    created_by: userId,
+    forms: clean(word.forms),
+    collocations: clean(word.collocations),
+    related_words: clean(word.related_words),
+    tags: Array.isArray(word.tags) ? word.tags : [],
+    notebook: clean(word.notebook) || undefined,
+    source: clean(word.source) || "human",
+    status: clean(word.status) || "published",
+    created_by: userId || undefined,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+// Writes the native-language ('zh' for now — see DEFAULT_NATIVE_LANGUAGE)
+// row in learning_object_translations for a word. Called alongside
+// toWordRow so a word edit updates both the language-neutral row and its
+// Chinese content in one sync pass.
+function toWordTranslationRow(word) {
+  if (!word?.id) return null;
+  return {
+    learning_object_id: word.id,
+    native_language: DEFAULT_NATIVE_LANGUAGE,
+    meaning: clean(word.chinese),
     updated_at: new Date().toISOString(),
   };
 }
@@ -552,6 +622,7 @@ export async function syncRemoteWordChanges({ previousWords = [], nextWords = []
     return !previous || wordContentSignature(previous) !== wordContentSignature(word);
   });
   await upsertRows(TABLES.words, contentChangedWords.map((word) => toWordRow(word, user?.id || null)));
+  await upsertRows(TABLES.wordTranslations, contentChangedWords.map(toWordTranslationRow), { onConflict: "learning_object_id,native_language" });
   if (user?.id) {
     await upsertRows(TABLES.userWords, changedWords.map((word) => toUserWordRow(user.id, word)), { onConflict: "user_id,word_id" });
   }
@@ -560,6 +631,49 @@ export async function syncRemoteWordChanges({ previousWords = [], nextWords = []
     words: contentChangedWords.length,
     userWords: user?.id ? changedWords.length : 0,
   };
+}
+
+// Structured grammatical forms (comparative/participle/etc., see
+// Reviews/Ordbok-词条字段规范（按词性）.md) live in word_forms, one row per
+// (learning_object_id, form_type). Fetched lazily per word (from the word
+// edit dialog) rather than bulk-loaded with the whole library, since only a
+// small fraction of words are being actively edited at any time.
+export async function loadWordForms(learningObjectId) {
+  const id = clean(learningObjectId);
+  if (!id) return [];
+  const { data, error } = await supabase
+    .from(TABLES.wordForms)
+    .select("form_type, form_value")
+    .eq("learning_object_id", id);
+  if (error) throw error;
+  return data || [];
+}
+
+// Replace-all semantics: deletes every existing word_forms row for this
+// word, then inserts the current set. Simpler and safer than a diffing
+// upsert given the small (≤7) row count per word, and it means clearing a
+// field in the UI actually removes the stale form_type instead of leaving
+// it behind.
+export async function saveWordForms(learningObjectId, forms = []) {
+  const id = clean(learningObjectId);
+  if (!id) return { enabled: false, forms: 0 };
+  const rows = forms
+    .filter((entry) => clean(entry?.form_type) && clean(entry?.form_value))
+    .map((entry) => ({
+      learning_object_id: id,
+      form_type: clean(entry.form_type),
+      form_value: clean(entry.form_value),
+      updated_at: new Date().toISOString(),
+    }));
+  const { error: deleteError } = await supabase
+    .from(TABLES.wordForms)
+    .delete()
+    .eq("learning_object_id", id);
+  if (deleteError) throw deleteError;
+  if (!rows.length) return { enabled: true, forms: 0 };
+  const { error: insertError } = await supabase.from(TABLES.wordForms).insert(rows);
+  if (insertError) throw insertError;
+  return { enabled: true, forms: rows.length };
 }
 
 async function writeUserWordProgress(userId, word = {}) {

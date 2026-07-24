@@ -759,6 +759,9 @@
                 <option value="adverb">Adverb</option>
                 <option value="pronoun">Pronomen</option>
                 <option value="preposition">Preposition</option>
+                <option value="conjunction">Konjunktion</option>
+                <option value="presens_particip">Presens particip</option>
+                <option value="perfekt_particip">Perfekt particip</option>
                 <option value="phrase">Fras</option>
                 <option value="abbreviation">Förkortning</option>
                 <option value="other">Övrigt</option>
@@ -769,6 +772,24 @@
               <input id="posDetailInput" maxlength="40" placeholder="vt / vi / en / ett" />
             </label>
           </div>
+          <div class="compact-grid">
+            <label>
+              Uttal (IPA)
+              <input id="ipaInput" maxlength="80" placeholder="t.ex. /buːk/" />
+            </label>
+            <label>
+              Nivå
+              <select id="cefrLevelInput">
+                <option value="">–</option>
+                <option value="A1">A1</option>
+                <option value="A2">A2</option>
+                <option value="B1">B1</option>
+                <option value="B2">B2</option>
+                <option value="C1">C1</option>
+                <option value="C2">C2</option>
+              </select>
+            </label>
+          </div>
           <label>
             Kinesisk betydelse
             <textarea id="chineseInput" required maxlength="360" placeholder="t.ex. 咖啡休息；和朋友或同事喝咖啡聊天"></textarea>
@@ -777,10 +798,95 @@
             Svensk förklaring
             <textarea id="englishInput" maxlength="360" placeholder="t.ex. en kaffepaus som ofta är social och gärna har något sött till"></textarea>
           </label>
-          <label>
-            Böjning
-            <textarea id="formsInput" maxlength="900" placeholder="En form per rad:&#10;imperativ: sök&#10;infinitiv: söka&#10;presens: söker&#10;preteritum: sökte&#10;supinum: sökt"></textarea>
-          </label>
+
+          <section id="wordFormsFields" class="word-forms-fields">
+            <p class="field-section-label">Böjning</p>
+
+            <div class="word-forms-group" data-pos-group="noun" hidden>
+              <div class="compact-grid">
+                <label>Genus
+                  <select data-form-type="genus">
+                    <option value="en-ord">en-ord</option>
+                    <option value="ett-ord">ett-ord</option>
+                  </select>
+                </label>
+                <label>Böjningsklass <input data-form-type="declension_group" placeholder="t.ex. Oregelbunden böjning" /></label>
+              </div>
+              <div class="compact-grid">
+                <label>Obestämd singular <input data-form-type="singular_indefinite" placeholder="en bok" /></label>
+                <label>Bestämd singular <input data-form-type="singular_definite" placeholder="boken" /></label>
+                <label>Obestämd plural <input data-form-type="plural_indefinite" placeholder="böcker" /></label>
+                <label>Bestämd plural <input data-form-type="plural_definite" placeholder="böckerna" /></label>
+              </div>
+            </div>
+
+            <div class="word-forms-group" data-pos-group="verb" hidden>
+              <div class="compact-grid">
+                <label>Infinitiv <input data-form-type="infinitive" placeholder="att skriva" /></label>
+                <label>Presens <input data-form-type="present" placeholder="skriver" /></label>
+                <label>Preteritum <input data-form-type="preteritum" placeholder="skrev" /></label>
+                <label>Supinum <input data-form-type="supinum" placeholder="skrivit" /></label>
+                <label>Imperativ <input data-form-type="imperative" placeholder="skriv" /></label>
+                <label>Verbgrupp <input data-form-type="verb_group" placeholder="t.ex. Grupp 4 – oregelbundet verb" /></label>
+              </div>
+            </div>
+
+            <div class="word-forms-group" data-pos-group="adjective" hidden>
+              <div class="compact-grid">
+                <label>Grundform (en-ord) <input data-form-type="base_form" /></label>
+                <label>Neutrum (ett-ord) <input data-form-type="neuter_form" /></label>
+                <label>Plural <input data-form-type="plural_form" /></label>
+                <label>Bestämd form <input data-form-type="definite_form" /></label>
+              </div>
+              <div class="compact-grid">
+                <label>Komparativ <input data-form-type="comparative" placeholder="större" /></label>
+                <label>Superlativ (obestämd) <input data-form-type="superlative_indefinite" placeholder="störst" /></label>
+                <label>Superlativ (bestämd) <input data-form-type="superlative_definite" placeholder="största" /></label>
+              </div>
+            </div>
+
+            <div class="word-forms-group" data-pos-group="adverb" hidden>
+              <div class="compact-grid">
+                <label>Grundform <input data-form-type="base_form" /></label>
+                <label>Komparativ <input data-form-type="comparative" placeholder="snabbare" /></label>
+                <label>Superlativ <input data-form-type="superlative" placeholder="snabbast" /></label>
+              </div>
+            </div>
+
+            <div class="word-forms-group" data-pos-group="pronoun" hidden>
+              <div class="compact-grid">
+                <label>Subjektsform <input data-form-type="subject_form" placeholder="jag" /></label>
+                <label>Objektsform <input data-form-type="object_form" placeholder="mig" /></label>
+              </div>
+              <div class="compact-grid">
+                <label>Possessiv (en-ord) <input data-form-type="possessive_en" placeholder="min" /></label>
+                <label>Possessiv (ett-ord) <input data-form-type="possessive_ett" placeholder="mitt" /></label>
+                <label>Possessiv (plural) <input data-form-type="possessive_plural" placeholder="mina" /></label>
+              </div>
+            </div>
+
+            <div class="word-forms-group" data-pos-group="presens_particip" hidden>
+              <div class="compact-grid">
+                <label>Grundverb <input data-form-type="base_verb" placeholder="studera" /></label>
+                <label>Presens particip-form <input data-form-type="participle_form" placeholder="studerande" /></label>
+              </div>
+            </div>
+
+            <div class="word-forms-group" data-pos-group="perfekt_particip" hidden>
+              <div class="compact-grid">
+                <label>Grundverb <input data-form-type="base_verb" placeholder="skriva" /></label>
+                <label>En-form <input data-form-type="en_form" placeholder="skriven" /></label>
+                <label>Ett-form <input data-form-type="ett_form" placeholder="skrivet" /></label>
+                <label>Plural/bestämd form <input data-form-type="plural_form" placeholder="skrivna" /></label>
+              </div>
+            </div>
+
+            <label class="word-forms-group" data-pos-group="freetext" hidden>
+              Böjning (fritext)
+              <textarea id="formsInput" maxlength="900" placeholder="En form per rad:&#10;imperativ: sök&#10;infinitiv: söka&#10;presens: söker&#10;preteritum: sökte&#10;supinum: sökt"></textarea>
+            </label>
+          </section>
+
           <label>
             Exempel
             <textarea id="exampleInput" maxlength="420" placeholder="t.ex. Ska vi ta en fika efter jobbet?"></textarea>

@@ -542,7 +542,7 @@ async function readPublicWords() {
   for (let from = 0; ; from += WORD_PAGE_SIZE) {
     const to = from + WORD_PAGE_SIZE - 1;
     const { data, error } = await supabaseAdmin
-      .from("words")
+      .from("learning_objects")
       .select("*")
       .order("swedish", { ascending: true })
       .range(from, to);
