@@ -649,6 +649,48 @@ export async function loadWordForms(learningObjectId) {
   return data || [];
 }
 
+// Full learning_object_translations row for one word (meaning/explanation/
+// grammar_note/learning_tip/example_translation/cultural_note) — the bulk
+// library load (loadRemoteLibrarySnapshot) only carries `meaning` forward
+// into `word.chinese`; the rest (learning_tip in particular) has had no
+// reader anywhere in the app until now. Fetched lazily per word, same
+// reasoning as loadWordForms above.
+export async function loadWordTranslationDetail(learningObjectId, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
+  const id = clean(learningObjectId);
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from(TABLES.wordTranslations)
+    .select("meaning, explanation, grammar_note, learning_tip, example_translation, cultural_note")
+    .eq("learning_object_id", id)
+    .eq("native_language", nativeLanguage)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+// learning_object_relationships rows FROM this word, each joined to its
+// target word's swedish/chinese so the caller doesn't need a second round
+// trip. `learning_objects!to_object_id(...)` disambiguates which of the
+// table's two FKs (from_object_id/to_object_id) to embed through — without
+// it PostgREST can't tell which relationship to follow.
+export async function loadWordRelationships(learningObjectId) {
+  const id = clean(learningObjectId);
+  if (!id) return [];
+  const { data, error } = await supabase
+    .from("learning_object_relationships")
+    .select("relationship_type, learning_objects!to_object_id(swedish, chinese, part_of_speech)")
+    .eq("from_object_id", id);
+  if (error) throw error;
+  return (data || [])
+    .map((row) => ({
+      type: row.relationship_type,
+      swedish: clean(row.learning_objects?.swedish),
+      chinese: clean(row.learning_objects?.chinese),
+      pos: clean(row.learning_objects?.part_of_speech),
+    }))
+    .filter((row) => row.swedish);
+}
+
 // Replace-all semantics: deletes every existing word_forms row for this
 // word, then inserts the current set. Simpler and safer than a diffing
 // upsert given the small (≤7) row count per word, and it means clearing a

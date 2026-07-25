@@ -3639,6 +3639,7 @@ function createWordCard(word, mode = "library") {
     addStudyDetail(details, "Fraser", createStudyCollocationList(word.collocations, word.example));
     addStudyDetail(details, "Relaterade ord", createRelatedWordList(word.related_words));
     enhanceGrammarSectionWithStructuredForms(card, word);
+    enhanceExtendedLearningSection(card, word);
   } else if (mode === "search" || mode === "dictionary") {
     card.classList.add("compact-word-card");
     addCompactDetail(details, "Böjning", summarizeForms(word.forms));
@@ -3821,6 +3822,7 @@ function addStudyDetail(list, term, content) {
   section.className = "study-detail-section";
   if (term === "Kinesisk betydelse") section.classList.add("chinese-meaning-section");
   if (term === "Grammatik") section.classList.add("grammar-section");
+  if (term === "Relaterade ord") section.classList.add("related-section");
   const title = document.createElement("h4");
   title.textContent = `${term}：`;
   section.append(title);
@@ -3871,6 +3873,80 @@ function createRelatedWordList(related_words) {
     list.append(dt, dd);
   });
   return list;
+}
+
+// Same visual structure as createRelatedWordList above, but for typed rows
+// from learning_object_relationships (already carry a real part_of_speech
+// from the join, so no guessing needed like getRelatedWordPosLabel does).
+function buildTypedRelatedList(items) {
+  const list = document.createElement("dl");
+  list.className = "related-word-list";
+  items.forEach((item) => {
+    const dt = document.createElement("dt");
+    const word = document.createElement("span");
+    const pos = document.createElement("span");
+    const dd = document.createElement("dd");
+    word.textContent = item.swedish;
+    pos.className = "related-pos";
+    pos.textContent = posLabels[item.pos] || "Övr.";
+    dt.append(word, pos);
+    dd.textContent = item.chinese || "";
+    list.append(dt, dd);
+  });
+  return list;
+}
+
+// Adds a "Minnesknep" (memory tip) section when learning_object_translations
+// has one, and upgrades the flat-text "Relaterade ord" section with proper
+// Synonymer/Motsatsord/Ordfamilj sections once learning_object_relationships
+// has typed data for this word — neither had a read path anywhere in the
+// app before this (see Reviews/SPK-DIC-001-标准对照评估与实施建议.md §2).
+// Same lazy-fetch-after-render pattern as
+// enhanceGrammarSectionWithStructuredForms: the synchronous render above
+// already shows a reasonable state (no "Minnesknep" section, generic flat
+// "Relaterade ord"), this only upgrades it once the fetch resolves.
+function enhanceExtendedLearningSection(card, word) {
+  if (!word?.id) return;
+  Promise.all([
+    remoteDb.loadWordRelationships(word.id).catch((error) => {
+      console.warn("[SpråkLab] Failed to load word relationships for", word.id, error);
+      return [];
+    }),
+    remoteDb.loadWordTranslationDetail(word.id).catch((error) => {
+      console.warn("[SpråkLab] Failed to load translation detail for", word.id, error);
+      return null;
+    }),
+  ]).then(([relationships, translationDetail]) => {
+    if (card.dataset.id !== word.id) return;
+    const details = card.querySelector(".detail-list");
+    if (!details) return;
+
+    if (relationships.length) {
+      const byType = { synonym: [], antonym: [], derived_from: [], related: [] };
+      relationships.forEach((rel) => (byType[rel.type] || byType.related).push(rel));
+      const relatedSection = details.querySelector(".related-section");
+      const insertBefore = (term, items) => {
+        if (!items.length || !relatedSection) return;
+        const section = document.createElement("section");
+        section.className = "study-detail-section related-section";
+        const title = document.createElement("h4");
+        title.textContent = `${term}：`;
+        section.append(title, buildTypedRelatedList(items));
+        relatedSection.before(section);
+      };
+      insertBefore("Synonymer", byType.synonym);
+      insertBefore("Motsatsord", byType.antonym);
+      insertBefore("Ordfamilj", byType.derived_from);
+      if (byType.related.length && relatedSection) {
+        relatedSection.querySelector("p, .related-word-list")?.remove();
+        relatedSection.append(buildTypedRelatedList(byType.related));
+      }
+    }
+
+    if (clean(translationDetail?.learning_tip)) {
+      addStudyDetail(details, "Minnesknep", clean(translationDetail.learning_tip));
+    }
+  });
 }
 
 function openWordDetail(word, sourceMode = "library") {
