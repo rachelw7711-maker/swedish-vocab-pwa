@@ -237,15 +237,15 @@
           <section class="library-shelf" aria-label="Böcker">
             <button class="library-book-card library-book-card--ordbok" type="button" data-open-book="notebookView" aria-label="Öppna Ordbok">
               <span class="library-book-cover" aria-hidden="true">
-                <img src="/icons/library-covers/ordbok.jpg" alt="" />
+                <img src="/icons/library-covers/ordbok.svg" alt="" />
               </span>
-              <span class="library-book-meta"><strong>Ordbok</strong><span>Ordlista · Studier · 5944 ord</span></span>
+              <span class="library-book-meta"><strong>Ordbok</strong><span>Ordlista · Studier · 10 097 ord</span></span>
               <span class="library-book-action" aria-hidden="true">Öppna</span>
             </button>
 
             <button class="library-book-card library-book-card--shadowing" type="button" data-open-book="historyView" aria-label="Öppna Shadowing">
               <span class="library-book-cover" aria-hidden="true">
-                <img src="/icons/library-covers/shadowing.jpg" alt="" />
+                <img src="/icons/library-covers/shadowing.svg" alt="" />
               </span>
               <span class="library-book-meta"><strong>Shadowing</strong><span>Lyssna · Öva · Spela in</span></span>
               <span class="library-book-action" aria-hidden="true">Öppna</span>
@@ -253,7 +253,7 @@
 
             <button class="library-book-card library-book-card--fraser" type="button" data-open-book="fraserView" aria-label="Öppna Fraser &amp; Uttryck">
               <span class="library-book-cover" aria-hidden="true">
-                <img src="/icons/library-covers/ordbok.jpg" alt="" />
+                <img src="/icons/library-covers/fraser.svg" alt="" />
               </span>
               <span class="library-book-meta"><strong>Fraser &amp; Uttryck</strong><span>Fasta uttryck · Idiom</span></span>
               <span class="library-book-action" aria-hidden="true">Öppna</span>
@@ -261,7 +261,7 @@
 
             <button class="library-book-card library-book-card--reading" type="button" data-open-book="readingView" aria-label="Öppna Läsning">
               <span class="library-book-cover" aria-hidden="true">
-                <img src="/icons/library-covers/reading.jpg" alt="" />
+                <img src="/icons/library-covers/reading.svg" alt="" />
               </span>
               <span class="library-book-meta"><strong>Läsning</strong><span>Texter · Förståelse</span></span>
               <span class="library-book-action" aria-hidden="true">Öppna</span>
@@ -304,6 +304,18 @@
               <button class="secondary-button" id="closeReadingEditorBtn" type="button">‹ Tillbaka</button>
               <button class="secondary-button" id="deleteReadingBtn" type="button" hidden>Ta bort</button>
             </div>
+            <div class="reading-editor-intro">
+              <span class="reading-editor-icon" aria-hidden="true">📖</span>
+              <div>
+                <h3>Ny text</h3>
+                <p>Klistra in en svensk text, spara den, och låt AI hjälpa dig med sammanfattning och nya ord.</p>
+              </div>
+            </div>
+            <ol class="study-steps reading-editor-steps" aria-label="Läsningssteg">
+              <li>Klistra in text</li>
+              <li>Spara</li>
+              <li>Analysera</li>
+            </ol>
             <input type="hidden" id="readingItemId" />
             <label class="field-label">
               Titel
@@ -1191,6 +1203,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=152" type="module"></script>
+    <script src="/app.js?v=153" type="module"></script>
   </body>
 </html>

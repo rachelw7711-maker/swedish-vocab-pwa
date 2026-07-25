@@ -3034,6 +3034,43 @@ h2 {
   color: #526760;
 }
 
+.reading-editor-intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 4px;
+}
+
+.reading-editor-icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  font-size: 1.5rem;
+}
+
+.reading-editor-intro h3 {
+  margin: 0 0 2px;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 740;
+}
+
+.reading-editor-intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.reading-editor-steps {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 6px;
+}
+
 .study-complete {
   display: grid;
   gap: 8px;

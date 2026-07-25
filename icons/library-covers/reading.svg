@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="328" height="436" viewBox="0 0 328 436">
+  <defs>
+    <linearGradient id="readingGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#84a08f"/>
+      <stop offset="100%" stop-color="#425a4c"/>
+    </linearGradient>
+  </defs>
+  <rect width="328" height="436" fill="url(#readingGrad)"/>
+  <circle cx="164" cy="196" r="92" fill="rgba(255,255,255,0.1)"/>
+  <g transform="translate(164,196)" fill="none" stroke="#f4f8f6" stroke-width="8" stroke-linecap="round">
+    <rect x="-54" y="-46" width="108" height="88" rx="8"/>
+    <line x1="-34" y1="-20" x2="34" y2="-20"/>
+    <line x1="-34" y1="0" x2="34" y2="0"/>
+    <line x1="-34" y1="20" x2="10" y2="20"/>
+  </g>
+  <text x="164" y="360" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="30" font-weight="700" fill="#f4f8f6" opacity="0.92">Läsning</text>
+</svg>

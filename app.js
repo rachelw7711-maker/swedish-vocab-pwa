@@ -2652,6 +2652,16 @@ function renderReadingList() {
   els.readingList.append(fragment);
 }
 
+function updateReadingSteps(stage) {
+  const steps = document.querySelectorAll(".reading-editor-steps li");
+  const order = ["paste", "saved", "analyzed"];
+  const index = order.indexOf(stage);
+  steps.forEach((li, i) => {
+    li.classList.toggle("done", i < index);
+    li.classList.toggle("active", i === index);
+  });
+}
+
 function openReadingEditor(item = null) {
   state.selectedReadingId = item?.id || "";
   els.readingItemId.value = item?.id || "";
@@ -2661,8 +2671,10 @@ function openReadingEditor(item = null) {
   els.analyzeReadingBtn.hidden = !item?.id;
   if (item?.analyzed_at) {
     renderReadingAnalysis(item);
+    updateReadingSteps("analyzed");
   } else {
     els.readingAnalysisPanel.hidden = true;
+    updateReadingSteps(item?.id ? "saved" : "paste");
   }
   els.readingListPanel.hidden = true;
   els.readingList.hidden = true;
@@ -2695,6 +2707,7 @@ async function saveCurrentReadingItem() {
     els.readingItemId.value = saved.id;
     els.deleteReadingBtn.hidden = false;
     els.analyzeReadingBtn.hidden = false;
+    updateReadingSteps("saved");
     return saved;
   } catch (error) {
     console.warn("[SpråkLab] Failed to save reading item.", error);
@@ -2724,6 +2737,7 @@ async function analyzeCurrentReadingItem() {
     const finalItem = result?.item || updated;
     state.readingItems = state.readingItems.map((item) => (item.id === finalItem.id ? finalItem : item));
     renderReadingAnalysis(finalItem);
+    updateReadingSteps("analyzed");
   } catch (error) {
     console.warn("[SpråkLab] Reading analysis failed.", error);
     els.readingAnalysisPanel.hidden = true;
