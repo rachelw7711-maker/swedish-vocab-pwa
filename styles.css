@@ -4687,6 +4687,54 @@ dialog:not([open]) {
   min-width: 0;
 }
 
+.detail-layer-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.detail-layer-label {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 760;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.detail-layer-group-collapsible {
+  border-top: 1px solid var(--border-subtle, #e3e7e5);
+  padding-top: 12px;
+}
+
+.detail-layer-group-collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.detail-layer-group-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-layer-group-collapsible > summary::after {
+  content: " ▸ Visa";
+  color: var(--accent-strong);
+  font-weight: 700;
+  text-transform: none;
+}
+
+.detail-layer-group-collapsible[open] > summary::after {
+  content: " ▾ Dölj";
+}
+
+.detail-layer-group-collapsible > .detail-layer-label {
+  margin-bottom: 0;
+}
+
+.detail-layer-group-collapsible > *:not(summary) {
+  margin-top: 12px;
+}
+
 .study-detail-section {
   display: grid;
   gap: 6px;

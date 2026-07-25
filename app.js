@@ -3631,13 +3631,27 @@ function createWordCard(word, mode = "library") {
     card.classList.add("study-word-card");
     card.querySelector(".star-button").hidden = true;
     card.querySelector(".english").hidden = true;
-    addStudyDetail(details, "Ordklass", formatPosForStudy(word));
-    addStudyDetail(details, "Kinesisk betydelse", clean(word.chinese) || "Kinesisk betydelse saknas.");
-    addStudyDetail(details, "Svensk förklaring", clean(word.english) || "Svensk förklaring saknas.");
-    addStudyDetail(details, "Grammatik", formatGrammarForStudy(word));
-    addStudyDetail(details, "Exempel", formatExampleForStudy(word.example));
-    addStudyDetail(details, "Fraser", createStudyCollocationList(word.collocations, word.example));
-    addStudyDetail(details, "Relaterade ord", createRelatedWordList(word.related_words));
+
+    // Five-layer progressive disclosure per SPK-DIC-001 §10: core info and
+    // grammar/usage stay expanded (the words a learner needs immediately),
+    // extended learning (synonyms/antonyms/word family/memory tip) starts
+    // collapsed since it's optional depth, not required to understand the word.
+    const coreGroup = addLayerGroup(details, "核心信息");
+    addStudyDetail(coreGroup, "Ordklass", formatPosForStudy(word));
+    addStudyDetail(coreGroup, "Kinesisk betydelse", clean(word.chinese) || "Kinesisk betydelse saknas.");
+    addStudyDetail(coreGroup, "Svensk förklaring", clean(word.english) || "Svensk förklaring saknas.");
+
+    const grammarGroup = addLayerGroup(details, "语法变化");
+    addStudyDetail(grammarGroup, "Grammatik", formatGrammarForStudy(word));
+
+    const usageGroup = addLayerGroup(details, "真实使用");
+    addStudyDetail(usageGroup, "Exempel", formatExampleForStudy(word.example));
+    addStudyDetail(usageGroup, "Fraser", createStudyCollocationList(word.collocations, word.example));
+
+    const extendedGroup = addLayerGroup(details, "扩展学习", { collapsible: true, expanded: false });
+    extendedGroup.classList.add("extended-learning-group");
+    addStudyDetail(extendedGroup, "Relaterade ord", createRelatedWordList(word.related_words));
+
     enhanceGrammarSectionWithStructuredForms(card, word);
     enhanceExtendedLearningSection(card, word);
   } else if (mode === "search" || mode === "dictionary") {
@@ -3817,6 +3831,32 @@ function formatStudyNote(word) {
   return "Används ofta i studier, arbete och samtal.";
 }
 
+// One of the five progressive-disclosure layers in the study detail view
+// (SPK-DIC-001 §10). Non-collapsible groups render as a plain labeled
+// section; collapsible ones use native <details> so no JS toggle logic
+// is needed. Returns the container to append addStudyDetail sections into.
+function addLayerGroup(list, label, { collapsible = false, expanded = true } = {}) {
+  if (collapsible) {
+    const group = document.createElement("details");
+    group.className = "detail-layer-group detail-layer-group-collapsible";
+    group.open = expanded;
+    const summary = document.createElement("summary");
+    summary.className = "detail-layer-label";
+    summary.textContent = label;
+    group.append(summary);
+    list.append(group);
+    return group;
+  }
+  const group = document.createElement("div");
+  group.className = "detail-layer-group";
+  const heading = document.createElement("p");
+  heading.className = "detail-layer-label";
+  heading.textContent = label;
+  group.append(heading);
+  list.append(group);
+  return group;
+}
+
 function addStudyDetail(list, term, content) {
   const section = document.createElement("section");
   section.className = "study-detail-section";
@@ -3918,7 +3958,7 @@ function enhanceExtendedLearningSection(card, word) {
     }),
   ]).then(([relationships, translationDetail]) => {
     if (card.dataset.id !== word.id) return;
-    const details = card.querySelector(".detail-list");
+    const details = card.querySelector(".extended-learning-group") || card.querySelector(".detail-list");
     if (!details) return;
 
     if (relationships.length) {
