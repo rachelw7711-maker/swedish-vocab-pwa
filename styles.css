@@ -1329,6 +1329,64 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   margin-top: 12px;
 }
 
+.profile-overview-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-cefr-breakdown,
+.profile-rating-breakdown {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.profile-cefr-row,
+.profile-rating-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+}
+
+.profile-cefr-row-label,
+.profile-rating-row-label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.profile-cefr-row-count,
+.profile-rating-row-count {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.profile-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--secondary-surface);
+  overflow: hidden;
+}
+
+.profile-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.profile-rating-fill-good {
+  background: var(--accent);
+}
+
+.profile-rating-fill-hard {
+  background: #c48a3d;
+}
+
+.profile-rating-fill-again {
+  background: #c25b4a;
+}
+
 .profile-overview-grid article {
   display: grid;
   gap: 4px;

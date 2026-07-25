@@ -501,6 +501,12 @@ const els = {
   profileLastSyncValue: document.querySelector("#profileLastSyncValue"),
   profileStudyStats: document.querySelector("#profileStudyStats"),
   profileStudyHint: document.querySelector("#profileStudyHint"),
+  profileAccuracyRate: document.querySelector("#profileAccuracyRate"),
+  profileCefrBreakdown: document.querySelector("#profileCefrBreakdown"),
+  profileRatingBreakdown: document.querySelector("#profileRatingBreakdown"),
+  profileRatingHint: document.querySelector("#profileRatingHint"),
+  profileReadingCount: document.querySelector("#profileReadingCount"),
+  profileShadowingCount: document.querySelector("#profileShadowingCount"),
   profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
   profileStartCard: document.querySelector("#profileStartCard"),
   profileGuestButton: document.querySelector("#profileGuestButton"),
@@ -2955,7 +2961,105 @@ function showProfilePage(page = "main") {
   if (els.profileStudiesPanel) els.profileStudiesPanel.hidden = target !== "studies";
   if (els.profileSettingsPanel) els.profileSettingsPanel.hidden = target !== "settings";
   if (els.profileSignedInGrid) els.profileSignedInGrid.dataset.profilePage = target;
+  if (target === "studies") renderProfileStudiesBreakdown();
   if (state.activeView === "profileView") resetViewportScroll();
+}
+
+// Fills the "Mina studier" breakdown cards (CEFR distribution, review
+// rating quality, reading/Shadowing activity) — computed on demand when
+// the subpage opens rather than on every renderAuthState() call, since
+// it iterates the full word list (~10k+ words with the shared corpus).
+function renderProfileStudiesBreakdown() {
+  const words = state.words || [];
+  const reviewed = words.filter((word) => word.last_rating);
+  const goodCount = reviewed.filter((word) => word.last_rating === "good").length;
+  const hardCount = reviewed.filter((word) => word.last_rating === "hard").length;
+  const againCount = reviewed.filter((word) => word.last_rating === "again").length;
+
+  if (els.profileAccuracyRate) {
+    els.profileAccuracyRate.textContent = reviewed.length ? `${Math.round((goodCount / reviewed.length) * 100)}%` : "–";
+  }
+
+  if (els.profileCefrBreakdown) {
+    const levels = ["A1", "A2", "B1", "B2", "C1", "C2"];
+    const rows = levels
+      .map((level) => {
+        const inLevel = words.filter((word) => word.cefr_level === level);
+        if (!inLevel.length) return null;
+        const learned = inLevel.filter((word) => word.learned).length;
+        const percent = Math.round((learned / inLevel.length) * 100);
+        return { level, learned, total: inLevel.length, percent };
+      })
+      .filter(Boolean);
+    els.profileCefrBreakdown.replaceChildren();
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "Inga CEFR-nivåer registrerade ännu.";
+      els.profileCefrBreakdown.append(empty);
+    }
+    rows.forEach((row) => {
+      const rowEl = document.createElement("div");
+      rowEl.className = "profile-cefr-row";
+      const label = document.createElement("span");
+      label.className = "profile-cefr-row-label";
+      label.textContent = row.level;
+      const track = document.createElement("div");
+      track.className = "profile-progress-track";
+      const fill = document.createElement("div");
+      fill.className = "profile-progress-fill";
+      fill.style.width = `${row.percent}%`;
+      track.append(fill);
+      const count = document.createElement("span");
+      count.className = "profile-cefr-row-count";
+      count.textContent = `${row.learned}/${row.total}`;
+      rowEl.append(label, track, count);
+      els.profileCefrBreakdown.append(rowEl);
+    });
+  }
+
+  if (els.profileRatingBreakdown) {
+    els.profileRatingBreakdown.replaceChildren();
+    const ratings = [
+      { key: "good", label: "Kom ihåg", count: goodCount, fillClass: "profile-rating-fill-good" },
+      { key: "hard", label: "Svårt", count: hardCount, fillClass: "profile-rating-fill-hard" },
+      { key: "again", label: "Glömde", count: againCount, fillClass: "profile-rating-fill-again" },
+    ];
+    if (!reviewed.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "Inga repetitioner ännu.";
+      els.profileRatingBreakdown.append(empty);
+    }
+    ratings.forEach((rating) => {
+      if (!reviewed.length) return;
+      const percent = Math.round((rating.count / reviewed.length) * 100);
+      const rowEl = document.createElement("div");
+      rowEl.className = "profile-rating-row";
+      const label = document.createElement("span");
+      label.className = "profile-rating-row-label";
+      label.textContent = rating.label;
+      const track = document.createElement("div");
+      track.className = "profile-progress-track";
+      const fill = document.createElement("div");
+      fill.className = `profile-progress-fill ${rating.fillClass}`;
+      fill.style.width = `${percent}%`;
+      track.append(fill);
+      const count = document.createElement("span");
+      count.className = "profile-rating-row-count";
+      count.textContent = `${percent}% (${rating.count})`;
+      rowEl.append(label, track, count);
+      els.profileRatingBreakdown.append(rowEl);
+    });
+  }
+  if (els.profileRatingHint) {
+    els.profileRatingHint.textContent = reviewed.length
+      ? `Baserat på ${reviewed.length} repeterade ord.`
+      : "Börja repetera för att se din statistik här.";
+  }
+
+  if (els.profileReadingCount) els.profileReadingCount.textContent = state.readingItems.length;
+  if (els.profileShadowingCount) els.profileShadowingCount.textContent = getShadowingItems().length;
 }
 
 function getAuthDisplayEmail(user) {
@@ -3329,7 +3433,7 @@ function renderAuthState() {
   const user = state.auth.user;
   const isSignedIn = Boolean(user?.id);
   const mastered = state.words.filter((word) => word.learned).length;
-  const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
+  const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, Number(state.dailyNewWordTarget || 10) || 10);
   if (els.profileSignedOutCard) els.profileSignedOutCard.hidden = isSignedIn;
   if (els.profileSignedInGrid) els.profileSignedInGrid.hidden = !isSignedIn;
   if (!isSignedIn) showProfilePage("main");

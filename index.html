@@ -492,10 +492,11 @@
                 </header>
                 <section class="profile-overview-card">
                   <p class="section-kicker">Statistik</p>
-                  <div class="profile-overview-grid">
+                  <div class="profile-overview-grid profile-overview-grid-4">
                     <article><strong id="profileWordCount">0</strong><span>Ord</span></article>
                     <article><strong id="profileStudyStats">0 dagar</strong><span>I rad</span></article>
                     <article><strong id="profileMasteredCount">0</strong><span>Lärda</span></article>
+                    <article><strong id="profileAccuracyRate">–</strong><span>Rätt-andel</span></article>
                   </div>
                 </section>
                 <section class="profile-detail-card">
@@ -504,9 +505,20 @@
                   <small id="profileStudyHint">0 lärda ord · 0 klara idag</small>
                 </section>
                 <section class="profile-detail-card">
-                  <span>Utveckling och prestationer</span>
-                  <strong>Fortsätt bygga din svenska varje dag</strong>
-                  <small>Din aktivitet och dina lärda ord sparas i kontot.</small>
+                  <span>Nivåfördelning (CEFR)</span>
+                  <div id="profileCefrBreakdown" class="profile-cefr-breakdown"></div>
+                </section>
+                <section class="profile-detail-card">
+                  <span>Repetitionskvalitet</span>
+                  <div id="profileRatingBreakdown" class="profile-rating-breakdown"></div>
+                  <small id="profileRatingHint"></small>
+                </section>
+                <section class="profile-detail-card">
+                  <span>Läsning &amp; Shadowing</span>
+                  <div class="profile-overview-grid">
+                    <article><strong id="profileReadingCount">0</strong><span>Texter lästa</span></article>
+                    <article><strong id="profileShadowingCount">0</strong><span>Shadowing-pass</span></article>
+                  </div>
                 </section>
               </section>
 
@@ -1191,6 +1203,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=150" type="module"></script>
+    <script src="/app.js?v=151" type="module"></script>
   </body>
 </html>
