@@ -756,12 +756,7 @@ body[data-active-view="historyView"] .topbar-auth-button[data-signed-in="true"] 
   background: #5b4639;
 }
 
-.library-book-card--video .library-book-cover {
-  background: #f4f4f4;
-}
-
-.library-book-card--reading .library-book-cover img,
-.library-book-card--video .library-book-cover img {
+.library-book-card--reading .library-book-cover img {
   object-position: center;
 }
 
