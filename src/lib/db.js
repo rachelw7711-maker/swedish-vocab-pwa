@@ -183,6 +183,15 @@ function normalizeWord(row, userRow = null, translationRow = null) {
     last_review_date: clean(userRow?.last_review_date ?? userMetadata.last_review_date ?? row.last_review_date),
     mastered_at: dateToMillis(userRow?.mastered_at) || dateToMillis(userMetadata.mastered_at) || row.mastered_at || null,
     next_review_at: dateToMillis(userRow?.next_review_at) || Number(row.next_review_at ?? 0) || 0,
+    // Stage-based SRS (SPK-LRN-001): review_stage 0-6 drives the interval
+    // table, not a raw review_count. Existing words that predate this
+    // field derive a starting stage from their review_count so they don't
+    // reset to stage 0 (short interval) the next time they're reviewed.
+    review_stage: Number(
+      userMetadata.review_stage ?? row.review_stage ?? Math.min(Number(userRow?.review_count ?? row.review_count ?? 0) || 0, 6),
+    ) || 0,
+    last_rating: clean(userMetadata.last_rating ?? row.last_rating) || "",
+    lapse_count: Number(userMetadata.lapse_count ?? row.lapse_count ?? 0) || 0,
     created_at: row.created_at ?? null,
     updated_at: Number(userRow?.updated_at ?? row.updated_at ?? 0) || Date.now(),
   };
@@ -590,6 +599,9 @@ function toUserWordRow(userId, word) {
       last_study_date: clean(word.last_study_date),
       last_review_date: clean(word.last_review_date),
       mastered_at: Number(word.mastered_at || 0) || null,
+      review_stage: Number(word.review_stage || 0) || 0,
+      last_rating: clean(word.last_rating),
+      lapse_count: Number(word.lapse_count || 0) || 0,
     }),
     updated_at: new Date().toISOString(),
   };
@@ -827,7 +839,13 @@ export async function loadDailyWordProgress({ date = todayKey() } = {}) {
   }
   const startOfTodayIso = millisToIso(startOfDayMillis(date));
   const endOfTodayIso = millisToIso(endOfDayMillis(date));
-  const [{ data: todayNewRows, error: newCountError }, { data: dueReviewRows, error: dueReviewError }, { data: firstReviewRows, error: firstReviewError }] = await Promise.all([
+  const [
+    { data: todayNewRows, error: newCountError },
+    { data: dueReviewRows, error: dueReviewError },
+    { data: firstReviewRows, error: firstReviewError },
+    { count: overdueCount, error: overdueError },
+    { count: dueTodayCount, error: dueTodayError },
+  ] = await Promise.all([
     supabase
       .from(TABLES.userWords)
       .select("word_id")
@@ -854,10 +872,31 @@ export async function loadDailyWordProgress({ date = todayKey() } = {}) {
       .neq("status", "mastered")
       .order("last_studied_at", { ascending: false })
       .limit(DAILY_WORD_LIMIT),
+    // Exact counts (not capped by DAILY_WORD_LIMIT like the queries above)
+    // — needed for real workload classification (SPK-LRN-001 §10). The
+    // capped queries above exist to build an actionable id list for
+    // today's session, not to report the true backlog size.
+    supabase
+      .from(TABLES.userWords)
+      .select("word_id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .not("next_review_at", "is", null)
+      .lt("next_review_at", startOfTodayIso)
+      .neq("status", "mastered"),
+    supabase
+      .from(TABLES.userWords)
+      .select("word_id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .not("next_review_at", "is", null)
+      .gte("next_review_at", startOfTodayIso)
+      .lte("next_review_at", endOfTodayIso)
+      .neq("status", "mastered"),
   ]);
   if (newCountError) throw newCountError;
   if (dueReviewError) throw dueReviewError;
   if (firstReviewError) throw firstReviewError;
+  if (overdueError) throw overdueError;
+  if (dueTodayError) throw dueTodayError;
   const todayNewWordIds = unique((todayNewRows || []).map((row) => row.word_id));
   const dueReviewWordIds = unique([
     ...(firstReviewRows || []).map((row) => row.word_id),
@@ -870,6 +909,8 @@ export async function loadDailyWordProgress({ date = todayKey() } = {}) {
     todayNewCount: todayNewWordIds.length,
     dueReviewWordIds,
     dueReviewCount: dueReviewWordIds.length,
+    overdueCount: overdueCount || 0,
+    dueTodayCount: dueTodayCount || 0,
   };
 }
 

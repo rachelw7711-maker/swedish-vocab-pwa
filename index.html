@@ -140,26 +140,37 @@
               <article class="study-entry-card">
                 <div class="study-entry-copy">
                   <div class="study-entry-heading">
-                    <p class="section-kicker">NYA ORD</p>
-                    <span class="study-entry-icon" aria-hidden="true">🔍</span>
-                  </div>
-                  <h3>Lär dig nya ord</h3>
-                </div>
-                <strong id="entryNewCount">0 ord idag</strong>
-                <button class="primary-button" id="startNewStudyBtn" type="button">Börja lära</button>
-              </article>
-              <article class="study-entry-card">
-                <div class="study-entry-copy">
-                  <div class="study-entry-heading">
                     <p class="section-kicker">REPETITION</p>
                     <span class="study-entry-icon" aria-hidden="true">📝</span>
                   </div>
                   <h3>Repetera ord</h3>
                 </div>
                 <strong id="entryReviewCount">0 ord idag</strong>
-                <button class="secondary-button" id="startReviewStudyBtn" type="button">Börja repetera</button>
+                <span class="study-entry-detail" id="entryReviewDetail"></span>
+                <button class="primary-button" id="startReviewStudyBtn" type="button">Börja repetera</button>
+              </article>
+              <article class="study-entry-card">
+                <div class="study-entry-copy">
+                  <div class="study-entry-heading">
+                    <p class="section-kicker">NYA ORD</p>
+                    <span class="study-entry-icon" aria-hidden="true">🔍</span>
+                  </div>
+                  <h3>Lär dig nya ord</h3>
+                </div>
+                <strong id="entryNewCount">0 ord idag</strong>
+                <label class="study-entry-target-label" for="dailyNewWordTargetSelect">
+                  Mål/dag
+                  <select id="dailyNewWordTargetSelect">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                  </select>
+                </label>
+                <button class="secondary-button" id="startNewStudyBtn" type="button">Börja lära</button>
               </article>
             </div>
+            <p class="study-workload-message" id="studyWorkloadMessage" hidden></p>
             <div class="practice-actions" hidden>
               <button class="primary-button" id="startQuizBtn" type="button" hidden>Starta</button>
               <button class="secondary-button" id="showAnswerBtn" type="button" hidden disabled>Visa svar</button>
@@ -1103,6 +1114,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=147" type="module"></script>
+    <script src="/app.js?v=148" type="module"></script>
   </body>
 </html>

@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=128";
+import * as remoteDb from "./src/lib/db.js?v=129";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -353,6 +353,7 @@ const state = {
     lastSyncedAt: 0,
   },
   stopBatchEnrich: false,
+  dailyNewWordTarget: 10,
   favoriteCategory: "all",
   exportPos: "all",
   exportNotebook: "all",
@@ -664,6 +665,9 @@ const els = {
   studyMasteredCount: document.querySelector("#studyMasteredCount"),
   entryNewCount: document.querySelector("#entryNewCount"),
   entryReviewCount: document.querySelector("#entryReviewCount"),
+  entryReviewDetail: document.querySelector("#entryReviewDetail"),
+  studyWorkloadMessage: document.querySelector("#studyWorkloadMessage"),
+  dailyNewWordTargetSelect: document.querySelector("#dailyNewWordTargetSelect"),
   studyCompletePanel: document.querySelector("#studyCompletePanel"),
   completeTodayCount: document.querySelector("#completeTodayCount"),
   completeMasteredCount: document.querySelector("#completeMasteredCount"),
@@ -752,6 +756,9 @@ function normalizeWord(word) {
     status: clean(firstDefined(word.status, "")),
     learned: Boolean(word.learned),
     review_count: Number(firstDefined(word.review_count, word.reviewCount, 0)) || 0,
+    review_stage: Number(firstDefined(word.review_stage, 0)) || 0,
+    last_rating: clean(firstDefined(word.last_rating, "")),
+    lapse_count: Number(firstDefined(word.lapse_count, 0)) || 0,
     wrong_count: Number(firstDefined(word.wrong_count, word.wrongCount, 0)) || 0,
     last_reviewed: firstDefined(word.last_reviewed, word.lastReviewed, null),
     next_review_at: firstDefined(word.next_review_at, word.nextReviewAt, now),
@@ -1035,6 +1042,9 @@ function progressSnapshotForWord(word) {
     learned: Boolean(word.learned),
     status: clean(word.status),
     review_count: Number(word.review_count || 0) || 0,
+    review_stage: Number(word.review_stage || 0) || 0,
+    last_rating: clean(word.last_rating),
+    lapse_count: Number(word.lapse_count || 0) || 0,
     wrong_count: Number(word.wrong_count || 0) || 0,
     spelling_correct_count: Number(word.spelling_correct_count || 0) || 0,
     first_studied_at: word.first_studied_at || null,
@@ -1136,6 +1146,7 @@ function persistUserPreferences() {
       exportNotebook: state.exportNotebook,
       exportPos: state.exportPos,
       shadowingLoopEnabled: state.shadowingLoopEnabled,
+      dailyNewWordTarget: state.dailyNewWordTarget,
     },
   }).catch((error) => console.warn("[Min Ordbok] Remote preferences sync failed.", error));
 }
@@ -1491,6 +1502,8 @@ function mergeStoredWordState(primary, secondary) {
     favorite: primary.favorite || secondary.favorite,
     learned: primary.learned || secondary.learned,
     review_count: Math.max(primary.review_count || 0, secondary.review_count || 0),
+    review_stage: Math.max(primary.review_stage || 0, secondary.review_stage || 0),
+    lapse_count: Math.max(primary.lapse_count || 0, secondary.lapse_count || 0),
     wrong_count: Math.max(primary.wrong_count || 0, secondary.wrong_count || 0),
     spelling_correct_count: Math.max(primary.spelling_correct_count || 0, secondary.spelling_correct_count || 0),
     first_studied_at: primary.first_studied_at || secondary.first_studied_at,
@@ -1586,6 +1599,23 @@ function localDailyWordProgress(words = getLibraryWordsForDisplay(), date = toda
       })
       .map((word) => word.id),
   ).slice(0, DAILY_NEW_WORD_LIMIT);
+  // Uncapped due/overdue totals for workload classification (SPK-LRN-001
+  // §10) — dueReviewWordIds above is intentionally capped to build an
+  // actionable session list, this counts the true backlog.
+  let overdueCount = 0;
+  let dueTodayCount = 0;
+  words.forEach((word) => {
+    if (!word?.id || isWordInLearnedNotebook(word)) return;
+    if (clean(word.last_review_date) === date) return;
+    const nextReviewAt = Number(word.next_review_at || 0) || 0;
+    const lastStudyDate = clean(word.last_study_date) || dateFromTimestamp(word.last_studied_at);
+    const firstReviewDue = Number(word.review_count || 0) === 0 && lastStudyDate && lastStudyDate < date;
+    if (firstReviewDue || (nextReviewAt > 0 && nextReviewAt < start)) {
+      overdueCount++;
+    } else if (nextReviewAt >= start && nextReviewAt <= end) {
+      dueTodayCount++;
+    }
+  });
   return {
     enabled: true,
     date,
@@ -1593,6 +1623,8 @@ function localDailyWordProgress(words = getLibraryWordsForDisplay(), date = toda
     todayNewCount: todayNewWordIds.length,
     dueReviewWordIds,
     dueReviewCount: dueReviewWordIds.length,
+    overdueCount,
+    dueTodayCount,
   };
 }
 
@@ -1613,6 +1645,8 @@ function mergeDailyWordProgress(remoteProgress, localProgress) {
     todayNewCount: Math.max(Number(remoteProgress?.todayNewCount || 0) || 0, todayNewWordIds.length),
     dueReviewWordIds,
     dueReviewCount: dueReviewWordIds.length,
+    overdueCount: Math.max(Number(remoteProgress?.overdueCount || 0) || 0, Number(localProgress?.overdueCount || 0) || 0),
+    dueTodayCount: Math.max(Number(remoteProgress?.dueTodayCount || 0) || 0, Number(localProgress?.dueTodayCount || 0) || 0),
   };
 }
 
@@ -2189,6 +2223,9 @@ async function loadData() {
     if (remotePhase4Snapshot.preferences.preferences?.favoriteCategory) {
       state.favoriteCategory = remotePhase4Snapshot.preferences.preferences.favoriteCategory;
     }
+    if (remotePhase4Snapshot.preferences.preferences?.dailyNewWordTarget) {
+      state.dailyNewWordTarget = Number(remotePhase4Snapshot.preferences.preferences.dailyNewWordTarget) || 10;
+    }
     if (remotePhase4Snapshot.preferences.preferences?.exportNotebook) {
       state.exportNotebook = remotePhase4Snapshot.preferences.preferences.exportNotebook;
     }
@@ -2538,8 +2575,12 @@ function renderStudyStats() {
   if (!state.dailyStudy) return;
   const newSession = readDailySession("new", state.dailyStudy);
   const reviewSession = readDailySession("review", state.dailyStudy);
-  const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
-  const todayReview = Math.min(Number(state.dailyProgress?.dueReviewCount || 0) || 0, DAILY_NEW_WORD_LIMIT);
+  const dailyTarget = Number(state.dailyNewWordTarget || 10) || 10;
+  const overdueCount = Number(state.dailyProgress?.overdueCount || 0) || 0;
+  const dueTodayCount = Number(state.dailyProgress?.dueTodayCount || 0) || 0;
+  const dueOverdueTotal = overdueCount + dueTodayCount;
+  const workload = getWorkloadState(dueOverdueTotal, dailyTarget);
+  const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, dailyTarget);
   const availableNew = Math.max((state.dailyStudy.newWordIds || []).length - newSession.completedWordIds.length, 0);
   const reviewTotal = (state.dailyStudy.reviewWordIds || []).length;
   const completedReview = Math.min(reviewSession.completedWordIds.length, reviewTotal);
@@ -2547,15 +2588,32 @@ function renderStudyStats() {
   const streak = state.studyStats?.current_streak || 0;
   const mastered = state.words.filter((word) => word.learned).length;
   const completedTotal = todayNew;
-  els.studyNewCount.textContent = `${todayNew}/${DAILY_NEW_WORD_LIMIT}`;
-  els.studyReviewCount.textContent = `${completedReview}/${DAILY_NEW_WORD_LIMIT}`;
+  els.studyNewCount.textContent = `${todayNew}/${dailyTarget}`;
+  els.studyReviewCount.textContent = `${completedReview}/${dueOverdueTotal}`;
   els.studyStreakCount.textContent = streak;
   els.studyMasteredCount.textContent = mastered;
   els.entryNewCount.textContent = `${availableNew} ord idag`;
   els.entryReviewCount.textContent = reviewSession.completed && reviewTotal > 0
     ? `${completedReview} av ${reviewTotal} klara idag`
     : `${availableReview} ord kvar idag`;
-  if (els.startNewStudyBtn) els.startNewStudyBtn.disabled = availableNew === 0 || newSession.completed;
+  // "Due: N / Overdue: M / Estimated: X min" per SPK-HOM-001 §3.1 —
+  // dueOverdueTotal is the real uncapped backlog, not just today's batch.
+  if (els.entryReviewDetail) {
+    els.entryReviewDetail.textContent = dueOverdueTotal > 0
+      ? `Idag ${dueTodayCount} · Försenat ${overdueCount} · Ca ${Math.max(1, Math.round(dueOverdueTotal * 0.75))} min`
+      : "";
+  }
+  if (els.studyWorkloadMessage) {
+    els.studyWorkloadMessage.textContent = workload.reason;
+    els.studyWorkloadMessage.hidden = !workload.reason;
+  }
+  if (els.dailyNewWordTargetSelect && document.activeElement !== els.dailyNewWordTargetSelect) {
+    els.dailyNewWordTargetSelect.value = String(dailyTarget);
+  }
+  if (els.startNewStudyBtn) {
+    els.startNewStudyBtn.disabled = availableNew === 0 || newSession.completed;
+    els.startNewStudyBtn.textContent = workload.allowedNewWords === 0 && dueOverdueTotal > 0 ? "Slutför repetition först" : "Börja lära";
+  }
   if (els.startReviewStudyBtn) {
     els.startReviewStudyBtn.disabled = reviewTotal === 0;
     els.startReviewStudyBtn.textContent = reviewSession.completed && reviewTotal > 0 ? "Visa repetition" : "Börja repetera";
@@ -2564,15 +2622,15 @@ function renderStudyStats() {
   els.completeMasteredCount.textContent = `${mastered} lärda ord`;
   els.completeStreakCount.textContent = `${streak} dagar i rad`;
   const parts = [
-    `Nyord ${todayNew}/${DAILY_NEW_WORD_LIMIT}`,
-    reviewTotal > 0 ? `Repetition ${completedReview}/${DAILY_NEW_WORD_LIMIT}` : "No review scheduled today",
+    `Nyord ${todayNew}/${dailyTarget}`,
+    reviewTotal > 0 ? `Repetition ${completedReview}/${dueOverdueTotal}` : "No review scheduled today",
     `Streak ${streak}`,
     `Lärt mig ${mastered}`,
   ];
   if (!state.currentQuiz && els.quizHint) {
     els.quizHint.textContent = parts.join(" · ");
   }
-  els.studyCompletePanel.hidden = !(todayNew >= DAILY_NEW_WORD_LIMIT && todayReview === 0 && !state.currentQuiz);
+  els.studyCompletePanel.hidden = !(todayNew >= dailyTarget && dueOverdueTotal === 0 && !state.currentQuiz);
 }
 
 function setupHomeGreeting() {
@@ -7015,11 +7073,49 @@ function startOfDayTimestamp(offset = 0) {
   return date.getTime();
 }
 
-function nextReviewTimestamp(reviewCount, isCorrect) {
-  if (!isCorrect) return startOfDayTimestamp(1);
-  const intervals = [1, 2, 4, 7, 14, 30, 60];
-  const index = Math.max(0, Math.min(Number(reviewCount || 1) - 1, intervals.length - 1));
-  return startOfDayTimestamp(intervals[index]);
+// Stage-based spaced repetition per SPK-LRN-001 §7/§8. Rating is derived
+// from the spelling test outcome (see deriveStudyRating) rather than an
+// explicit again/hard/good UI, per Rachel's 2026-07-25 decision to keep
+// the existing "write the word" practice mechanic unchanged and layer the
+// smarter interval math underneath it.
+const STAGE_INTERVAL_DAYS = [1, 3, 7, 14, 30, 60, 90];
+const MAX_REVIEW_STAGE = STAGE_INTERVAL_DAYS.length - 1;
+
+function deriveStudyRating(attempts, isCorrect) {
+  if (!isCorrect) return "again";
+  return attempts > 1 ? "hard" : "good";
+}
+
+// Returns { stage, intervalDays, nextReviewAt } for the word's *next*
+// review, given its current stage and this session's rating.
+function computeNextReview(currentStage, rating) {
+  const stage = Math.max(0, Math.min(Number(currentStage || 0) || 0, MAX_REVIEW_STAGE));
+  if (rating === "again") {
+    return { stage: 0, intervalDays: 1, nextReviewAt: startOfDayTimestamp(1) };
+  }
+  if (rating === "hard") {
+    const intervalDays = Math.max(1, Math.round(STAGE_INTERVAL_DAYS[stage] * 0.5));
+    return { stage, intervalDays, nextReviewAt: startOfDayTimestamp(intervalDays) };
+  }
+  const nextStage = Math.min(stage + 1, MAX_REVIEW_STAGE);
+  const intervalDays = STAGE_INTERVAL_DAYS[nextStage];
+  return { stage: nextStage, intervalDays, nextReviewAt: startOfDayTimestamp(intervalDays) };
+}
+
+// Review-load-based new-word throttling, SPK-LRN-001 §10. Only the
+// Normal/Moderate/Heavy/Backlog classification and its effect on new-word
+// count is implemented — the spec's separate adaptive/manual workload
+// mode toggle is intentionally out of scope for this pass (2026-07-25
+// decision), so there is exactly one behavior, not a user setting.
+function getWorkloadState(dueOverdueTotal, target) {
+  const total = Number(dueOverdueTotal || 0) || 0;
+  const dailyTarget = Number(target || 10) || 10;
+  if (total <= 20) return { state: "normal", allowedNewWords: dailyTarget, reason: "" };
+  if (total <= 30) {
+    const allowed = Math.ceil(dailyTarget * 0.5);
+    return { state: "moderate", allowedNewWords: allowed, reason: `Idag är repetitionerna fler än vanligt, nya ord minskade till ${allowed}.` };
+  }
+  return { state: total <= 50 ? "heavy" : "backlog", allowedNewWords: 0, reason: "Många repetitioner väntar — fokusera på dem innan nya ord." };
 }
 
 function sameCategory(a, b) {
@@ -7168,7 +7264,10 @@ function ensureDailyStudyPlan(scope = state.studyScope) {
       : [];
   const todayNewWordIds = uniqueIds(state.dailyProgress?.todayNewWordIds || []);
   const todayNewCount = Number(state.dailyProgress?.todayNewCount || todayNewWordIds.length || 0) || 0;
-  const remainingNewLimit = Math.max(DAILY_NEW_WORD_LIMIT - todayNewCount, 0);
+  const dueOverdueTotal =
+    (Number(state.dailyProgress?.overdueCount || 0) || 0) + (Number(state.dailyProgress?.dueTodayCount || 0) || 0);
+  const workload = getWorkloadState(dueOverdueTotal, state.dailyNewWordTarget);
+  const remainingNewLimit = Math.max(workload.allowedNewWords - todayNewCount, 0);
   const newCandidates = remainingNewLimit > 0
     ? candidates.filter((word) => !hasWordStudyHistory(word) && !todayNewWordIds.includes(word.id))
     : [];
@@ -7775,9 +7874,12 @@ async function completeCurrentStudyWordFromSpelling() {
   const previousTodayNewWordIds = uniqueIds(state.dailyProgress?.todayNewWordIds || []);
   const now = Date.now();
   const nextReviewCount = session.mode === "review" ? Number(word.review_count || 0) + 1 : Number(word.review_count || 0);
-  const nextMasteryLevel = Math.min(5, Math.max(0, nextReviewCount));
-  const mastered = session.mode === "review" && isCorrect && nextMasteryLevel >= 5;
-  const status = !isCorrect ? "needs_review" : mastered ? "mastered" : "learning";
+  const rating = deriveStudyRating(spelling.attempts, isCorrect);
+  const schedule = session.mode === "review" ? computeNextReview(word.review_stage, rating) : { stage: 0, nextReviewAt: startOfDayTimestamp(1) };
+  const mastered = session.mode === "review" && schedule.stage >= MAX_REVIEW_STAGE;
+  // Status enum per SPK-LRN-001 §4: new/learning/reviewing/relearning/mastered.
+  const status =
+    session.mode !== "review" ? "learning" : rating === "again" ? "relearning" : mastered ? "mastered" : "reviewing";
   const updated = updateWordInMemory(
     word.id,
     {
@@ -7790,9 +7892,12 @@ async function completeCurrentStudyWordFromSpelling() {
       last_reviewed: session.mode === "review" ? now : word.last_reviewed,
       last_review_date: session.mode === "review" ? todayKey() : word.last_review_date,
       review_count: nextReviewCount,
+      review_stage: session.mode === "review" ? schedule.stage : word.review_stage || 0,
+      last_rating: session.mode === "review" ? rating : word.last_rating,
+      lapse_count: session.mode === "review" && rating === "again" ? Number(word.lapse_count || 0) + 1 : word.lapse_count || 0,
       spelling_correct_count: word.spelling_correct_count + (isCorrect ? 1 : 0),
       wrong_count: word.wrong_count + (isCorrect ? 0 : MAX_SPELLING_ATTEMPTS),
-      next_review_at: session.mode === "review" ? nextReviewTimestamp(nextReviewCount, isCorrect) : startOfDayTimestamp(1),
+      next_review_at: session.mode === "review" ? schedule.nextReviewAt : startOfDayTimestamp(1),
     },
     session.mode === "review" ? "reviewed" : "updated",
   );
@@ -9146,6 +9251,14 @@ function bindEvents() {
     els.quizPrompt.textContent = "Redo att börja";
     renderStudyStats();
   });
+  els.dailyNewWordTargetSelect?.addEventListener("change", async (event) => {
+    state.dailyNewWordTarget = Number(event.target.value) || 10;
+    persistUserPreferences();
+    state.dailyStudy = ensureDailyStudyPlan(state.studyScope);
+    await persistDailyStudyPlan(state.dailyStudy);
+    renderStudyStats();
+  });
+
   els.checkSpellingBtn.addEventListener("click", checkCurrentSpelling);
   els.spellingInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
