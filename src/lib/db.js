@@ -498,7 +498,10 @@ export async function loadRemoteLibrarySnapshot() {
 // exactly like a word card with no extra branching.
 export async function loadPhraseObjects() {
   const rows = await fetchAll(TABLES.words, (query) =>
-    query.in("object_type", ["phrase", "expression"]).order("swedish", { ascending: true }),
+    query
+      .in("object_type", ["phrase", "expression"])
+      .in("status", ["human_reviewed", "published"])
+      .order("swedish", { ascending: true }),
   );
   if (!rows.length) return [];
   const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch(
@@ -698,6 +701,23 @@ export async function loadWordForms(learningObjectId) {
     .from(TABLES.wordForms)
     .select("form_type, form_value")
     .eq("learning_object_id", id);
+  if (error) throw error;
+  return data || [];
+}
+
+// Extra example sentences beyond the primary learning_objects.example_sv
+// (sort_order 0 is reserved for that primary example conceptually; rows
+// here are the 2nd+ examples, e.g. from the bundled enrichment pass that
+// prioritizes an idiomatic-usage example when the word has one). Lazy
+// per-word fetch, same pattern as loadWordForms.
+export async function loadWordExamples(learningObjectId) {
+  const id = clean(learningObjectId);
+  if (!id) return [];
+  const { data, error } = await supabase
+    .from("learning_object_examples")
+    .select("example_swedish, example_chinese, sort_order")
+    .eq("learning_object_id", id)
+    .order("sort_order", { ascending: true });
   if (error) throw error;
   return data || [];
 }

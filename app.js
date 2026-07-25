@@ -3692,6 +3692,7 @@ function createWordCard(word, mode = "library") {
 
     enhanceGrammarSectionWithStructuredForms(card, word);
     enhanceExtendedLearningSection(card, word);
+    enhanceUsageSectionWithExtraExamples(card, word);
   } else if (mode === "search" || mode === "dictionary") {
     card.classList.add("compact-word-card");
     addCompactDetail(details, "Böjning", summarizeForms(word.forms));
@@ -3845,6 +3846,36 @@ function enhanceGrammarSectionWithStructuredForms(card, word) {
   });
 }
 
+// Appends any 2nd+ example sentences from learning_object_examples below
+// the primary example_sv (SPK-DIC-001 wants >=2 examples; the bundled
+// enrichment pass, 2026-07-25, prioritizes an idiomatic-usage sentence
+// here when the word has one). Most words don't have extra rows yet, so
+// this quietly does nothing until they're generated.
+function enhanceUsageSectionWithExtraExamples(card, word) {
+  if (!word?.id) return;
+  remoteDb.loadWordExamples(word.id).then((examples) => {
+    if (!examples.length || card.dataset.id !== word.id) return;
+    const section = card.querySelector(".example-section");
+    if (!section) return;
+    examples.forEach((example) => {
+      const sv = clean(example.example_swedish);
+      if (!sv) return;
+      const p = document.createElement("p");
+      p.textContent = stripChineseExampleTranslation(sv);
+      section.append(p);
+      const zh = clean(example.example_chinese);
+      if (zh) {
+        const zhP = document.createElement("p");
+        zhP.className = "example-translation";
+        zhP.textContent = zh;
+        section.append(zhP);
+      }
+    });
+  }).catch((error) => {
+    console.warn("[SpråkLab] Failed to load extra examples for", word.id, error);
+  });
+}
+
 // "en"/"ett" shown next to the lemma in the title, per SPK-DIC-001 §3:
 // "Genus 必须与 lemma 一同醒目展示，如 en bok、ett hus".
 function applyGenusToTitle(card, genus) {
@@ -3901,6 +3932,7 @@ function addStudyDetail(list, term, content) {
   if (term === "Kinesisk betydelse") section.classList.add("chinese-meaning-section");
   if (term === "Grammatik") section.classList.add("grammar-section");
   if (term === "Relaterade ord") section.classList.add("related-section");
+  if (term === "Exempel") section.classList.add("example-section");
   const title = document.createElement("h4");
   title.textContent = `${term}：`;
   section.append(title);

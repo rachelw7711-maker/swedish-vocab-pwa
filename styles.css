@@ -4753,6 +4753,17 @@ dialog:not([open]) {
   white-space: pre-line;
 }
 
+.example-section p {
+  margin-top: 6px;
+}
+
+.example-section .example-translation {
+  color: var(--muted);
+  font-family: var(--chinese-font);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
 .grammar-section p {
   max-width: 100%;
   line-height: 1.6;

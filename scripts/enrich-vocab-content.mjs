@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { writeFileSync, existsSync } from "node:fs";
+import { writeFileSync, existsSync, readFileSync } from "node:fs";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
@@ -130,7 +130,7 @@ async function main() {
   words = words.slice(0, LIMIT);
   console.log(`Processing ${words.length} words.`);
 
-  const existing = existsSync(OUTPUT_PATH) ? JSON.parse(require("node:fs").readFileSync(OUTPUT_PATH, "utf8")) : [];
+  const existing = existsSync(OUTPUT_PATH) ? JSON.parse(readFileSync(OUTPUT_PATH, "utf8")) : [];
   const doneIds = new Set(existing.map((e) => e.id));
   const remaining = words.filter((w) => !doneIds.has(w.id));
   console.log(`Already done (from a previous run): ${existing.length}. Remaining: ${remaining.length}.`);
