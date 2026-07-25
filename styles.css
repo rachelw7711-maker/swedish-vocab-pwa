@@ -4833,6 +4833,23 @@ dialog:not([open]) {
   word-break: break-word;
 }
 
+.collocation-promote-button {
+  margin-top: 4px;
+  border: 1px solid rgba(55, 65, 72, 0.12);
+  border-radius: 999px;
+  background: var(--secondary-surface);
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 3px 11px;
+  cursor: pointer;
+}
+
+.collocation-promote-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .related-word-list {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

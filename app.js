@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=127";
+import * as remoteDb from "./src/lib/db.js?v=128";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -201,6 +201,11 @@ const HISTORY_LIMIT_STEP = 120;
 const NEEDS_REVIEW_PLACEHOLDER = "behöver kontrolleras";
 
 const dictionaryWords = [];
+// Fraser & Uttryck catalog (learning_objects with object_type
+// phrase/expression) — loaded lazily on first visit to fraserView, same
+// module-level-cache pattern as dictionaryWords.
+const phraseObjects = [];
+let phraseObjectsLoaded = false;
 const allWordPacks = [...educationWordPacks, ...documentWordPacks];
 const builtInNotebookNames = new Set(allWordPacks.map((pack) => normalizeNotebookName(pack.notebook)));
 const legacyNotebookNames = new Set([
@@ -306,6 +311,7 @@ const state = {
   generatedWord: null,
   activeView: "homeView",
   libraryReturnView: "",
+  fraserTypeFilter: "all",
   selectedNotebook: "",
   historyPos: "all",
   historyAction: "all",
@@ -368,6 +374,7 @@ const state = {
     library: INITIAL_LIST_LIMIT,
     notebook: INITIAL_LIST_LIMIT,
     history: INITIAL_HISTORY_LIMIT,
+    fraser: INITIAL_LIST_LIMIT,
   },
 };
 
@@ -509,6 +516,8 @@ const els = {
   notebookDetailPanel: document.querySelector("#notebookDetailPanel"),
   notebookTitle: document.querySelector("#notebookTitle"),
   notebookList: document.querySelector("#notebookList"),
+  fraserList: document.querySelector("#fraserList"),
+  fraserTypeFilter: document.querySelector("#fraserTypeFilter"),
   backToBooksBtn: document.querySelector("#backToBooksBtn"),
   bookActionMenu: document.querySelector("#bookActionMenu"),
   historyList: document.querySelector("#historyList"),
@@ -2484,8 +2493,37 @@ function renderActiveView() {
     renderShadowing();
     return;
   }
+  if (state.activeView === "fraserView") {
+    renderFraserView();
+    return;
+  }
   renderWords();
   renderDictionary();
+}
+
+async function renderFraserView() {
+  if (!phraseObjectsLoaded) {
+    phraseObjectsLoaded = true;
+    try {
+      const rows = await remoteDb.loadPhraseObjects();
+      phraseObjects.splice(0, phraseObjects.length, ...rows);
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to load Fraser/Uttryck catalog.", error);
+    }
+    if (state.activeView === "fraserView") renderFraserView();
+    return;
+  }
+  const filtered =
+    state.fraserTypeFilter === "all"
+      ? phraseObjects
+      : phraseObjects.filter((item) => item.object_type === state.fraserTypeFilter);
+  renderWordCollection(
+    els.fraserList,
+    filtered,
+    "Inga fraser eller uttryck ännu — de tillkommer när ord kompletteras med Fraser/Uttryck-innehåll.",
+    "dictionary",
+    "fraser",
+  );
 }
 
 function renderStats() {
@@ -3646,7 +3684,7 @@ function createWordCard(word, mode = "library") {
 
     const usageGroup = addLayerGroup(details, "真实使用");
     addStudyDetail(usageGroup, "Exempel", formatExampleForStudy(word.example));
-    addStudyDetail(usageGroup, "Fraser", createStudyCollocationList(word.collocations, word.example));
+    addStudyDetail(usageGroup, "Fraser", createStudyCollocationList(word.collocations, word.example, word));
 
     const extendedGroup = addLayerGroup(details, "扩展学习", { collapsible: true, expanded: false });
     extendedGroup.classList.add("extended-learning-group");
@@ -3876,7 +3914,7 @@ function addStudyDetail(list, term, content) {
   list.append(section);
 }
 
-function createStudyCollocationList(collocations, fallbackExample) {
+function createStudyCollocationList(collocations, fallbackExample, sourceWord) {
   const items = splitCollocations(collocations, fallbackExample);
   if (items.length === 0) return document.createTextNode("Fraser saknas.");
   const list = document.createElement("ol");
@@ -3890,9 +3928,43 @@ function createStudyCollocationList(collocations, fallbackExample) {
     meaning.textContent = item.meaning || "中文释义待补";
     example.textContent = item.example ? stripChineseExampleTranslation(item.example) : "Exempel saknas.";
     li.append(phrase, meaning, example);
+    if (sourceWord?.id) {
+      const promoteBtn = document.createElement("button");
+      promoteBtn.type = "button";
+      promoteBtn.className = "collocation-promote-button";
+      promoteBtn.textContent = "+ Fraser";
+      promoteBtn.dataset.action = "promote-collocation";
+      promoteBtn.dataset.sourceWordId = sourceWord.id;
+      promoteBtn.dataset.phrase = item.phrase;
+      promoteBtn.dataset.meaning = item.meaning || "";
+      promoteBtn.dataset.example = item.example || "";
+      promoteBtn.dataset.cefrLevel = sourceWord.cefr_level || "";
+      li.append(promoteBtn);
+    }
     list.append(li);
   });
   return list;
+}
+
+async function handlePromoteCollocation(button) {
+  const { sourceWordId, phrase, meaning, example, cefrLevel } = button.dataset;
+  button.disabled = true;
+  button.textContent = "…";
+  try {
+    const promoted = await remoteDb.promoteCollocationToPhrase({
+      sourceWordId,
+      phrase,
+      meaning,
+      exampleSv: example,
+      cefrLevel,
+    });
+    phraseObjects.push(promoted);
+    button.textContent = "✓ Tillagd";
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to promote collocation to Fraser.", error);
+    button.disabled = false;
+    button.textContent = "Misslyckades, försök igen";
+  }
 }
 
 function createRelatedWordList(related_words) {
@@ -3998,7 +4070,12 @@ function openWordDetail(word, sourceMode = "library") {
 function getOpenDetailWord() {
   const wordId = els.detailDialog.dataset.wordId;
   if (!wordId) return null;
-  return state.words.find((item) => item.id === wordId) || dictionaryWords.find((item) => item.id === wordId) || null;
+  return (
+    state.words.find((item) => item.id === wordId) ||
+    dictionaryWords.find((item) => item.id === wordId) ||
+    phraseObjects.find((item) => item.id === wordId) ||
+    null
+  );
 }
 
 function closeDetailMoreMenu() {
@@ -8300,7 +8377,7 @@ function activateView(viewId) {
   if (viewId !== "historyView") closeShadowingPlayback();
   state.activeView = viewId;
   document.body.dataset.activeView = state.activeView;
-  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "wordLibraryView", "historyView"].includes(state.activeView);
+  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "wordLibraryView", "historyView", "fraserView"].includes(state.activeView);
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === state.activeView);
   });
@@ -8474,6 +8551,15 @@ function bindEvents() {
     renderFavoriteCategoryFilter();
     renderWords();
     renderDictionary();
+  });
+
+  els.fraserTypeFilter?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-fraser-type]");
+    if (!button) return;
+    state.fraserTypeFilter = button.dataset.fraserType;
+    resetListLimit("fraser");
+    els.fraserTypeFilter.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("active", chip === button));
+    renderFraserView();
   });
 
   els.favoriteCategoryFilter.addEventListener("change", (event) => {
@@ -8933,6 +9019,7 @@ function bindEvents() {
       if (limitKey === "history") renderHistory();
       if (limitKey === "notebook") renderNotebook();
       if (limitKey === "library") renderWords();
+      if (limitKey === "fraser") renderFraserView();
       return;
     }
 
@@ -8945,6 +9032,11 @@ function bindEvents() {
       if (detailAction === "listen") speakSwedish(word.swedish);
       return;
     }
+    const promoteButton = event.target.closest('[data-action="promote-collocation"]');
+    if (promoteButton) {
+      await handlePromoteCollocation(promoteButton);
+      return;
+    }
     if (!card) return;
     const action = event.target.closest("[data-action]")?.dataset.action;
     const word =
@@ -8952,7 +9044,8 @@ function bindEvents() {
       (state.generatedWord && clean(state.generatedWord.swedish).toLowerCase() === clean(card.dataset.swedish).toLowerCase()
         ? state.generatedWord
         : null) ||
-      dictionaryWords.find((item) => clean(item.swedish).toLowerCase() === clean(card.dataset.swedish).toLowerCase());
+      dictionaryWords.find((item) => clean(item.swedish).toLowerCase() === clean(card.dataset.swedish).toLowerCase()) ||
+      phraseObjects.find((item) => item.id === card.dataset.id);
     if (!word) return;
     if (!action && card.classList.contains("word-row")) {
       openWordDetail(word, card.dataset.mode);

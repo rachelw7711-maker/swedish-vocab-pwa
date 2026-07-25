@@ -216,6 +216,14 @@
               <span class="library-book-action" aria-hidden="true">Öppna</span>
             </button>
 
+            <button class="library-book-card library-book-card--fraser" type="button" data-open-book="fraserView" aria-label="Öppna Fraser &amp; Uttryck">
+              <span class="library-book-cover" aria-hidden="true">
+                <img src="/icons/library-covers/ordbok.jpg" alt="" />
+              </span>
+              <span class="library-book-meta"><strong>Fraser &amp; Uttryck</strong><span>Fasta uttryck · Idiom</span></span>
+              <span class="library-book-action" aria-hidden="true">Öppna</span>
+            </button>
+
             <button class="library-book-card library-book-card--reading library-book-card--upcoming" type="button" aria-label="Läsning, snart" disabled>
               <span class="library-book-cover" aria-hidden="true">
                 <img src="/icons/library-covers/reading.jpg" alt="" />
@@ -225,6 +233,26 @@
             </button>
 
           </section>
+        </section>
+
+        <section id="fraserView" class="view">
+          <section class="panel shelf-return-panel">
+            <button class="secondary-button" type="button" data-return-view="libraryView">Till Bibliotek</button>
+          </section>
+          <section class="panel">
+            <div class="toolbar">
+              <div>
+                <p class="section-kicker">Bibliotek</p>
+                <h2>Fraser &amp; Uttryck</h2>
+              </div>
+            </div>
+            <div class="filter-row" id="fraserTypeFilter" role="tablist" aria-label="Filtrera Fraser eller Uttryck">
+              <button type="button" class="chip active" data-fraser-type="all" role="tab" aria-selected="true">Alla</button>
+              <button type="button" class="chip" data-fraser-type="phrase" role="tab" aria-selected="false">Fraser</button>
+              <button type="button" class="chip" data-fraser-type="expression" role="tab" aria-selected="false">Uttryck</button>
+            </div>
+          </section>
+          <section class="word-list" id="fraserList" aria-live="polite"></section>
         </section>
 
         <section id="wordLibraryView" class="view word-library-view">
@@ -1075,6 +1103,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=145" type="module"></script>
+    <script src="/app.js?v=146" type="module"></script>
   </body>
 </html>

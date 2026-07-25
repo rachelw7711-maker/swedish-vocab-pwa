@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
+import { randomUUID } from "node:crypto";
 
 const PORT = Number(process.env.PORT || 4174);
 const ROOT = process.cwd();
@@ -531,6 +532,68 @@ async function generateShadowingTts(req) {
   }
 }
 
+// "Promote" a word-card collocation into a standalone Fraser/Uttryck
+// learning_objects entry. Routed through the server (service role) rather
+// than a direct client insert because the anon key has no write grant on
+// learning_objects (confirmed live: 42501 permission denied) — this is
+// shared public catalog content, not a user-private row, so it can't go
+// through the same client-side path as personal word edits.
+//
+// NOTE for future multi-user launch: no auth/role check here yet since
+// the only caller today is the founder testing locally. Before opening
+// signups, add an admin/curator check here so arbitrary users can't
+// write into the shared catalog (see spraklab_future_readiness memory).
+async function promoteCollocationToPhrase({ sourceWordId, phrase, meaning, exampleSv, cefrLevel }) {
+  if (!supabaseAdmin) {
+    const error = new Error("Supabase service role is not configured on the server.");
+    error.status = 500;
+    throw error;
+  }
+  if (!sourceWordId || !phrase) {
+    const error = new Error("sourceWordId and phrase are required.");
+    error.status = 400;
+    throw error;
+  }
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const row = {
+    id,
+    swedish: String(phrase).trim(),
+    part_of_speech: "other",
+    pos_detail: "",
+    object_type: "phrase",
+    category: "common_collocation",
+    cefr_level: cefrLevel ? String(cefrLevel).trim() : null,
+    ipa: "",
+    chinese: String(meaning || "").trim(),
+    swedish_explanation: "",
+    example_sv: String(exampleSv || "").trim(),
+    forms: "",
+    collocations: "",
+    related_words: "",
+    tags: [],
+    notebook: "Fraser",
+    source: "promoted from word card",
+    status: "human_reviewed",
+    updated_at: now,
+  };
+  const { error: insertError } = await supabaseAdmin.from("learning_objects").insert(row);
+  if (insertError) throw insertError;
+  const { error: translationError } = await supabaseAdmin.from("learning_object_translations").insert({
+    learning_object_id: id,
+    native_language: "zh",
+    meaning: row.chinese,
+    updated_at: now,
+  });
+  if (translationError) throw translationError;
+  await supabaseAdmin
+    .from("learning_object_collocations")
+    .update({ promoted_object_id: id })
+    .eq("learning_object_id", sourceWordId)
+    .eq("phrase_text", row.swedish);
+  return row;
+}
+
 async function readPublicWords() {
   if (!supabaseAdmin) {
     const error = new Error("Supabase service role is not configured on the server.");
@@ -544,6 +607,7 @@ async function readPublicWords() {
     const { data, error } = await supabaseAdmin
       .from("learning_objects")
       .select("*")
+      .eq("object_type", "word")
       .order("swedish", { ascending: true })
       .range(from, to);
     if (error) throw error;
@@ -609,6 +673,13 @@ createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/api/shadowing/tts") {
       const result = await generateShadowingTts(req);
       sendJson(res, 200, result);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/promote-collocation") {
+      const { sourceWordId, phrase, meaning, exampleSv, cefrLevel } = await readBody(req);
+      const entry = await promoteCollocationToPhrase({ sourceWordId, phrase, meaning, exampleSv, cefrLevel });
+      sendJson(res, 200, { entry });
       return;
     }
 

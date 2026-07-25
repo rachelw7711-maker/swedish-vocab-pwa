@@ -328,7 +328,12 @@ async function fetchAll(table, buildQuery = (query) => query) {
   const rows = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const to = from + PAGE_SIZE - 1;
-    const query = buildQuery(supabase.from(table).select("*").range(from, to));
+    // .range() must be applied AFTER buildQuery's filters/order, not before
+    // — chaining .in() + .order() onto a builder that already has .range()
+    // set silently returns 0 rows (confirmed live against this project's
+    // supabase-js version), even though .eq() alone after .range() is fine.
+    // Applying range last avoids the combination entirely.
+    const query = buildQuery(supabase.from(table).select("*")).range(from, to);
     const { data, error } = await query;
     if (error) throw error;
     rows.push(...(data || []));
@@ -432,7 +437,7 @@ export async function loadRemoteLibrarySnapshot() {
   });
   let wordRows = [];
   try {
-    wordRows = await fetchAll(TABLES.words, (query) => query.order("swedish", { ascending: true }));
+    wordRows = await fetchAll(TABLES.words, (query) => query.eq("object_type", "word").order("swedish", { ascending: true }));
     console.log("[Min Ordbok] public.words query result", {
       error: null,
       count: wordRows.length,
@@ -482,6 +487,54 @@ export async function loadRemoteLibrarySnapshot() {
     remoteBookCount: books.length,
     userWordCount: userWordRows.length,
   };
+}
+
+// Fraser/Uttryck browsing: learning_objects rows with object_type
+// "phrase"/"expression" instead of "word" — same table, same shape, just
+// excluded from loadRemoteLibrarySnapshot's main word query (object_type
+// = "word" filter above) so they don't leak into the regular dictionary,
+// search or home-page counts. normalizeWord() already carries object_type
+// and category through unchanged, so createWordCard can render these
+// exactly like a word card with no extra branching.
+export async function loadPhraseObjects() {
+  const rows = await fetchAll(TABLES.words, (query) =>
+    query.in("object_type", ["phrase", "expression"]).order("swedish", { ascending: true }),
+  );
+  if (!rows.length) return [];
+  const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch(
+    (error) => {
+      console.warn("[Min Ordbok] Failed to read translations for phrase objects.", error);
+      return [];
+    },
+  );
+  const translationRowsById = new Map(translationRows.map((row) => [clean(row.learning_object_id), row]));
+  return rows.map((row) => normalizeWord(row, null, translationRowsById.get(clean(row.id))));
+}
+
+// "Promote" one collocation line from a word's Fraser section into its own
+// standalone learning_objects entry (object_type "phrase"), so it can be
+// browsed in the Fraser/Uttryck catalog and studied independently — the
+// promoted_object_id link back to the source word's
+// learning_object_collocations row is what SPK-DIC-001's Fraser/Uttryck
+// design already expects. This is a manual, one-at-a-time curation action
+// (not bulk/automatic — the existing collocations are literal phrases, not
+// all of them are worth a standalone entry).
+//
+// Routed through /api/promote-collocation (service role) rather than a
+// direct client insert: the anon key has no write grant on
+// learning_objects (confirmed live, 42501) — this writes shared public
+// catalog content, not a user-private row, so it can't reuse the
+// personal-word sync path. See server.mjs for the future-launch note
+// about adding an admin/curator check there before opening signups.
+export async function promoteCollocationToPhrase({ sourceWordId, phrase, meaning, exampleSv, cefrLevel }) {
+  const response = await fetch("/api/promote-collocation", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sourceWordId, phrase, meaning, exampleSv, cefrLevel }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || "Failed to promote collocation.");
+  return normalizeWord(payload.entry, null, { meaning: clean(meaning) });
 }
 
 async function cleanupSourceDerivedUserBooks(userId, currentRows = [], sanitizedRows = []) {
