@@ -3117,6 +3117,47 @@ h2 {
   width: 100%;
 }
 
+.home-continue-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.continue-learning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.continue-learning-card {
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  min-height: 140px;
+  padding: 14px;
+  border: 1px solid rgba(55, 65, 72, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 12px 30px rgba(31, 42, 48, 0.055);
+}
+
+.continue-learning-card h3 {
+  color: #303735;
+  font-size: 1rem;
+  font-weight: 720;
+  overflow-wrap: anywhere;
+}
+
+.continue-learning-card button {
+  width: 100%;
+}
+
+@media (max-width: 430px) {
+  .continue-learning-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .study-session-dialog {
   width: min(100% - 18px, 720px);
   height: calc(100dvh - 24px);

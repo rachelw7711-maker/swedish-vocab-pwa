@@ -688,6 +688,13 @@ const els = {
   entryReviewCount: document.querySelector("#entryReviewCount"),
   entryReviewDetail: document.querySelector("#entryReviewDetail"),
   studyWorkloadMessage: document.querySelector("#studyWorkloadMessage"),
+  continueLearningPanel: document.querySelector("#continueLearningPanel"),
+  continueReadingTitle: document.querySelector("#continueReadingTitle"),
+  continueReadingSubtitle: document.querySelector("#continueReadingSubtitle"),
+  continueReadingBtn: document.querySelector("#continueReadingBtn"),
+  continueShadowingTitle: document.querySelector("#continueShadowingTitle"),
+  continueShadowingSubtitle: document.querySelector("#continueShadowingSubtitle"),
+  continueShadowingBtn: document.querySelector("#continueShadowingBtn"),
   dailyNewWordTargetSelect: document.querySelector("#dailyNewWordTargetSelect"),
   studyCompletePanel: document.querySelector("#studyCompletePanel"),
   completeTodayCount: document.querySelector("#completeTodayCount"),
@@ -2823,7 +2830,50 @@ function renderStats() {
   els.dueCount.textContent = words.filter(isDue).length;
 }
 
+// SPK-HOM-001 §6-8: "Fortsätt lära dig" surfaces the user's own reading
+// and Shadowing so they don't have to hunt through Bibliotek — but per
+// §18.2 (no official recommended content exists), this only ever
+// suggests the user's own items, never a fabricated "today's pick".
+let continueLearningLoaded = false;
+async function renderContinueLearningPanel() {
+  if (!continueLearningLoaded) {
+    continueLearningLoaded = true;
+    if (!state.readingItemsLoaded) {
+      state.readingItemsLoaded = true;
+      state.readingItems = await remoteDb.loadReadingItems().catch(() => []);
+    }
+    renderContinueLearningPanel();
+    return;
+  }
+  if (!els.continueLearningPanel) return;
+  els.continueLearningPanel.hidden = false;
+
+  const reading = state.readingItems[0];
+  if (reading) {
+    els.continueReadingTitle.textContent = reading.title || "(Utan titel)";
+    els.continueReadingSubtitle.textContent = reading.analyzed_at ? "Fortsätt där du slutade" : "Ej analyserad än";
+    els.continueReadingBtn.textContent = "Fortsätt läsa";
+  } else {
+    els.continueReadingTitle.textContent = "Ingen läsning ännu";
+    els.continueReadingSubtitle.textContent = "Klistra in en text för att komma igång";
+    els.continueReadingBtn.textContent = "Kom igång";
+  }
+
+  const shadowingItems = getShadowingItems();
+  const shadowing = shadowingItems[0];
+  if (shadowing) {
+    els.continueShadowingTitle.textContent = shadowing.title || shadowing.swedish?.slice(0, 40) || "(Utan titel)";
+    els.continueShadowingSubtitle.textContent = "Fortsätt öva uttal";
+    els.continueShadowingBtn.textContent = "Fortsätt öva";
+  } else {
+    els.continueShadowingTitle.textContent = "Ingen Shadowing ännu";
+    els.continueShadowingSubtitle.textContent = "Läs en text och skicka den till Shadowing";
+    els.continueShadowingBtn.textContent = "Kom igång";
+  }
+}
+
 function renderStudyStats() {
+  renderContinueLearningPanel();
   state.dailyStudy = ensureDailyStudyPlan();
   if (!state.dailyStudy) return;
   const newSession = readDailySession("new", state.dailyStudy);
@@ -8959,6 +9009,16 @@ function bindEvents() {
   els.analyzeReadingBtn?.addEventListener("click", analyzeCurrentReadingItem);
   els.deleteReadingBtn?.addEventListener("click", deleteCurrentReadingItem);
   els.sendReadingToShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
+  els.continueReadingBtn?.addEventListener("click", () => {
+    activateView("readingView");
+    const reading = state.readingItems[0];
+    openReadingEditor(reading || null);
+  });
+  els.continueShadowingBtn?.addEventListener("click", () => {
+    const shadowing = getShadowingItems()[0];
+    if (shadowing) state.selectedShadowingId = shadowing.id;
+    activateView("historyView");
+  });
   els.readingList?.addEventListener("click", (event) => {
     const card = event.target.closest("[data-reading-id]");
     if (!card) return;

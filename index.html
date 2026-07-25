@@ -200,6 +200,30 @@
               </div>
             </div>
           </section>
+
+          <section class="continue-learning-panel home-continue-panel" aria-label="Fortsätt lära dig" id="continueLearningPanel" hidden>
+            <p class="section-kicker">Fortsätt lära dig</p>
+            <div class="continue-learning-grid">
+              <article class="continue-learning-card" id="continueReadingCard">
+                <div class="study-entry-heading">
+                  <p class="section-kicker">LÄSNING</p>
+                  <span class="study-entry-icon" aria-hidden="true">📖</span>
+                </div>
+                <h3 id="continueReadingTitle">Ingen läsning ännu</h3>
+                <p id="continueReadingSubtitle" class="study-entry-detail"></p>
+                <button class="secondary-button" id="continueReadingBtn" type="button">Kom igång</button>
+              </article>
+              <article class="continue-learning-card" id="continueShadowingCard">
+                <div class="study-entry-heading">
+                  <p class="section-kicker">SHADOWING</p>
+                  <span class="study-entry-icon" aria-hidden="true">🎧</span>
+                </div>
+                <h3 id="continueShadowingTitle">Ingen Shadowing ännu</h3>
+                <p id="continueShadowingSubtitle" class="study-entry-detail"></p>
+                <button class="secondary-button" id="continueShadowingBtn" type="button">Kom igång</button>
+              </article>
+            </div>
+          </section>
         </section>
 
         <section id="libraryView" class="view">
@@ -1167,6 +1191,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=149" type="module"></script>
+    <script src="/app.js?v=150" type="module"></script>
   </body>
 </html>
