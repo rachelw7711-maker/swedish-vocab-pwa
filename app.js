@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=129";
+import * as remoteDb from "./src/lib/db.js?v=130";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -312,6 +312,9 @@ const state = {
   activeView: "homeView",
   libraryReturnView: "",
   fraserTypeFilter: "all",
+  readingItems: [],
+  readingItemsLoaded: false,
+  selectedReadingId: "",
   selectedNotebook: "",
   historyPos: "all",
   historyAction: "all",
@@ -519,6 +522,24 @@ const els = {
   notebookList: document.querySelector("#notebookList"),
   fraserList: document.querySelector("#fraserList"),
   fraserTypeFilter: document.querySelector("#fraserTypeFilter"),
+  newReadingBtn: document.querySelector("#newReadingBtn"),
+  readingList: document.querySelector("#readingList"),
+  readingListPanel: document.querySelector("#readingListPanel"),
+  readingEditorPanel: document.querySelector("#readingEditorPanel"),
+  readingItemId: document.querySelector("#readingItemId"),
+  readingTitleInput: document.querySelector("#readingTitleInput"),
+  readingTextInput: document.querySelector("#readingTextInput"),
+  readingAuthNote: document.querySelector("#readingAuthNote"),
+  closeReadingEditorBtn: document.querySelector("#closeReadingEditorBtn"),
+  deleteReadingBtn: document.querySelector("#deleteReadingBtn"),
+  saveReadingBtn: document.querySelector("#saveReadingBtn"),
+  analyzeReadingBtn: document.querySelector("#analyzeReadingBtn"),
+  readingAnalysisPanel: document.querySelector("#readingAnalysisPanel"),
+  readingSummarySv: document.querySelector("#readingSummarySv"),
+  readingSummaryZh: document.querySelector("#readingSummaryZh"),
+  readingKeyWords: document.querySelector("#readingKeyWords"),
+  readingKeyPhrases: document.querySelector("#readingKeyPhrases"),
+  sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
   backToBooksBtn: document.querySelector("#backToBooksBtn"),
   bookActionMenu: document.querySelector("#bookActionMenu"),
   historyList: document.querySelector("#historyList"),
@@ -2534,6 +2555,10 @@ function renderActiveView() {
     renderFraserView();
     return;
   }
+  if (state.activeView === "readingView") {
+    renderReadingView();
+    return;
+  }
   renderWords();
   renderDictionary();
 }
@@ -2561,6 +2586,234 @@ async function renderFraserView() {
     "dictionary",
     "fraser",
   );
+}
+
+// Läsning V1 (paste-text only, no OCR/PDF/photo — see
+// Reviews/下一阶段规划-...md §5). Reading items are user-owned/private
+// (require login, same as Shadowing — reading_items RLS is
+// authenticated-only), so this list is empty for anonymous sessions.
+async function renderReadingView() {
+  if (!state.readingItemsLoaded) {
+    state.readingItemsLoaded = true;
+    try {
+      state.readingItems = await remoteDb.loadReadingItems();
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to load reading items.", error);
+    }
+    if (state.activeView === "readingView") renderReadingView();
+    return;
+  }
+  renderReadingList();
+}
+
+function renderReadingList() {
+  if (!els.readingList) return;
+  els.readingList.replaceChildren();
+  if (state.readingItems.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "Inga texter ännu. Klicka på \"Ny text\" för att klistra in en svensk text.";
+    els.readingList.append(empty);
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  state.readingItems.forEach((item) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "reading-item-card";
+    card.dataset.readingId = item.id;
+    const title = document.createElement("strong");
+    title.textContent = item.title || "(Utan titel)";
+    const snippet = document.createElement("span");
+    snippet.className = "reading-item-snippet";
+    snippet.textContent = clean(item.source_text).slice(0, 80);
+    card.append(title, snippet);
+    if (item.cefr_level) {
+      const badge = document.createElement("span");
+      badge.className = "pos-badge";
+      badge.textContent = item.cefr_level;
+      card.append(badge);
+    }
+    fragment.append(card);
+  });
+  els.readingList.append(fragment);
+}
+
+function openReadingEditor(item = null) {
+  state.selectedReadingId = item?.id || "";
+  els.readingItemId.value = item?.id || "";
+  els.readingTitleInput.value = item?.title || "";
+  els.readingTextInput.value = item?.source_text || "";
+  els.deleteReadingBtn.hidden = !item?.id;
+  els.analyzeReadingBtn.hidden = !item?.id;
+  if (item?.analyzed_at) {
+    renderReadingAnalysis(item);
+  } else {
+    els.readingAnalysisPanel.hidden = true;
+  }
+  els.readingListPanel.hidden = true;
+  els.readingList.hidden = true;
+  els.readingEditorPanel.hidden = false;
+}
+
+function closeReadingEditor() {
+  state.selectedReadingId = "";
+  els.readingListPanel.hidden = false;
+  els.readingList.hidden = false;
+  els.readingEditorPanel.hidden = true;
+}
+
+async function saveCurrentReadingItem() {
+  const title = clean(els.readingTitleInput.value);
+  const sourceText = clean(els.readingTextInput.value);
+  if (!sourceText) return null;
+  const existing = state.readingItems.find((item) => item.id === els.readingItemId.value);
+  const payload = { ...(existing || {}), id: els.readingItemId.value || undefined, title, source_text: sourceText };
+  els.saveReadingBtn.disabled = true;
+  try {
+    const result = await remoteDb.upsertReadingItem(payload);
+    if (!result?.enabled) {
+      els.readingAuthNote.hidden = false;
+      return null;
+    }
+    els.readingAuthNote.hidden = true;
+    const saved = result.item;
+    state.readingItems = [saved, ...state.readingItems.filter((item) => item.id !== saved.id)];
+    els.readingItemId.value = saved.id;
+    els.deleteReadingBtn.hidden = false;
+    els.analyzeReadingBtn.hidden = false;
+    return saved;
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to save reading item.", error);
+    return null;
+  } finally {
+    els.saveReadingBtn.disabled = false;
+  }
+}
+
+async function analyzeCurrentReadingItem() {
+  const saved = await saveCurrentReadingItem();
+  if (!saved) return;
+  els.analyzeReadingBtn.disabled = true;
+  els.analyzeReadingBtn.textContent = "Analyserar…";
+  try {
+    const analysis = await remoteDb.analyzeReadingText(saved.source_text);
+    const updated = {
+      ...saved,
+      summary_sv: analysis.summary_sv,
+      summary_zh: analysis.summary_zh,
+      cefr_level: analysis.cefr_level,
+      key_words: analysis.key_words || [],
+      key_phrases: analysis.key_phrases || [],
+      analyzed_at: Date.now(),
+    };
+    const result = await remoteDb.upsertReadingItem(updated);
+    const finalItem = result?.item || updated;
+    state.readingItems = state.readingItems.map((item) => (item.id === finalItem.id ? finalItem : item));
+    renderReadingAnalysis(finalItem);
+  } catch (error) {
+    console.warn("[SpråkLab] Reading analysis failed.", error);
+    els.readingAnalysisPanel.hidden = true;
+    alert(error.message || "Kunde inte analysera texten just nu.");
+  } finally {
+    els.analyzeReadingBtn.disabled = false;
+    els.analyzeReadingBtn.textContent = "Analysera";
+  }
+}
+
+function renderReadingAnalysis(item) {
+  els.readingAnalysisPanel.hidden = false;
+  els.readingSummarySv.textContent = item.summary_sv || "";
+  els.readingSummaryZh.textContent = item.summary_zh || "";
+  els.readingKeyWords.replaceChildren();
+  (item.key_words || []).forEach((entry) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip reading-keyword-chip";
+    chip.dataset.readingWord = entry.swedish;
+    chip.textContent = `${entry.swedish} · ${entry.chinese}`;
+    els.readingKeyWords.append(chip);
+  });
+  if (!(item.key_words || []).length) {
+    const none = document.createElement("span");
+    none.className = "empty-state";
+    none.textContent = "Inga särskilda ord att lyfta fram i den här texten.";
+    els.readingKeyWords.append(none);
+  }
+  els.readingKeyPhrases.replaceChildren();
+  (item.key_phrases || []).forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "reading-phrase-row";
+    const phrase = document.createElement("strong");
+    phrase.textContent = entry.phrase;
+    const meaning = document.createElement("span");
+    meaning.textContent = entry.meaning_zh;
+    row.append(phrase, meaning);
+    els.readingKeyPhrases.append(row);
+  });
+  if (!(item.key_phrases || []).length) {
+    const none = document.createElement("span");
+    none.className = "empty-state";
+    none.textContent = "Inga fasta uttryck hittades i den här texten.";
+    els.readingKeyPhrases.append(none);
+  }
+}
+
+// Reuses the existing search flow rather than a bespoke lookup: works
+// whether or not the word is already in the corpus (search's own
+// "not found, create it" state already handles the miss case).
+function openWordFromReadingChip(swedish) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+  setter.call(els.searchInput, swedish);
+  els.searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+  runSearchAndOpenDetail();
+}
+
+// Läsning doesn't run its own player — it hands the text to Shadowing
+// (already a mature TTS/recording engine), per the architecture doc's
+// "don't rebuild the player per module" principle.
+async function sendCurrentReadingItemToShadowing() {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  if (!item) return;
+  els.sendReadingToShadowingBtn.disabled = true;
+  try {
+    const result = await remoteDb.upsertShadowingItem({
+      title: item.title || "Läsning",
+      swedish: item.source_text,
+      chinese: item.summary_zh || "",
+      category: "Läsning",
+    });
+    if (!result?.enabled) {
+      els.readingAuthNote.hidden = false;
+      return;
+    }
+    await remoteDb.upsertReadingItem({ ...item, shadowing_item_id: result.item.id });
+    const normalized = shadowingStore.normalizeShadowingItem(result.item);
+    remotePhase4Snapshot = {
+      ...(remotePhase4Snapshot || {}),
+      shadowingItems: mergeShadowingItemsForApp([normalized], remotePhase4Snapshot?.shadowingItems || []),
+    };
+    await refreshShadowingState();
+    state.selectedShadowingId = normalized.id;
+    activateView("historyView");
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to send reading item to Shadowing.", error);
+  } finally {
+    els.sendReadingToShadowingBtn.disabled = false;
+  }
+}
+
+async function deleteCurrentReadingItem() {
+  const id = els.readingItemId.value;
+  if (!id) return;
+  try {
+    await remoteDb.deleteReadingItem(id);
+    state.readingItems = state.readingItems.filter((item) => item.id !== id);
+    closeReadingEditor();
+    renderReadingList();
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to delete reading item.", error);
+  }
 }
 
 function renderStats() {
@@ -8514,7 +8767,7 @@ function activateView(viewId) {
   if (viewId !== "historyView") closeShadowingPlayback();
   state.activeView = viewId;
   document.body.dataset.activeView = state.activeView;
-  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "wordLibraryView", "historyView", "fraserView"].includes(state.activeView);
+  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "wordLibraryView", "historyView", "fraserView", "readingView"].includes(state.activeView);
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === state.activeView);
   });
@@ -8637,6 +8890,7 @@ function bindEvents() {
         state.selectedNotebook = "";
         resetListLimit("notebook");
       }
+      if (viewId === "readingView") closeReadingEditor();
       activateView(viewId);
     });
   });
@@ -8697,6 +8951,24 @@ function bindEvents() {
     resetListLimit("fraser");
     els.fraserTypeFilter.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("active", chip === button));
     renderFraserView();
+  });
+
+  els.newReadingBtn?.addEventListener("click", () => openReadingEditor(null));
+  els.closeReadingEditorBtn?.addEventListener("click", closeReadingEditor);
+  els.saveReadingBtn?.addEventListener("click", saveCurrentReadingItem);
+  els.analyzeReadingBtn?.addEventListener("click", analyzeCurrentReadingItem);
+  els.deleteReadingBtn?.addEventListener("click", deleteCurrentReadingItem);
+  els.sendReadingToShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
+  els.readingList?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-reading-id]");
+    if (!card) return;
+    const item = state.readingItems.find((entry) => entry.id === card.dataset.readingId);
+    if (item) openReadingEditor(item);
+  });
+  els.readingKeyWords?.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-reading-word]");
+    if (!chip) return;
+    openWordFromReadingChip(chip.dataset.readingWord);
   });
 
   els.favoriteCategoryFilter.addEventListener("change", (event) => {

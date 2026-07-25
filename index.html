@@ -235,12 +235,12 @@
               <span class="library-book-action" aria-hidden="true">Öppna</span>
             </button>
 
-            <button class="library-book-card library-book-card--reading library-book-card--upcoming" type="button" aria-label="Läsning, snart" disabled>
+            <button class="library-book-card library-book-card--reading" type="button" data-open-book="readingView" aria-label="Öppna Läsning">
               <span class="library-book-cover" aria-hidden="true">
                 <img src="/icons/library-covers/reading.jpg" alt="" />
-                <span class="library-book-status">Snart</span>
               </span>
-              <span class="library-book-meta"><strong>Läsning</strong><span>Texter · Böcker · Förståelse</span></span>
+              <span class="library-book-meta"><strong>Läsning</strong><span>Texter · Förståelse</span></span>
+              <span class="library-book-action" aria-hidden="true">Öppna</span>
             </button>
 
           </section>
@@ -264,6 +264,59 @@
             </div>
           </section>
           <section class="word-list" id="fraserList" aria-live="polite"></section>
+        </section>
+
+        <section id="readingView" class="view">
+          <section class="panel shelf-return-panel">
+            <button class="secondary-button" type="button" data-return-view="libraryView">Till Bibliotek</button>
+          </section>
+          <section class="panel" id="readingListPanel">
+            <div class="toolbar">
+              <div>
+                <p class="section-kicker">Bibliotek</p>
+                <h2>Läsning</h2>
+              </div>
+              <button class="primary-button" id="newReadingBtn" type="button">Ny text</button>
+            </div>
+          </section>
+          <section class="word-list" id="readingList" aria-live="polite"></section>
+
+          <section class="panel reading-editor" id="readingEditorPanel" hidden>
+            <div class="toolbar">
+              <button class="secondary-button" id="closeReadingEditorBtn" type="button">‹ Tillbaka</button>
+              <button class="secondary-button" id="deleteReadingBtn" type="button" hidden>Ta bort</button>
+            </div>
+            <input type="hidden" id="readingItemId" />
+            <label class="field-label">
+              Titel
+              <input type="text" id="readingTitleInput" placeholder="T.ex. En dag i Stockholm" />
+            </label>
+            <label class="field-label">
+              Text
+              <textarea id="readingTextInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
+            </label>
+            <p class="reading-auth-note" id="readingAuthNote" hidden>Logga in för att spara dina texter.</p>
+            <div class="practice-actions">
+              <button class="primary-button" id="saveReadingBtn" type="button">Spara</button>
+              <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
+            </div>
+            <section id="readingAnalysisPanel" hidden>
+              <div class="reading-summary-block">
+                <h4>Sammanfattning</h4>
+                <p id="readingSummarySv"></p>
+                <p id="readingSummaryZh" class="example-translation"></p>
+              </div>
+              <div class="reading-keywords-block">
+                <h4>Ord värda att lära sig</h4>
+                <div id="readingKeyWords" class="reading-chip-list"></div>
+              </div>
+              <div class="reading-phrases-block">
+                <h4>Fasta uttryck i texten</h4>
+                <div id="readingKeyPhrases" class="reading-phrase-list"></div>
+              </div>
+              <button class="primary-button" id="sendReadingToShadowingBtn" type="button">Skicka till Shadowing</button>
+            </section>
+          </section>
         </section>
 
         <section id="wordLibraryView" class="view word-library-view">
@@ -1114,6 +1167,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=148" type="module"></script>
+    <script src="/app.js?v=149" type="module"></script>
   </body>
 </html>

@@ -80,6 +80,92 @@ const wordSchema = {
   required: ["swedish", "pos", "pos_detail", "chinese", "english", "forms", "example", "collocations", "related_words", "tags"],
 };
 
+// Läsning V1 analysis output — Swedish+Chinese summary, key words (only
+// ones genuinely worth learning at the reader's level, not every unknown
+// word — SPK-HOM-001 §3.7's "Must Understand / Worth Learning / Context
+// Only" filtering, collapsed to a single "worth flagging" list for V1),
+// and fixed phrases/collocations found in the text (feeds the Fraser
+// promote workflow the same way a word card's collocations do).
+const readingAnalysisSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    summary_sv: { type: "string" },
+    summary_zh: { type: "string" },
+    cefr_level: { type: "string", enum: ["A1", "A2", "B1", "B2", "C1", "C2"] },
+    key_words: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          swedish: { type: "string" },
+          chinese: { type: "string" },
+        },
+        required: ["swedish", "chinese"],
+      },
+    },
+    key_phrases: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          phrase: { type: "string" },
+          meaning_zh: { type: "string" },
+        },
+        required: ["phrase", "meaning_zh"],
+      },
+    },
+  },
+  required: ["summary_sv", "summary_zh", "cefr_level", "key_words", "key_phrases"],
+};
+
+async function analyzeReadingText(text) {
+  if (!OPENAI_API_KEY) {
+    const error = new Error("OPENAI_API_KEY saknas på servern.");
+    error.status = 500;
+    throw error;
+  }
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${OPENAI_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      reasoning: { effort: "low" },
+      text: {
+        format: {
+          type: "json_schema",
+          name: "reading_analysis",
+          strict: true,
+          schema: readingAnalysisSchema,
+        },
+      },
+      input: [
+        {
+          role: "system",
+          content:
+            "You are a Swedish teacher for Chinese-speaking learners, analyzing a text the learner pasted in to read. Return: a short Swedish-language summary (2-4 sentences, simple enough to train summarization skill at the text's own level), a Chinese summary of the same length for quick comprehension, the CEFR level the text is written at, a short list of key words genuinely worth adding to a learner's vocabulary from this text (skip words that are only understandable in this exact context and not reusable, skip words a learner at this level almost certainly already knows — quality over quantity, an empty list is fine for a very simple text), and any fixed phrases/collocations/idiomatic expressions that actually appear in the text (not invented) worth learning as a unit. All Chinese output must be Simplified Chinese.",
+        },
+        {
+          role: "user",
+          content: `Analyze this Swedish text:\n\n${text}`,
+        },
+      ],
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.error?.message || "OpenAI API request failed.");
+    error.status = response.status;
+    throw error;
+  }
+  return JSON.parse(extractOutputText(data));
+}
+
 function firstDefined(...values) {
   return values.find((value) => value !== undefined && value !== null);
 }
@@ -667,6 +753,27 @@ createServer(async (req, res) => {
       }
       const entry = await generateWord(word.trim(), source);
       sendJson(res, 200, { entry });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/reading/analyze") {
+      // Gated to logged-in users — this calls a paid AI API, and
+      // reading_items themselves already require auth (RLS), so an
+      // anonymous caller could never save the result anyway. Unlike
+      // /api/generate-word (pre-existing, ungated), don't repeat that gap
+      // here now that it's been noticed — see spraklab_future_readiness memory.
+      await readAuthenticatedUser(req);
+      const { text } = await readBody(req);
+      if (!text || typeof text !== "string" || !text.trim()) {
+        sendJson(res, 400, { error: "Klistra in en text att analysera." });
+        return;
+      }
+      if (text.length > 20000) {
+        sendJson(res, 400, { error: "Texten är för lång (max 20 000 tecken)." });
+        return;
+      }
+      const analysis = await analyzeReadingText(text.trim());
+      sendJson(res, 200, { analysis });
       return;
     }
 

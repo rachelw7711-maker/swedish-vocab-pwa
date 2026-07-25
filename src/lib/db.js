@@ -20,6 +20,7 @@ const TABLES = {
   studyHistory: "study_history",
   shadowingItems: "shadowing_items",
   shadowingRecordings: "shadowing_recordings",
+  readingItems: "reading_items",
   userPreferences: "user_preferences",
   effectiveStudyTime: "effective_study_time",
 };
@@ -1562,6 +1563,102 @@ function fromShadowingItemRow(row) {
     created_at: createdAt,
     updated_at: updatedAt,
   };
+}
+
+// Läsning V1 — see supabase/migrations/20260725140000_reading_items_v1.sql.
+// Same authenticated-only, user-owned pattern as shadowing_items (personal
+// content, not the shared learning_objects catalog).
+function toReadingItemRow(userId, item = {}) {
+  return {
+    id: item.id || undefined,
+    user_id: userId,
+    title: clean(item.title),
+    source_text: clean(item.source_text || item.sourceText),
+    cefr_level: clean(item.cefr_level || item.cefrLevel) || null,
+    summary_sv: clean(item.summary_sv),
+    summary_zh: clean(item.summary_zh),
+    key_words: Array.isArray(item.key_words) ? item.key_words : [],
+    key_phrases: Array.isArray(item.key_phrases) ? item.key_phrases : [],
+    analyzed_at: item.analyzed_at ? millisToIso(item.analyzed_at) : item.analyzed_at === null ? null : undefined,
+    shadowing_item_id: item.shadowing_item_id || null,
+    created_at: millisToIso(item.createdAt || item.created_at) || undefined,
+    updated_at: new Date().toISOString(),
+    deleted_at: item.deleted_at ? millisToIso(item.deleted_at) : null,
+  };
+}
+
+function fromReadingItemRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    source_text: row.source_text,
+    cefr_level: row.cefr_level,
+    summary_sv: row.summary_sv,
+    summary_zh: row.summary_zh,
+    key_words: row.key_words || [],
+    key_phrases: row.key_phrases || [],
+    analyzed_at: dateToMillis(row.analyzed_at),
+    shadowing_item_id: row.shadowing_item_id,
+    createdAt: dateToMillis(row.created_at),
+    updatedAt: dateToMillis(row.updated_at),
+  };
+}
+
+export async function loadReadingItems() {
+  const user = await readCurrentUser();
+  if (!user?.id) return [];
+  const rows = await fetchAll(TABLES.readingItems, (query) =>
+    query.eq("user_id", user.id).is("deleted_at", null).order("updated_at", { ascending: false }),
+  );
+  return rows.map(fromReadingItemRow);
+}
+
+async function writeReadingItem(userId, item = {}) {
+  const row = toReadingItemRow(userId, item);
+  const { data, error } = await supabase.from(TABLES.readingItems).upsert(row, { onConflict: "id" }).select().single();
+  if (error) throw error;
+  return { enabled: true, item: fromReadingItemRow(data) };
+}
+
+export async function upsertReadingItem(item = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false };
+  return runQueuedMutation("reading_item", { item }, {
+    userId: user.id,
+    handler: ({ item: queuedItem }) => writeReadingItem(user.id, queuedItem),
+  });
+}
+
+export async function deleteReadingItem(itemId) {
+  const user = await readCurrentUser();
+  const id = clean(itemId);
+  if (!user?.id || !id) return { enabled: false };
+  const { error } = await supabase
+    .from(TABLES.readingItems)
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("user_id", user.id)
+    .eq("id", id);
+  if (error) throw error;
+  return { enabled: true };
+}
+
+// The only step that goes through the server: OpenAI must never be called
+// with a key exposed to the browser. Everything else (create/read/update/
+// delete of the reading_items row itself) goes straight through Supabase
+// like the functions above, gated by RLS.
+export async function analyzeReadingText(text) {
+  const token = await getAccessToken().catch(() => "");
+  const response = await fetch("/api/reading/analyze", {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ text }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Kunde inte analysera texten.");
+  return payload.analysis;
 }
 
 function fromShadowingRecordingRow(row) {
