@@ -4160,6 +4160,7 @@ function createWordCard(word, mode = "library") {
     // collapsed since it's optional depth, not required to understand the word.
     const coreGroup = addLayerGroup(details, "核心信息");
     addStudyDetail(coreGroup, "Ordklass", formatPosForStudy(word));
+    if (clean(word.cefr_level)) addStudyDetail(coreGroup, "CEFR-nivå", clean(word.cefr_level));
     addStudyDetail(coreGroup, "Kinesisk betydelse", clean(word.chinese) || "Kinesisk betydelse saknas.");
     addStudyDetail(coreGroup, "Svensk förklaring", clean(word.english) || "Svensk förklaring saknas.");
 
