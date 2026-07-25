@@ -2,17 +2,20 @@ import "dotenv/config";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import OpenAI from "openai";
 
-// Generates full dictionary-entry content for the A1-level candidates in
+// Generates full dictionary-entry content for one CEFR level's candidates in
 // Reviews/词库扩充候选清单.json (produced by build-vocab-expansion-candidates.mjs),
 // via OpenAI, in the exact input shape scripts/upsert-learning-objects.mjs
-// expects. Writes incrementally to an output JSON file as each word
+// expects. Writes incrementally to a per-level output JSON file as each word
 // completes, so a crash/interrupt partway through doesn't lose finished
-// work — rerunning skips words already present in the output file.
+// work — rerunning the same --cefr skips words already present in that
+// level's output file. Originally A1-only (scripts/generate-a1-vocab-content.mjs,
+// 493 words, $3.90, 2026-07-26); generalized the same day to run the
+// remaining A2/B1/B2/C1/C2 levels in batches.
 //
 // Usage:
-//   node scripts/generate-a1-vocab-content.mjs --limit 5      # pilot
-//   node scripts/generate-a1-vocab-content.mjs                # full run (493 words)
-//   node scripts/generate-a1-vocab-content.mjs --concurrency 8
+//   node scripts/generate-vocab-content.mjs --cefr A2 --limit 5   # pilot
+//   node scripts/generate-vocab-content.mjs --cefr A2             # full level
+//   node scripts/generate-vocab-content.mjs --cefr B1 --concurrency 8
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY in .env.");
@@ -25,10 +28,14 @@ function flagValue(name, fallback) {
 }
 const LIMIT = Number(flagValue("limit", "0")) || Infinity;
 const CONCURRENCY = Number(flagValue("concurrency", "5"));
+const CEFR = flagValue("cefr", "A1").toUpperCase();
+if (!["A1", "A2", "B1", "B2", "C1", "C2"].includes(CEFR)) {
+  throw new Error(`Invalid --cefr "${CEFR}". Must be one of A1/A2/B1/B2/C1/C2.`);
+}
 
 const CANDIDATES_PATH = new URL("../Reviews/词库扩充候选清单.json", import.meta.url);
 const OUTPUT_DIR = new URL("../Reviews/", import.meta.url);
-const OUTPUT_PATH = new URL("../Reviews/A1生成结果.json", import.meta.url);
+const OUTPUT_PATH = new URL(`../Reviews/${CEFR}生成结果.json`, import.meta.url);
 
 const client = new OpenAI({ apiKey: OPENAI_API_KEY });
 
@@ -87,8 +94,9 @@ function buildUserPrompt(word) {
   const formTypes = FORM_TYPES_BY_POS[pos] || [];
   return `瑞典语单词：${word.lemma}
 词性（已确定，请直接使用）：${pos}${pos_detail ? `，pos_detail: ${pos_detail}` : ""}
-CEFR 等级：A1
+CEFR 等级：${CEFR}
 ${formTypes.length ? `这个词性需要填写的 word_forms 字段（form_type 只能从这个列表里选，不要发明新的）：${formTypes.join(", ")}` : "这个词性不需要 word_forms（不发生规则性词形变化，比如介词/连词/感叹词/数词）。"}
+例句和释义的难度请控制在 ${CEFR} 等级，不要明显超纲。
 
 请生成这个词的完整词典条目。`;
 }
@@ -155,7 +163,7 @@ function toEntry(word, generated) {
     swedish: word.lemma,
     pos,
     pos_detail,
-    cefr_level: "A1",
+    cefr_level: CEFR,
     meaning_zh: generated.meaning_zh,
     swedish_explanation: generated.swedish_explanation,
     example_sv: generated.example_sv,
@@ -166,7 +174,7 @@ function toEntry(word, generated) {
     collocations_text: collocationsText,
     related_words_text: relatedWordsText,
     forms: generated.forms,
-    tags: ["Kelly A1", word.wordClass],
+    tags: [`Kelly ${CEFR}`, word.wordClass],
     source: `Kelly / gpt-5.4 generated ${new Date().toISOString().slice(0, 10)}`,
     status: "ai_generated",
     notebook: "词库扩充候选",
@@ -191,13 +199,13 @@ async function generateOne(word) {
 
 // --- main ---
 const candidates = JSON.parse(readFileSync(CANDIDATES_PATH, "utf8"));
-const a1Words = candidates.newCandidates.filter((w) => w.cefr === "A1").slice(0, LIMIT);
-console.log(`Loaded ${a1Words.length} A1 candidates (limit=${LIMIT === Infinity ? "none" : LIMIT}).`);
+const levelWords = candidates.newCandidates.filter((w) => w.cefr === CEFR).slice(0, LIMIT);
+console.log(`Loaded ${levelWords.length} ${CEFR} candidates (limit=${LIMIT === Infinity ? "none" : LIMIT}).`);
 
 if (!existsSync(OUTPUT_DIR)) mkdirSync(OUTPUT_DIR, { recursive: true });
 let results = existsSync(OUTPUT_PATH) ? JSON.parse(readFileSync(OUTPUT_PATH, "utf8")) : [];
 const doneSwedish = new Set(results.map((r) => r.swedish));
-const remaining = a1Words.filter((w) => !doneSwedish.has(w.lemma));
+const remaining = levelWords.filter((w) => !doneSwedish.has(w.lemma));
 console.log(`Already done (from a previous run): ${results.length}. Remaining: ${remaining.length}.`);
 
 let totalInputTokens = 0;
@@ -216,7 +224,7 @@ async function worker(queue) {
       results.push(entry);
       totalInputTokens += usage.prompt_tokens || 0;
       totalOutputTokens += usage.completion_tokens || 0;
-      console.log(`OK  ${word.lemma} (${results.length}/${a1Words.length})`);
+      console.log(`OK  ${word.lemma} (${results.length}/${levelWords.length})`);
       if (results.length % 10 === 0) saveProgress();
     } catch (error) {
       failedCount += 1;
