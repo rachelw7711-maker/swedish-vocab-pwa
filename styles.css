@@ -323,11 +323,11 @@ body[data-active-view="profileView"] .topbar-auth-button {
   display: none;
 }
 
-body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="true"],
-body[data-active-view="libraryView"] .topbar-auth-button[data-signed-in="true"],
-body[data-active-view="notebookView"] .topbar-auth-button[data-signed-in="true"],
-body[data-active-view="wordLibraryView"] .topbar-auth-button[data-signed-in="true"],
-body[data-active-view="historyView"] .topbar-auth-button[data-signed-in="true"] {
+/* The round avatar duplicates the bigger one already shown on the Profil
+   page itself (#profileAvatar) — hidden everywhere when signed in rather
+   than listing views one by one (that list had already missed two views
+   before this rule existed, letting the button leak through unexpectedly). */
+.topbar-auth-button[data-signed-in="true"] {
   display: none;
 }
 

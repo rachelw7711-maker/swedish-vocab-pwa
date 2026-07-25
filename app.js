@@ -4119,7 +4119,12 @@ function createWordCard(word, mode = "library") {
   card.querySelector(".star-button").classList.toggle("active", word.favorite);
   card.querySelector("h3").classList.add("word-title");
   card.querySelector("h3").textContent = word.swedish;
-  card.querySelector(".pos-badge").textContent = posBadgeLabel(word.pos);
+  // Fraser/Uttryck entries keep a legacy part_of_speech value (often
+  // "phrase") unrelated to the Fraser-vs-Uttryck distinction shown in that
+  // catalog's own filter tabs — badge by object_type there instead so the
+  // badge doesn't say "Fras" on something filed under Uttryck.
+  card.querySelector(".pos-badge").textContent =
+    word.object_type === "phrase" ? "Fras" : word.object_type === "expression" ? "Uttryck" : posBadgeLabel(word.pos);
   card.querySelector(".meaning").textContent = word.chinese;
   card.querySelector(".english").textContent = word.english || "Svensk förklaring saknas";
 
