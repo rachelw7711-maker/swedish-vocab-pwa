@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=151" />
+    <link rel="stylesheet" href="/styles.css?v=153" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -332,6 +332,15 @@
             <input class="visually-hidden" id="readingPhotoFileInput" type="file" accept="image/*" capture="environment" />
             <p class="reading-auth-note" id="readingAuthNote" hidden>Logga in för att spara dina texter.</p>
             <p class="reading-word-count-note" id="readingWordCountNote" hidden></p>
+            <div class="reading-translate-row">
+              <button class="secondary-button" id="translateSelectionBtn" type="button">Översätt markering</button>
+              <button class="reading-translate-full-link" id="translateFullBtn" type="button">Översätt hela texten</button>
+            </div>
+            <section class="reading-translation-result" id="readingTranslationResult" hidden>
+              <h4>Översättning</h4>
+              <p id="readingTranslationText"></p>
+              <button class="icon-button" id="closeTranslationBtn" type="button" aria-label="Stäng">×</button>
+            </section>
             <div class="practice-actions">
               <button class="primary-button" id="saveReadingBtn" type="button">Spara</button>
               <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
@@ -533,6 +542,15 @@
                     <article><strong id="profileReadingCount">0</strong><span>Texter lästa</span></article>
                     <article><strong id="profileShadowingCount">0</strong><span>Shadowing-pass</span></article>
                   </div>
+                </section>
+                <section class="profile-detail-card">
+                  <span>AI-användning</span>
+                  <div class="profile-overview-grid">
+                    <article><strong id="profileAiCreditsToday">0</strong><span id="profileAiCreditsTodayLabel">poäng idag</span></article>
+                    <article><strong id="profileAiCreditsMonth">0</strong><span id="profileAiCreditsMonthLabel">poäng denna månad</span></article>
+                  </div>
+                  <small id="profileAiCostHint"></small>
+                  <div id="profileAiFeatureBreakdown" class="profile-ai-feature-breakdown"></div>
                 </section>
               </section>
 
@@ -1211,6 +1229,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=157" type="module"></script>
+    <script src="/app.js?v=159" type="module"></script>
   </body>
 </html>

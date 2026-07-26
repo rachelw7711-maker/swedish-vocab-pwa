@@ -508,6 +508,10 @@ const els = {
   profileRatingHint: document.querySelector("#profileRatingHint"),
   profileReadingCount: document.querySelector("#profileReadingCount"),
   profileShadowingCount: document.querySelector("#profileShadowingCount"),
+  profileAiCreditsToday: document.querySelector("#profileAiCreditsToday"),
+  profileAiCreditsMonth: document.querySelector("#profileAiCreditsMonth"),
+  profileAiCostHint: document.querySelector("#profileAiCostHint"),
+  profileAiFeatureBreakdown: document.querySelector("#profileAiFeatureBreakdown"),
   profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
   profileStartCard: document.querySelector("#profileStartCard"),
   profileGuestButton: document.querySelector("#profileGuestButton"),
@@ -550,6 +554,11 @@ const els = {
   importReadingPhotoBtn: document.querySelector("#importReadingPhotoBtn"),
   readingPhotoFileInput: document.querySelector("#readingPhotoFileInput"),
   readingPhotoStatus: document.querySelector("#readingPhotoStatus"),
+  translateSelectionBtn: document.querySelector("#translateSelectionBtn"),
+  translateFullBtn: document.querySelector("#translateFullBtn"),
+  readingTranslationResult: document.querySelector("#readingTranslationResult"),
+  readingTranslationText: document.querySelector("#readingTranslationText"),
+  closeTranslationBtn: document.querySelector("#closeTranslationBtn"),
   readingWordPreview: document.querySelector("#readingWordPreview"),
   generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
   sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
@@ -2721,6 +2730,57 @@ async function handleReadingPhotoImport(event) {
   }
 }
 
+// 规范§11/§20 — sentence/selection translation is the cheap primary entry
+// point; full-text stays visually secondary and is gated by length exactly
+// like analysis is.
+const FULL_TEXT_TRANSLATE_WARN_WORDS = 500;
+const FULL_TEXT_TRANSLATE_MAX_WORDS = 2000;
+
+async function runReadingTranslation(text, scopeType, textResourceId) {
+  const btn = scopeType === "full" ? els.translateFullBtn : els.translateSelectionBtn;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Översätter…";
+  try {
+    const { translatedText } = await remoteDb.translateReadingText(text, { scopeType, textResourceId });
+    els.readingTranslationText.textContent = translatedText;
+    els.readingTranslationResult.hidden = false;
+  } catch (error) {
+    console.warn("[SpråkLab] Translation failed.", error);
+    alert(error.message || "Kunde inte översätta texten just nu.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+function translateReadingSelection() {
+  const textarea = els.readingTextInput;
+  const selection = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd).trim();
+  if (!selection) {
+    alert("Markera den text du vill översätta i textrutan ovan.");
+    return;
+  }
+  const saved = state.readingItems.find((item) => item.id === els.readingItemId.value);
+  runReadingTranslation(selection, "selection", saved?.text_resource_id || null);
+}
+
+function translateReadingFullText() {
+  const fullText = clean(els.readingTextInput.value);
+  if (!fullText) return;
+  const wordCount = readingWordCount(fullText);
+  if (wordCount > FULL_TEXT_TRANSLATE_MAX_WORDS) {
+    alert(`Texten är för lång (${wordCount} ord) för att översätta i sin helhet. Markera ett kortare stycke istället.`);
+    return;
+  }
+  if (wordCount > FULL_TEXT_TRANSLATE_WARN_WORDS) {
+    const proceed = confirm(`Hela texten är ${wordCount} ord — det kostar mer än att översätta ett markerat stycke. Fortsätta ändå?`);
+    if (!proceed) return;
+  }
+  const saved = state.readingItems.find((item) => item.id === els.readingItemId.value);
+  runReadingTranslation(fullText, "full", saved?.text_resource_id || null);
+}
+
 function updateReadingSteps(stage) {
   const steps = document.querySelectorAll(".reading-editor-steps li");
   const order = ["paste", "saved", "analyzed"];
@@ -2741,6 +2801,8 @@ function openReadingEditor(item = null) {
   els.analyzeReadingBtn.hidden = !item?.id;
   updateReadingWordCountNote();
   els.readingAnalysisPanel.hidden = true;
+  if (els.readingTranslationResult) els.readingTranslationResult.hidden = true;
+  if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
   updateReadingSteps(item?.id ? "saved" : "paste");
   els.readingListPanel.hidden = true;
   els.readingList.hidden = true;
@@ -3284,6 +3346,55 @@ function renderProfileStudiesBreakdown() {
 
   if (els.profileReadingCount) els.profileReadingCount.textContent = state.readingItems.length;
   if (els.profileShadowingCount) els.profileShadowingCount.textContent = getShadowingItems().length;
+  renderProfileAiUsage();
+}
+
+const AI_FEATURE_LABELS = {
+  analysis: "Textanalys",
+  summary: "Sammanfattning",
+  ocr: "Foto-import",
+  translate_sentence: "Översättning (mening)",
+  translate_paragraph: "Översättning (stycke)",
+  translate_full: "Översättning (hela texten)",
+  missing_word_batch: "Nya ord (bakgrund)",
+  key_expressions: "Uttryck (bakgrund)",
+};
+
+// 规范§14/§21 — shows real usage/cost, not a hard limit (limits aren't
+// enforced yet, single-user stage). Computed on demand when the subpage
+// opens, same pattern as renderProfileStudiesBreakdown above.
+async function renderProfileAiUsage() {
+  try {
+    const summary = await remoteDb.loadAiUsageSummary();
+    if (!summary) return;
+    if (els.profileAiCreditsToday) els.profileAiCreditsToday.textContent = summary.creditsToday;
+    if (els.profileAiCreditsMonth) els.profileAiCreditsMonth.textContent = summary.creditsMonth;
+    if (els.profileAiCostHint) {
+      els.profileAiCostHint.textContent = `Cachträff: ${summary.cacheHitRate}% · Verklig kostnad denna månad: $${summary.costMonth.toFixed(3)}`;
+    }
+    if (els.profileAiFeatureBreakdown) {
+      els.profileAiFeatureBreakdown.replaceChildren();
+      const entries = Object.entries(summary.byFeature).sort((a, b) => b[1].credits - a[1].credits);
+      if (!entries.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent = "Ingen AI-användning denna månad ännu.";
+        els.profileAiFeatureBreakdown.append(empty);
+      }
+      entries.forEach(([feature, stats]) => {
+        const row = document.createElement("div");
+        row.className = "profile-ai-feature-row";
+        const label = document.createElement("span");
+        label.textContent = AI_FEATURE_LABELS[feature] || feature;
+        const value = document.createElement("span");
+        value.textContent = `${stats.credits}p · ${stats.count}x`;
+        row.append(label, value);
+        els.profileAiFeatureBreakdown.append(row);
+      });
+    }
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load AI usage summary.", error);
+  }
 }
 
 function getAuthDisplayEmail(user) {
@@ -9434,6 +9545,11 @@ function bindEvents() {
   els.readingTextInput?.addEventListener("input", updateReadingWordCountNote);
   els.importReadingPhotoBtn?.addEventListener("click", () => els.readingPhotoFileInput?.click());
   els.readingPhotoFileInput?.addEventListener("change", handleReadingPhotoImport);
+  els.translateSelectionBtn?.addEventListener("click", translateReadingSelection);
+  els.translateFullBtn?.addEventListener("click", translateReadingFullText);
+  els.closeTranslationBtn?.addEventListener("click", () => {
+    els.readingTranslationResult.hidden = true;
+  });
 
   els.favoriteCategoryFilter.addEventListener("change", (event) => {
     state.favoriteCategory = event.target.value;

@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import { analyzeReadingResource, generateReadingSummary, extractTextFromImage } from "./server-reading.mjs";
+import { analyzeReadingResource, generateReadingSummary, extractTextFromImage, calculateCredits, translateReadingText } from "./server-reading.mjs";
 import { generateWord, promoteCollocationToPhrase, readPublicWords } from "./server-words.mjs";
 
 const PORT = Number(process.env.PORT || 4174);
@@ -549,11 +549,29 @@ createServer(async (req, res) => {
         model: MODEL,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
-        credits_used: 0,
+        credits_used: calculateCredits("ocr"),
         actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
         cache_hit: false,
       });
       sendJson(res, 200, { text });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/reading/translate") {
+      const user = await readAuthenticatedUser(req);
+      const { text, scopeType, textResourceId } = await readBody(req);
+      if (!text || typeof text !== "string" || !text.trim()) {
+        sendJson(res, 400, { error: "Ingen text att översätta." });
+        return;
+      }
+      const result = await translateReadingText({
+        supabaseAdmin,
+        userId: user.id,
+        textResourceId: textResourceId || null,
+        text,
+        scopeType: scopeType === "full" ? "full" : "selection",
+      });
+      sendJson(res, 200, result);
       return;
     }
 

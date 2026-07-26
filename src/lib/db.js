@@ -1725,6 +1725,64 @@ export async function extractTextFromImage(imageDataUrl) {
   return { text: payload.text || "", warning: payload.warning || "" };
 }
 
+// 规范§11 — sentence/selection translation is the cheap primary entry
+// point; scopeType "full" is the higher-cost, gated option.
+export async function translateReadingText(text, { scopeType = "selection", textResourceId = null } = {}) {
+  const token = await getAccessToken().catch(() => "");
+  const response = await fetch("/api/reading/translate", {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ text, scopeType, textResourceId }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Kunde inte översätta texten.");
+  return { translatedText: payload.translated_text || "", cached: Boolean(payload.cached) };
+}
+
+// 规范§21 — cost/usage transparency. Reads the user's own ai_usage_logs
+// rows directly (RLS: auth.uid() = user_id, granted at the same migration
+// that created the table) — no server endpoint needed for a read-only
+// aggregate the user's already allowed to see.
+export async function loadAiUsageSummary() {
+  const user = await readCurrentUser();
+  if (!user?.id) return null;
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+
+  const { data, error } = await supabase
+    .from("ai_usage_logs")
+    .select("feature, credits_used, actual_cost, cache_hit, created_at")
+    .eq("user_id", user.id)
+    .gte("created_at", monthStart.toISOString());
+  if (error) throw error;
+
+  const rows = data || [];
+  const todayRows = rows.filter((row) => new Date(row.created_at) >= dayStart);
+  const byFeature = {};
+  rows.forEach((row) => {
+    const key = row.feature;
+    if (!byFeature[key]) byFeature[key] = { credits: 0, cost: 0, count: 0 };
+    byFeature[key].credits += row.credits_used || 0;
+    byFeature[key].cost += row.actual_cost || 0;
+    byFeature[key].count += 1;
+  });
+  const cacheHits = rows.filter((row) => row.cache_hit).length;
+
+  return {
+    creditsToday: todayRows.reduce((sum, row) => sum + (row.credits_used || 0), 0),
+    creditsMonth: rows.reduce((sum, row) => sum + (row.credits_used || 0), 0),
+    costMonth: rows.reduce((sum, row) => sum + (row.actual_cost || 0), 0),
+    cacheHitRate: rows.length ? Math.round((cacheHits / rows.length) * 100) : 0,
+    byFeature,
+  };
+}
+
 export async function loadTextAnalysis(textResourceId) {
   const id = clean(textResourceId);
   if (!id) return null;

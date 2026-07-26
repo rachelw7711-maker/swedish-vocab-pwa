@@ -1822,6 +1822,19 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   font-size: 0.76rem;
 }
 
+.profile-ai-feature-breakdown {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.profile-ai-feature-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .profile-detail-card > strong {
   color: var(--ink);
   font-size: 0.96rem;
@@ -4187,6 +4200,49 @@ h2 {
 .reading-import-photo-status {
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+.reading-translate-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* 规范§20: full-text translation is the high-consumption option, kept
+   visually secondary to selection translation. */
+.reading-translate-full-link {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.84rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.reading-translation-result {
+  position: relative;
+  padding: 10px 34px 10px 14px;
+  border-radius: 12px;
+  background: var(--secondary-surface);
+}
+
+.reading-translation-result h4 {
+  margin: 0 0 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.reading-translation-result p {
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.reading-translation-result .icon-button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
 }
 
 .reading-word-preview {

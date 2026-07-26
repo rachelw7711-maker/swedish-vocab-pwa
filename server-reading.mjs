@@ -20,6 +20,32 @@ const MAX_KEY_VOCABULARY = 15;
 const MAX_KEY_EXPRESSIONS = 6;
 const MAX_BATCH_GENERATE = 15;
 
+// 规范§14.3 point table. Credits are a user-facing abstraction over real
+// token cost (规范§14: "平台对用户展示 AI Learning Credits，不直接展示
+// Token") — recorded on every call regardless of whether limits are
+// enforced (they aren't yet, 规范§14.1 decision 2026-07-26: record now,
+// enforce later once there's real multi-user traffic).
+export function calculateCredits(feature, wordCount = 0) {
+  switch (feature) {
+    case "ocr":
+      return 10;
+    case "analysis":
+      if (wordCount <= 250) return 10;
+      if (wordCount <= 500) return 20;
+      return 35;
+    case "summary":
+      return 5;
+    case "translate_sentence":
+      return 1;
+    case "translate_paragraph":
+      return Math.max(3, Math.min(5, Math.ceil(wordCount / 40)));
+    case "translate_full":
+      return wordCount <= 500 ? 15 : 30;
+    default:
+      return 0;
+  }
+}
+
 const STOPWORDS = new Set(
   ("och att det som en av är för den på med han inte har jag detta men ett om hade de så var till "
     + "vi kan man här ut vid honom nu över man skulle mycket vara sig sin dig ni din där ju hur nog "
@@ -332,7 +358,7 @@ async function findPublicAnalysisByHash(supabaseAdmin, hash) {
   return analysis || null;
 }
 
-function logUsage(entries, { userId, textResourceId, feature, model, usage, cacheHit }) {
+function logUsage(entries, { userId, textResourceId, feature, model, usage, cacheHit, credits = 0 }) {
   entries.push({
     user_id: userId || null,
     text_resource_id: textResourceId || null,
@@ -340,7 +366,7 @@ function logUsage(entries, { userId, textResourceId, feature, model, usage, cach
     model,
     input_tokens: usage?.input_tokens || 0,
     output_tokens: usage?.output_tokens || 0,
-    credits_used: 0,
+    credits_used: credits,
     actual_cost: ((usage?.input_tokens || 0) / 1_000_000) * 0.75 + ((usage?.output_tokens || 0) / 1_000_000) * 4.5,
     cache_hit: Boolean(cacheHit),
   });
@@ -472,6 +498,21 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   if (analysisError) throw analysisError;
 
   await supabaseAdmin.from("text_resources").update({ analysis_status: "ready" }).eq("id", textResource.id);
+  // One "analysis" credit charge for the whole user-facing action (规范
+  // §14.3 counts vocabulary+phrases+summary as a single tiered charge), kept
+  // separate from the granular per-call actual_cost entries above so real
+  // dollar cost never gets double-counted.
+  usageLogEntries.push({
+    user_id: userId || null,
+    text_resource_id: textResource.id,
+    feature: "analysis",
+    model: MODEL,
+    input_tokens: 0,
+    output_tokens: 0,
+    credits_used: calculateCredits("analysis", wordCount),
+    actual_cost: 0,
+    cache_hit: false,
+  });
   if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
 
   return { textResource, analysis: analysisRow, tier, cached: false };
@@ -505,7 +546,7 @@ export async function generateReadingSummary({ supabaseAdmin, userId, textResour
   });
 
   const usageLogEntries = [];
-  logUsage(usageLogEntries, { userId, textResourceId, feature: "summary", model: MODEL, usage, cacheHit: false });
+  logUsage(usageLogEntries, { userId, textResourceId, feature: "summary", model: MODEL, usage, cacheHit: false, credits: calculateCredits("summary") });
   await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
 
   if (analysis) {
@@ -515,4 +556,58 @@ export async function generateReadingSummary({ supabaseAdmin, userId, textResour
   }
 
   return { summary_sv: result.summary_sv, summary_zh: result.summary_zh, cached: false };
+}
+
+// 规范§11 — sentence/selection translation is the cheap primary entry
+// point; full-text is the high-consumption option, gated the same way full
+// analysis is (规范§5): allowed <=500 words, still allowed but flagged as
+// higher-cost at 501-1000, forbidden above that. Cached by the exact text's
+// hash, reusable across articles (规范§15) — not scoped to one
+// text_resource, same "Generate Once, Reuse Forever" principle as analysis.
+export async function translateReadingText({ supabaseAdmin, userId, textResourceId, text, scopeType }) {
+  const trimmed = cleanText(text);
+  if (!trimmed) {
+    const error = new Error("Ingen text att översätta.");
+    error.status = 400;
+    throw error;
+  }
+  const wordCount = countWords(trimmed);
+  if (scopeType === "full" && wordCount > LENGTH_TIERS.overlong.maxWords) {
+    const error = new Error(`Texten är för lång för att översätta i sin helhet (${wordCount} ord, max ${LENGTH_TIERS.overlong.maxWords}). Markera ett kortare stycke istället.`);
+    error.status = 400;
+    throw error;
+  }
+
+  const hash = textHash(trimmed);
+  const { data: cached } = await supabaseAdmin
+    .from("translations")
+    .select("translated_text")
+    .eq("source_text_hash", hash)
+    .eq("scope_type", scopeType)
+    .eq("target_language", "zh")
+    .order("translation_version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (cached) return { translated_text: cached.translated_text, cached: true };
+
+  const schema = { type: "object", additionalProperties: false, properties: { translated_text: { type: "string" } }, required: ["translated_text"] };
+  const { result, usage } = await callOpenAI({
+    schemaName: "reading_translation",
+    schema,
+    maxOutputTokens: Math.min(4000, Math.max(500, wordCount * 8)),
+    systemPrompt: "Translate the given Swedish text into natural, fluent Simplified Chinese. Preserve meaning and register; do not add commentary or explanation, only the translation.",
+    userPrompt: trimmed,
+  });
+
+  const { error: insertError } = await supabaseAdmin
+    .from("translations")
+    .insert({ text_resource_id: textResourceId || null, scope_type: scopeType, source_text_hash: hash, target_language: "zh", translated_text: result.translated_text, translation_version: 1 });
+  if (insertError) throw insertError;
+
+  const feature = scopeType === "full" ? "translate_full" : wordCount <= 15 ? "translate_sentence" : "translate_paragraph";
+  const usageLogEntries = [];
+  logUsage(usageLogEntries, { userId, textResourceId, feature, model: MODEL, usage, cacheHit: false, credits: calculateCredits(feature, wordCount) });
+  await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
+
+  return { translated_text: result.translated_text, cached: false };
 }

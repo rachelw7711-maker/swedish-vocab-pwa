@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { extractTextFromImage } from "../../server-reading.mjs";
+import { extractTextFromImage, calculateCredits } from "../../server-reading.mjs";
 
 // Real Vercel serverless function — see api/reading/analyze.js for why
 // production needs actual files under api/. This is the photo/camera
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
       model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
       input_tokens: inputTokens,
       output_tokens: outputTokens,
-      credits_used: 0,
+      credits_used: calculateCredits("ocr"),
       actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
       cache_hit: false,
     });
