@@ -1,0 +1,1214 @@
+[
+  {
+    "id": "cc518ab9-6b52-4d5b-aee8-bab82a9fdc4f",
+    "swedish": "underrättelsetjänst",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "countable",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可拆解为 underrättelse（情报、消息）+ tjänst（服务；机构、部门），合起来可记为“情报服务/情报部门”。",
+    "usage_registers": [
+      "written",
+      "formal"
+    ]
+  },
+  {
+    "id": "d58ff888-a0ea-4976-8564-f3f1d2d0c3d0",
+    "swedish": "och så vidare",
+    "part_of_speech": "adverb",
+    "needs": [
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可拆解为 och（和）+ så（这样/如此）+ vidare（继续、往下）→ 字面像“和这样继续下去”，因此表示“等等；诸如此类”。也可联想到缩写 o.s.v./osv.",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "b124270d-62c7-48b4-bc7c-4cb451f2af4d",
+    "swedish": "bemärkelse",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "countable",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想近义词 betydelse（意义）。固定表达常见有 i en viss bemärkelse（在某种意义上），把 bemärkelse 记成“某种理解/意义上的说法”。",
+    "usage_registers": [
+      "written",
+      "formal"
+    ]
+  },
+  {
+    "id": "99fda7ee-f5d9-4143-81f1-15a84fbdd60b",
+    "swedish": "gudom",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "both",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想为 gud（神）+ -om。先记住核心词 gud“神”，gudom 表示“神、神性、神祇”这一更抽象或书面的概念。",
+    "usage_registers": [
+      "written",
+      "formal"
+    ]
+  },
+  {
+    "id": "cbaf65ba-40ce-4ac2-b159-f4392ffd12b0",
+    "swedish": "tillfällighet",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "countable",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可拆解联想：tillfällig（临时的、偶然的）+ -het（名词后缀，对应“……性/状态”）→ tillfällighet 表示“偶然性；偶然发生的事、巧合”。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "4bb39ec6-e700-4449-b886-f1f7b21f0b5b",
+    "swedish": "anfall",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "countable",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想为动词短语 falla an（着手攻击/抨击）；anfall 常表示一次具体的“攻击、发作”，所以常按可数名词记，一个 anfall / flera anfall。",
+    "usage_registers": [
+      "everyday",
+      "written"
+    ]
+  },
+  {
+    "id": "a8d0f40a-21ec-436b-8dd1-bab28c3a7b2e",
+    "swedish": "ventil",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "countable",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想到英语 valve（阀门）：两者意义接近。也可把 ventil 和 ventilation（通风）联系起来记，都是和空气、流动、开关调节有关。",
+    "usage_registers": [
+      "written",
+      "formal",
+      "everyday"
+    ]
+  },
+  {
+    "id": "991d68b5-1e9e-4a25-8973-4fe7c968b144",
+    "swedish": "imponerande",
+    "part_of_speech": "presens_particip",
+    "needs": [
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想动词 imponera（给人深刻印象）→ imponerande = “让人产生深刻印象的”。词尾 -ande 常见于现在分词，表示“正在/具有某种作用的”，所以可记成“令人印象深刻的”。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "formal",
+      "everyday"
+    ]
+  },
+  {
+    "id": "e579f291-1c3d-44af-a9c2-69d975efbd71",
+    "swedish": "konkurrens",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "both",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想英语 competition / compete 的拉丁词根 con-/com-（共同）+ pet/kur- 系列；瑞典语 konkurrens 常指“竞争”这一现象，也可指“一场/一种竞争”或“竞争对手关系”。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "formal",
+      "everyday"
+    ]
+  },
+  {
+    "id": "61329875-4db2-4a21-a0f8-ab58e049ca76",
+    "swedish": "underrättelse",
+    "part_of_speech": "noun",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "countable",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可拆解联想为 under + rättelse。记作“被告知/得到更正后的信息”→ 引申为“通知、消息”；固定搭配如 få en underrättelse（收到通知）、militära underrättelser（军事情报）也有助于记忆。",
+    "usage_registers": [
+      "written",
+      "formal"
+    ]
+  },
+  {
+    "id": "2f2aa5a9-0b68-462a-9c8f-ae3bf98c9cf1",
+    "swedish": "kommunikativ",
+    "part_of_speech": "adjective",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "kommunikativt",
+    "comparison_type": "regular",
+    "passiv_s": "",
+    "memory_tip": "Tänk på ordstammen kommunikat- i ord som kommunikation och kommunicera: någon som är kommunikativ är bra på att kommunicera.",
+    "usage_registers": [
+      "written",
+      "formal",
+      "everyday"
+    ]
+  },
+  {
+    "id": "3540fa99-ede4-43c7-9ebd-6413f27305ae",
+    "swedish": "innovativ",
+    "part_of_speech": "adjective",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "innovativt",
+    "comparison_type": "regular",
+    "passiv_s": "",
+    "memory_tip": "可联想英语 innovative；词尾 -iv 的形容词常对应副词/中性形式 -ivt，如 aktiv → aktivt。",
+    "usage_registers": [
+      "written",
+      "formal",
+      "everyday"
+    ]
+  },
+  {
+    "id": "0f476779-773c-4474-aa47-ac27e14d5729",
+    "swedish": "ändlös",
+    "part_of_speech": "adjective",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "ändlöst",
+    "comparison_type": "regular",
+    "passiv_s": "",
+    "memory_tip": "änd-（尽头、末端）+ -lös（无……的）→ 字面可记为“没有尽头的”。可联想名词 ände（末端、尽头）和形容词 hopplös（无望的）里的 -lös。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "5b674759-b4d0-4d96-a0bb-0d9f7d31d269",
+    "swedish": "journalistisk",
+    "part_of_speech": "adjective",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "journalistiskt",
+    "comparison_type": "regular",
+    "passiv_s": "",
+    "memory_tip": "journalist + -isk → 表示“与新闻记者/新闻工作相关的”；可联想名词 journalistik（新闻业，新闻工作）和 journalist（记者）。",
+    "usage_registers": [
+      "written",
+      "formal"
+    ]
+  },
+  {
+    "id": "55c2d25d-8020-4c3c-b773-27db7ae5cdfd",
+    "swedish": "ond",
+    "part_of_speech": "adjective",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "ont",
+    "comparison_type": "irregular",
+    "passiv_s": "",
+    "memory_tip": "联想记忆：ond（坏的）和 ont（疼、痛地）常一起出现，如 Jag är ond. 不自然，但 Jag har ont. 很常见；记成“d 形容人/事物坏，t 形容疼痛状态”。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "93fd7bc7-af5c-4ed9-90e4-20b866718507",
+    "swedish": "vidga",
+    "part_of_speech": "verb",
+    "needs": [
+      "transitivity",
+      "passiv_s",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "",
+    "second_example_sv": "",
+    "second_example_zh": "",
+    "collocations": [],
+    "relationships": [],
+    "countability": "",
+    "transitivity": "transitive",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "vidgas",
+    "memory_tip": "联想名词 vidd（宽度、广度）和形容词 vid（宽的）；vidga 就是“使变宽、拓宽”。",
+    "usage_registers": [
+      "written",
+      "formal",
+      "everyday"
+    ]
+  },
+  {
+    "id": "5a3f1191-c14e-4590-9623-b13f0bcf1b80",
+    "swedish": "mobil",
+    "part_of_speech": "noun",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "A1",
+    "second_example_sv": "Jag glömde min mobil hemma, så jag kunde inte ringa dig.",
+    "second_example_zh": "我把手机忘在家里了，所以我没法给你打电话。",
+    "collocations": [
+      {
+        "phrase": "prata i mobilen",
+        "meaning_zh": "用手机通话",
+        "example_sv": "Hon stod ute och pratade i mobilen."
+      },
+      {
+        "phrase": "ladda mobilen",
+        "meaning_zh": "给手机充电",
+        "example_sv": "Jag måste ladda mobilen innan jag går."
+      },
+      {
+        "phrase": "kolla mobilen",
+        "meaning_zh": "看手机",
+        "example_sv": "Han kollade mobilen direkt efter mötet."
+      },
+      {
+        "phrase": "mobilnummer",
+        "meaning_zh": "手机号码",
+        "example_sv": "Kan du skicka ditt mobilnummer till mig?"
+      },
+      {
+        "phrase": "mobiltelefon",
+        "meaning_zh": "移动电话；手机",
+        "example_sv": "Min mobiltelefon är nästan fem år gammal."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "mobiltelefon",
+        "type": "synonym",
+        "meaning_zh": "手机；移动电话"
+      },
+      {
+        "word": "smartphone",
+        "type": "related",
+        "meaning_zh": "智能手机"
+      },
+      {
+        "word": "telefon",
+        "type": "word_family",
+        "meaning_zh": "电话"
+      },
+      {
+        "word": "ringa",
+        "type": "related",
+        "meaning_zh": "打电话"
+      },
+      {
+        "word": "sms",
+        "type": "related",
+        "meaning_zh": "短信"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想英语 mobile（移动的；手机）；瑞典语 mobil 常直接表示“手机”。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "392efcee-eb02-4f94-8165-0bc5163a9fa4",
+    "swedish": "aktiv",
+    "part_of_speech": "adjective",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "A2",
+    "second_example_sv": "Hon spelar en aktiv roll i föreningen och ordnar ofta nya aktiviteter.",
+    "second_example_zh": "她在协会中扮演积极角色，并且经常组织新的活动。",
+    "collocations": [
+      {
+        "phrase": "aktiv roll",
+        "meaning_zh": "积极作用；主动角色",
+        "example_sv": "Han tog en aktiv roll i projektet."
+      },
+      {
+        "phrase": "aktiv livsstil",
+        "meaning_zh": "积极的生活方式；活跃的生活方式",
+        "example_sv": "En aktiv livsstil är bra för hälsan."
+      },
+      {
+        "phrase": "vara aktiv på sociala medier",
+        "meaning_zh": "在社交媒体上很活跃",
+        "example_sv": "Många företag är aktiva på sociala medier."
+      },
+      {
+        "phrase": "politiskt aktiv",
+        "meaning_zh": "政治上活跃的",
+        "example_sv": "Hon blev politiskt aktiv redan som student."
+      },
+      {
+        "phrase": "sexuellt aktiv",
+        "meaning_zh": "有性生活的",
+        "example_sv": "Läkaren frågade om patienten är sexuellt aktiv."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "passiv",
+        "type": "antonym",
+        "meaning_zh": "被动的；消极的"
+      },
+      {
+        "word": "verksam",
+        "type": "synonym",
+        "meaning_zh": "活跃的；从事中的"
+      },
+      {
+        "word": "engagerad",
+        "type": "related",
+        "meaning_zh": "投入的；积极参与的"
+      },
+      {
+        "word": "aktivitet",
+        "type": "word_family",
+        "meaning_zh": "活动"
+      },
+      {
+        "word": "aktivera",
+        "type": "word_family",
+        "meaning_zh": "激活；使活跃"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "aktivt",
+    "comparison_type": "regular",
+    "passiv_s": "",
+    "memory_tip": "可联想英语 active：aktiv = active（活跃的、积极的）。",
+    "usage_registers": [
+      "everyday",
+      "written",
+      "spoken"
+    ]
+  },
+  {
+    "id": "51551298-2264-4e5e-bf9f-f6f2da0dd61f",
+    "swedish": "van",
+    "part_of_speech": "adjective",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "B1",
+    "second_example_sv": "Efter några månader i Sverige blev hon van vid mörka vintermorgnar.",
+    "second_example_zh": "在瑞典住了几个月后，她习惯了冬天黑暗的清晨。",
+    "collocations": [
+      {
+        "phrase": "van vid något",
+        "meaning_zh": "习惯于某事",
+        "example_sv": "Han är van vid högt tempo på jobbet."
+      },
+      {
+        "phrase": "bli van vid något",
+        "meaning_zh": "逐渐习惯于某事",
+        "example_sv": "Det tar tid att bli van vid nya rutiner."
+      },
+      {
+        "phrase": "vara van att göra något",
+        "meaning_zh": "习惯于做某事",
+        "example_sv": "Hon är van att tala inför publik."
+      },
+      {
+        "phrase": "en van förare",
+        "meaning_zh": "有经验的司机",
+        "example_sv": "Vi behöver en van förare på den här vägen."
+      },
+      {
+        "phrase": "en van resenär",
+        "meaning_zh": "老练的旅行者，常出行的人",
+        "example_sv": "Som van resenär packar han väldigt lätt."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "erfaren",
+        "type": "synonym",
+        "meaning_zh": "有经验的"
+      },
+      {
+        "word": "rutinerad",
+        "type": "synonym",
+        "meaning_zh": "熟练的，老练的"
+      },
+      {
+        "word": "ovan",
+        "type": "antonym",
+        "meaning_zh": "不习惯的；生疏的"
+      },
+      {
+        "word": "vana",
+        "type": "word_family",
+        "meaning_zh": "习惯；经验"
+      },
+      {
+        "word": "vänja sig",
+        "type": "reflexive",
+        "meaning_zh": "使自己习惯于，逐渐适应"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "vant",
+    "comparison_type": "irregular",
+    "passiv_s": "",
+    "memory_tip": "联想词族：van（习惯的、熟练的）→ vana（习惯）→ vänja sig vid（习惯于）。看到 van vid 就优先想到“习惯于”。",
+    "usage_registers": [
+      "everyday",
+      "spoken",
+      "written"
+    ]
+  },
+  {
+    "id": "f63f322a-b780-4ea3-9439-20717f3cb87d",
+    "swedish": "charter",
+    "part_of_speech": "noun",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "B1",
+    "second_example_sv": "Vi bokade en charter till Rhodos eftersom det blev billigare än att köpa flyg och hotell separat.",
+    "second_example_zh": "我们预订了去罗得岛的包价旅游，因为比单独买机票和酒店更便宜。",
+    "collocations": [
+      {
+        "phrase": "åka på charter",
+        "meaning_zh": "参加包价旅游；去包机旅行",
+        "example_sv": "Många svenskar åker på charter under sommaren."
+      },
+      {
+        "phrase": "boka en charter",
+        "meaning_zh": "预订包价旅游",
+        "example_sv": "De bokade en charter i sista minuten."
+      },
+      {
+        "phrase": "en charterresa till Spanien",
+        "meaning_zh": "去西班牙的包价旅游",
+        "example_sv": "Hon hittade en billig charterresa till Spanien."
+      },
+      {
+        "phrase": "charter med all inclusive",
+        "meaning_zh": "全包式包价旅游",
+        "example_sv": "Familjen valde charter med all inclusive."
+      },
+      {
+        "phrase": "sista minuten-charter",
+        "meaning_zh": "最后时刻特价包价游",
+        "example_sv": "Ibland kan man hitta en billig sista minuten-charter."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "charterresa",
+        "type": "word_family",
+        "meaning_zh": "包价旅游；包机旅行"
+      },
+      {
+        "word": "paketresa",
+        "type": "related",
+        "meaning_zh": "套餐旅游；包价旅游"
+      },
+      {
+        "word": "semesterresa",
+        "type": "related",
+        "meaning_zh": "度假旅行"
+      },
+      {
+        "word": "solresa",
+        "type": "related",
+        "meaning_zh": "阳光度假游"
+      },
+      {
+        "word": "flygresa",
+        "type": "related",
+        "meaning_zh": "飞行旅行；航程"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想英语 charter。瑞典语里常指“包价旅游/包机旅行”，常见派生词是 charterresa。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "67269ffd-4667-4d0e-9300-24d76036e529",
+    "swedish": "dagstur",
+    "part_of_speech": "noun",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "A2",
+    "second_example_sv": "Vi planerar en dagstur till skärgården på lördag, om vädret håller sig fint.",
+    "second_example_zh": "如果天气一直不错，我们计划周六去群岛一日游。",
+    "collocations": [
+      {
+        "phrase": "åka på dagstur",
+        "meaning_zh": "去一日游",
+        "example_sv": "De åkte på dagstur till Uppsala."
+      },
+      {
+        "phrase": "göra en dagstur",
+        "meaning_zh": "进行一次当天往返行程",
+        "example_sv": "Man hinner göra en dagstur från Malmö."
+      },
+      {
+        "phrase": "en dagstur till [plats]",
+        "meaning_zh": "去某地的一日游",
+        "example_sv": "Vi bokade en dagstur till Visby."
+      },
+      {
+        "phrase": "ordna en dagstur",
+        "meaning_zh": "安排一日游",
+        "example_sv": "Företaget ordnade en dagstur för personalen."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "utflykt",
+        "type": "related",
+        "meaning_zh": "郊游；短途出游"
+      },
+      {
+        "word": "resa",
+        "type": "word_family",
+        "meaning_zh": "旅行"
+      },
+      {
+        "word": "rundtur",
+        "type": "related",
+        "meaning_zh": "观光行程；环游路线"
+      },
+      {
+        "word": "weekendresa",
+        "type": "related",
+        "meaning_zh": "周末旅行"
+      },
+      {
+        "word": "heldagstur",
+        "type": "related",
+        "meaning_zh": "全天行程"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "dag（天）+ tur（行程、出行）→ 当天完成的行程，即“一日游”。",
+    "usage_registers": [
+      "everyday",
+      "spoken",
+      "written"
+    ]
+  },
+  {
+    "id": "24ab7d88-dbbc-4d77-86cc-7819dd1a878c",
+    "swedish": "användbar",
+    "part_of_speech": "adjective",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "B1",
+    "second_example_sv": "Manualen är användbar även för den som aldrig har arbetat med programmet tidigare.",
+    "second_example_zh": "这本使用手册即使对以前从未使用过该程序的人也很有用。",
+    "collocations": [
+      {
+        "phrase": "vara användbar för",
+        "meaning_zh": "对……有用",
+        "example_sv": "Appen är användbar för studenter."
+      },
+      {
+        "phrase": "mycket användbar",
+        "meaning_zh": "非常有用的",
+        "example_sv": "Det här verktyget är mycket användbart i vardagen."
+      },
+      {
+        "phrase": "praktisk och användbar",
+        "meaning_zh": "实用且有用",
+        "example_sv": "Vi söker enkla, praktiska och användbara lösningar."
+      },
+      {
+        "phrase": "göra sig användbar",
+        "meaning_zh": "派上用场；帮上忙",
+        "example_sv": "Hon försökte göra sig användbar under flytten."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "nyttig",
+        "type": "synonym",
+        "meaning_zh": "有益的；有用的"
+      },
+      {
+        "word": "praktisk",
+        "type": "related",
+        "meaning_zh": "实用的"
+      },
+      {
+        "word": "oanvändbar",
+        "type": "antonym",
+        "meaning_zh": "无用的；不能用的"
+      },
+      {
+        "word": "använda",
+        "type": "word_family",
+        "meaning_zh": "使用"
+      },
+      {
+        "word": "användning",
+        "type": "word_family",
+        "meaning_zh": "使用；用途"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "användbart",
+    "comparison_type": "regular",
+    "passiv_s": "",
+    "memory_tip": "可拆解为 använda（使用） + -bar（可……的）→“可使用的”＝有用的、实用的。",
+    "usage_registers": [
+      "everyday",
+      "spoken",
+      "written"
+    ]
+  },
+  {
+    "id": "35c52917-1b47-4889-9ec0-b5ae9a82ff4c",
+    "swedish": "juice",
+    "part_of_speech": "noun",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "A1",
+    "second_example_sv": "Till frukost dricker hon ofta ett glas apelsinjuice.",
+    "second_example_zh": "早餐时她经常喝一杯橙汁。",
+    "collocations": [
+      {
+        "phrase": "ett glas juice",
+        "meaning_zh": "一杯果汁",
+        "example_sv": "Kan jag få ett glas juice?"
+      },
+      {
+        "phrase": "färskpressad juice",
+        "meaning_zh": "鲜榨果汁",
+        "example_sv": "De serverar färskpressad juice på kaféet."
+      },
+      {
+        "phrase": "apelsinjuice",
+        "meaning_zh": "橙汁",
+        "example_sv": "Barnen vill ha apelsinjuice till frukost."
+      },
+      {
+        "phrase": "dricka juice",
+        "meaning_zh": "喝果汁",
+        "example_sv": "Hon brukar dricka juice på morgonen."
+      },
+      {
+        "phrase": "juice utan socker",
+        "meaning_zh": "无糖果汁",
+        "example_sv": "Jag köper helst juice utan socker."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "saft",
+        "type": "related",
+        "meaning_zh": "果味饮料，糖浆饮料"
+      },
+      {
+        "word": "smoothie",
+        "type": "related",
+        "meaning_zh": "思慕雪，果昔"
+      },
+      {
+        "word": "apelsinjuice",
+        "type": "word_family",
+        "meaning_zh": "橙汁"
+      },
+      {
+        "word": "frukt",
+        "type": "related",
+        "meaning_zh": "水果"
+      },
+      {
+        "word": "dryck",
+        "type": "related",
+        "meaning_zh": "饮料"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可联想英语 juice，瑞典语中意思相同，都是“果汁”。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "8640cdb2-1723-40b7-b135-ae587687e75d",
+    "swedish": "geléfisk",
+    "part_of_speech": "noun",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "B1",
+    "second_example_sv": "Barnen valde varsin påse geléfisk till lördagsmyset.",
+    "second_example_zh": "孩子们各自挑了一袋果冻糖，留着周六晚上吃零食时享用。",
+    "collocations": [
+      {
+        "phrase": "en påse geléfisk",
+        "meaning_zh": "一袋果冻糖",
+        "example_sv": "Hon köpte en påse geléfisk i kiosken."
+      },
+      {
+        "phrase": "äta geléfisk",
+        "meaning_zh": "吃果冻糖",
+        "example_sv": "Vi brukar äta geléfisk när vi ser på film."
+      },
+      {
+        "phrase": "färgglada geléfiskar",
+        "meaning_zh": "色彩鲜艳的果冻糖",
+        "example_sv": "Skålen var full av färgglada geléfiskar."
+      },
+      {
+        "phrase": "geléfisk med fruktsmak",
+        "meaning_zh": "水果味果冻糖",
+        "example_sv": "Jag gillar geléfisk med fruktsmak bäst."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "godis",
+        "type": "related",
+        "meaning_zh": "糖果，零食糖"
+      },
+      {
+        "word": "gelégodis",
+        "type": "related",
+        "meaning_zh": "果冻糖，胶质糖果"
+      },
+      {
+        "word": "smågodis",
+        "type": "related",
+        "meaning_zh": "散装糖果"
+      },
+      {
+        "word": "fiskgodis",
+        "type": "related",
+        "meaning_zh": "鱼形糖果"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可拆成 gelé（果冻）+ fisk（鱼），联想为“鱼形的果冻糖”。",
+    "usage_registers": [
+      "spoken",
+      "informal",
+      "everyday"
+    ]
+  },
+  {
+    "id": "4508107e-9287-4f04-bd86-c76389be2b79",
+    "swedish": "stavgång",
+    "part_of_speech": "noun",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "B1",
+    "second_example_sv": "På rehabiliteringen rekommenderades stavgång eftersom den ger skonsam träning för hela kroppen.",
+    "second_example_zh": "在康复训练中，医生建议进行北欧式健走，因为它能为全身提供较温和的锻炼。",
+    "collocations": [
+      {
+        "phrase": "ägna sig åt stavgång",
+        "meaning_zh": "进行北欧式健走",
+        "example_sv": "Hon ägnar sig åt stavgång flera gånger i veckan."
+      },
+      {
+        "phrase": "gå stavgång",
+        "meaning_zh": "走北欧式健走",
+        "example_sv": "De går stavgång i parken på morgnarna."
+      },
+      {
+        "phrase": "stavar för stavgång",
+        "meaning_zh": "用于北欧式健走的手杖",
+        "example_sv": "Jag köpte nya stavar för stavgång inför hösten."
+      },
+      {
+        "phrase": "kurs i stavgång",
+        "meaning_zh": "北欧式健走课程",
+        "example_sv": "Kommunen ordnar en kurs i stavgång för seniorer."
+      },
+      {
+        "phrase": "teknik i stavgång",
+        "meaning_zh": "北欧式健走技巧",
+        "example_sv": "Rätt teknik i stavgång minskar belastningen på knäna."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "promenad",
+        "type": "related",
+        "meaning_zh": "散步，步行"
+      },
+      {
+        "word": "motion",
+        "type": "related",
+        "meaning_zh": "锻炼，运动"
+      },
+      {
+        "word": "gång",
+        "type": "word_family",
+        "meaning_zh": "行走，步行"
+      },
+      {
+        "word": "stav",
+        "type": "word_family",
+        "meaning_zh": "手杖，杆"
+      },
+      {
+        "word": "vandra",
+        "type": "related",
+        "meaning_zh": "徒步，行走"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可拆解为 stav（手杖）+ gång（行走），即“拿着手杖走路”→ 北欧式健走。",
+    "usage_registers": [
+      "spoken",
+      "written",
+      "everyday"
+    ]
+  },
+  {
+    "id": "9be099e8-2198-4eae-81af-df8ec4c6ae49",
+    "swedish": "tilltal",
+    "part_of_speech": "noun",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ],
+    "cefr_level": "B2",
+    "second_example_sv": "I mejlet valde hon ett mer formellt tilltal än i våra vanliga chattar.",
+    "second_example_zh": "在那封邮件里，她采用了比我们平时聊天更正式的称呼和语气。",
+    "collocations": [
+      {
+        "phrase": "formellt tilltal",
+        "meaning_zh": "正式称呼；正式语气",
+        "example_sv": "Myndigheten använder ett formellt tilltal i sina brev."
+      },
+      {
+        "phrase": "personligt tilltal",
+        "meaning_zh": "有亲切感的说话方式；个人化语气",
+        "example_sv": "Texten får ett personligt tilltal genom direkta frågor."
+      },
+      {
+        "phrase": "direkt tilltal",
+        "meaning_zh": "直接称呼；直接面向读者的表达",
+        "example_sv": "Författaren använder direkt tilltal för att engagera läsaren."
+      },
+      {
+        "phrase": "duande tilltal",
+        "meaning_zh": "使用“du”的称呼方式",
+        "example_sv": "Många företag har numera ett duande tilltal."
+      },
+      {
+        "phrase": "artigt tilltal",
+        "meaning_zh": "礼貌的称呼；礼貌语气",
+        "example_sv": "Ett artigt tilltal är viktigt i kundservice."
+      }
+    ],
+    "relationships": [
+      {
+        "word": "tilltala",
+        "type": "word_family",
+        "meaning_zh": "对……说；以某种方式称呼；吸引"
+      },
+      {
+        "word": "anslag",
+        "type": "related",
+        "meaning_zh": "语气；风格；笔调"
+      },
+      {
+        "word": "ton",
+        "type": "related",
+        "meaning_zh": "语气；口吻"
+      },
+      {
+        "word": "hälsningsfras",
+        "type": "related",
+        "meaning_zh": "问候语；招呼用语"
+      },
+      {
+        "word": "titel",
+        "type": "related",
+        "meaning_zh": "头衔；称谓"
+      }
+    ],
+    "countability": "",
+    "transitivity": "",
+    "adverb_form": "",
+    "comparison_type": "",
+    "passiv_s": "",
+    "memory_tip": "可拆成 till + tal：tal 有“说话、言语”之意，联想为“对着某人说话的方式”，即“称呼、语气”。",
+    "usage_registers": [
+      "written",
+      "formal",
+      "everyday"
+    ]
+  }
+]

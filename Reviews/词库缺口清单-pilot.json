@@ -1,0 +1,354 @@
+[
+  {
+    "id": "cbaf65ba-40ce-4ac2-b159-f4392ffd12b0",
+    "swedish": "tillfällighet",
+    "part_of_speech": "noun",
+    "chinese": "偶然，巧合",
+    "swedish_explanation": "något som händer utan plan eller tydlig orsak; en slump",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "d58ff888-a0ea-4976-8564-f3f1d2d0c3d0",
+    "swedish": "och så vidare",
+    "part_of_speech": "adverb",
+    "chinese": "等等；诸如此类",
+    "swedish_explanation": "används när man fortsätter en lista utan att säga allt (förk. o.s.v., osv.)",
+    "needs": [
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "4bb39ec6-e700-4449-b886-f1f7b21f0b5b",
+    "swedish": "anfall",
+    "part_of_speech": "noun",
+    "chinese": "攻击；发作",
+    "swedish_explanation": "ett plötsligt angrepp eller en plötslig stark sjuk känsla i kroppen",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "b124270d-62c7-48b4-bc7c-4cb451f2af4d",
+    "swedish": "bemärkelse",
+    "part_of_speech": "noun",
+    "chinese": "意义，含义",
+    "swedish_explanation": "betydelse eller sätt som ett ord eller ett uttryck ska förstås på",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "61329875-4db2-4a21-a0f8-ab58e049ca76",
+    "swedish": "underrättelse",
+    "part_of_speech": "noun",
+    "chinese": "消息；情报；通知",
+    "swedish_explanation": "En underrättelse är information eller ett meddelande, ofta om något viktigt. Ordet kan också betyda hemlig information som används av staten eller militären.",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "99fda7ee-f5d9-4143-81f1-15a84fbdd60b",
+    "swedish": "gudom",
+    "part_of_speech": "noun",
+    "chinese": "神；神性；神祇",
+    "swedish_explanation": "En gudom är en gud eller ett väsen som dyrkas som gud. Ordet kan också betyda det gudomliga i mer allmän mening.",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "a8d0f40a-21ec-436b-8dd1-bab28c3a7b2e",
+    "swedish": "ventil",
+    "part_of_speech": "noun",
+    "chinese": "阀门；活门；（比喻）宣泄渠道",
+    "swedish_explanation": "En ventil är en anordning som reglerar, öppnar eller stänger flödet av till exempel gas eller vätska. Ordet kan också användas bildligt om något som ger utlopp för känslor eller spänningar.",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "e579f291-1c3d-44af-a9c2-69d975efbd71",
+    "swedish": "konkurrens",
+    "part_of_speech": "noun",
+    "chinese": "竞争",
+    "swedish_explanation": "Konkurrens är när flera personer eller företag försöker vara bättre än andra för att vinna eller få kunder.",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "991d68b5-1e9e-4a25-8973-4fe7c968b144",
+    "swedish": "imponerande",
+    "part_of_speech": "presens_particip",
+    "chinese": "令人印象深刻的，惊人的",
+    "swedish_explanation": "något som är mycket bra, stort eller starkt och som får andra att känna stor respekt eller förvåning",
+    "needs": [
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "cc518ab9-6b52-4d5b-aee8-bab82a9fdc4f",
+    "swedish": "underrättelsetjänst",
+    "part_of_speech": "noun",
+    "chinese": "情报机构；情报部门",
+    "swedish_explanation": "en statlig organisation som samlar in och analyserar information om hot, säkerhet och andra länder",
+    "needs": [
+      "countability",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "2f2aa5a9-0b68-462a-9c8f-ae3bf98c9cf1",
+    "swedish": "kommunikativ",
+    "part_of_speech": "adjective",
+    "chinese": "善于沟通的；交际能力强的；重视交流的",
+    "swedish_explanation": "som har lätt för att uttrycka sig tydligt och skapa god kontakt med andra i olika sociala och professionella sammanhang",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "93fd7bc7-af5c-4ed9-90e4-20b866718507",
+    "swedish": "vidga",
+    "part_of_speech": "verb",
+    "chinese": "扩大；拓宽",
+    "swedish_explanation": "att göra något större eller mer omfattande",
+    "needs": [
+      "transitivity",
+      "passiv_s",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "5b674759-b4d0-4d96-a0bb-0d9f7d31d269",
+    "swedish": "journalistisk",
+    "part_of_speech": "adjective",
+    "chinese": "新闻的；新闻工作的；具有新闻报道特点的",
+    "swedish_explanation": "som har att göra med journalistik eller med hur journalister arbetar och skriver",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "0f476779-773c-4474-aa47-ac27e14d5729",
+    "swedish": "ändlös",
+    "part_of_speech": "adjective",
+    "chinese": "无尽的；无穷无尽的",
+    "swedish_explanation": "som inte verkar ha något slut; mycket lång eller utan gräns",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "55c2d25d-8020-4c3c-b773-27db7ae5cdfd",
+    "swedish": "ond",
+    "part_of_speech": "adjective",
+    "chinese": "坏的；疼的",
+    "swedish_explanation": "Ond betyder att något är dåligt eller att det gör ont i kroppen.",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "3540fa99-ede4-43c7-9ebd-6413f27305ae",
+    "swedish": "innovativ",
+    "part_of_speech": "adjective",
+    "chinese": "创新的；富有创意的",
+    "swedish_explanation": "som innehåller nya idéer eller nya sätt att göra något",
+    "needs": [
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "51551298-2264-4e5e-bf9f-f6f2da0dd61f",
+    "swedish": "van",
+    "part_of_speech": "adjective",
+    "chinese": "熟练的，老练的；有经验、做事很自然。常用于“van vid”结构表示“习惯于”。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "392efcee-eb02-4f94-8165-0bc5163a9fa4",
+    "swedish": "aktiv",
+    "part_of_speech": "adjective",
+    "chinese": "活跃的；积极的；主动的。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "5a3f1191-c14e-4590-9623-b13f0bcf1b80",
+    "swedish": "mobil",
+    "part_of_speech": "noun",
+    "chinese": "手机；移动电话。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "f63f322a-b780-4ea3-9439-20717f3cb87d",
+    "swedish": "charter",
+    "part_of_speech": "noun",
+    "chinese": "包价旅游；包机旅行。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "67269ffd-4667-4d0e-9300-24d76036e529",
+    "swedish": "dagstur",
+    "part_of_speech": "noun",
+    "chinese": "一日游；当天往返行程。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "35c52917-1b47-4889-9ec0-b5ae9a82ff4c",
+    "swedish": "juice",
+    "part_of_speech": "noun",
+    "chinese": "果汁。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "4508107e-9287-4f04-bd86-c76389be2b79",
+    "swedish": "stavgång",
+    "part_of_speech": "noun",
+    "chinese": "北欧式健走；持杖步行。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "8640cdb2-1723-40b7-b135-ae587687e75d",
+    "swedish": "geléfisk",
+    "part_of_speech": "noun",
+    "chinese": "果冻糖，果冻状糖果；口语里也可指“棉花糖质感的软糖”，带有可爱、透明的感觉，不是正式术语。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "24ab7d88-dbbc-4d77-86cc-7819dd1a878c",
+    "swedish": "användbar",
+    "part_of_speech": "adjective",
+    "chinese": "有用的；实用的，指能帮助解决问题或方便使用。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "adverb_form",
+      "comparison_type",
+      "memory_tip",
+      "usage_registers"
+    ]
+  },
+  {
+    "id": "9be099e8-2198-4eae-81af-df8ec4c6ae49",
+    "swedish": "tilltal",
+    "part_of_speech": "noun",
+    "chinese": "称呼；称谓，也可指对人的说话方式和语气。",
+    "swedish_explanation": "",
+    "needs": [
+      "cefr_level",
+      "second_example",
+      "collocations",
+      "relationships",
+      "memory_tip",
+      "usage_registers"
+    ]
+  }
+]
