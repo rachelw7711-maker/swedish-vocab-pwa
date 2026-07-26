@@ -782,6 +782,20 @@ function normalizeWord(word) {
     example: clean(word.example || ""),
     collocations: clean(word.collocations || ""),
     related_words: clean(firstDefined(word.related_words, word.relatedWords, "")),
+    // SPK-DIC-001 fields added 2026-07-26 (Reviews/SPK-DIC-001-完整标准核对
+    // 与任务清单-2026-07-26.md) — this function is a strict whitelist (no
+    // `...word` spread), so a new DB column silently vanishes here unless
+    // listed explicitly.
+    memory_tip: clean(word.memory_tip || ""),
+    grammar_note: clean(word.grammar_note || ""),
+    adverb_form: clean(word.adverb_form || ""),
+    comparison_type: clean(word.comparison_type || ""),
+    passiv_s: clean(word.passiv_s || ""),
+    countability: clean(word.countability || ""),
+    transitivity: clean(word.transitivity || ""),
+    function_tags: Array.isArray(word.function_tags) ? word.function_tags : [],
+    meaning_note: clean(word.meaning_note || ""),
+    usage_registers: Array.isArray(word.usage_registers) ? word.usage_registers : [],
     note: clean(firstDefined(word.note, word.comment, word.kommentar, "")),
     notebook,
     book_names: explicitBooks,
@@ -4166,14 +4180,17 @@ function createWordCard(word, mode = "library") {
 
     const grammarGroup = addLayerGroup(details, "语法变化");
     addStudyDetail(grammarGroup, "Grammatik", formatGrammarForStudy(word));
+    formatPosSpecificGrammarExtras(word).forEach(({ label, value }) => addStudyDetail(grammarGroup, label, value));
 
     const usageGroup = addLayerGroup(details, "真实使用");
     addStudyDetail(usageGroup, "Exempel", formatExampleForStudy(word.example));
     addStudyDetail(usageGroup, "Fraser", createStudyCollocationList(word.collocations, word.example, word));
+    if (word.usage_registers.length) addStudyDetail(usageGroup, "Användning", formatUsageRegisters(word.usage_registers));
 
     const extendedGroup = addLayerGroup(details, "扩展学习", { collapsible: true, expanded: false });
     extendedGroup.classList.add("extended-learning-group");
     addStudyDetail(extendedGroup, "Relaterade ord", createRelatedWordList(word.related_words));
+    if (word.memory_tip) addStudyDetail(extendedGroup, "Minnesknep", word.memory_tip);
 
     enhanceGrammarSectionWithStructuredForms(card, word);
     enhanceExtendedLearningSection(card, word);
@@ -4286,6 +4303,50 @@ function buildGrammarLinesFragment(lines) {
     container.append(line);
   });
   return container;
+}
+
+const USAGE_REGISTER_LABELS = {
+  spoken: "muntligt",
+  written: "skriftligt",
+  formal: "formellt",
+  informal: "informellt",
+  everyday: "vardagligt",
+};
+
+function formatUsageRegisters(registers) {
+  return registers.map((r) => USAGE_REGISTER_LABELS[r] || r).join(", ");
+}
+
+const PARTICIPLE_FUNCTION_TAG_LABELS = {
+  adjektivisk: "形容词性",
+  substantiverad: "名词化",
+  adverbiell: "副词性",
+  passiv_betydelse: "被动含义",
+  lexicalized_adjective: "已词汇化形容词",
+};
+
+// POS-specific fields added by the 2026-07-26 SPK-DIC-001 corpus fill (see
+// Reviews/SPK-DIC-001-完整标准核对与任务清单-2026-07-26.md §3-7) — these sit
+// in the same "语法变化" layer as the Grammatik line above since they're all
+// grammar facts, just not part of the structured word_forms table.
+function formatPosSpecificGrammarExtras(word) {
+  const lines = [];
+  if (word.pos === "noun") {
+    if (word.countability) lines.push({ label: "Countability", value: word.countability });
+    if (word.grammar_note) lines.push({ label: "Grammar Note", value: word.grammar_note });
+  } else if (word.pos === "verb") {
+    if (word.transitivity) lines.push({ label: "Transitivitet", value: word.transitivity });
+    if (word.passiv_s) lines.push({ label: "Passiv -s", value: word.passiv_s });
+  } else if (word.pos === "adjective") {
+    if (word.adverb_form) lines.push({ label: "Adverbform", value: word.adverb_form });
+    if (word.comparison_type) lines.push({ label: "Comparison Type", value: word.comparison_type });
+  } else if (word.pos === "presens_particip" || word.pos === "perfekt_particip") {
+    if (word.function_tags.length) {
+      lines.push({ label: "Function Tags", value: word.function_tags.map((t) => PARTICIPLE_FUNCTION_TAG_LABELS[t] || t).join(", ") });
+    }
+    if (word.meaning_note) lines.push({ label: "Meaning Note", value: word.meaning_note });
+  }
+  return lines;
 }
 
 function formatGrammarForStudy(word) {
@@ -4551,8 +4612,15 @@ function enhanceExtendedLearningSection(card, word) {
     if (!details) return;
 
     if (relationships.length) {
-      const byType = { synonym: [], antonym: [], derived_from: [], related: [] };
-      relationships.forEach((rel) => (byType[rel.type] || byType.related).push(rel));
+      // word_family (added 2026-07-26 fill) is the same concept the app has
+      // long labeled "Ordfamilj" via derived_from — same bucket, not a
+      // separate section. particle_verb/reflexive (SPK-DIC-001 §4) get
+      // their own sections.
+      const byType = { synonym: [], antonym: [], derived_from: [], particle_verb: [], reflexive: [], related: [] };
+      relationships.forEach((rel) => {
+        const key = rel.type === "word_family" ? "derived_from" : rel.type;
+        (byType[key] || byType.related).push(rel);
+      });
       const relatedSection = details.querySelector(".related-section");
       const insertBefore = (term, items) => {
         if (!items.length || !relatedSection) return;
@@ -4566,13 +4634,20 @@ function enhanceExtendedLearningSection(card, word) {
       insertBefore("Synonymer", byType.synonym);
       insertBefore("Motsatsord", byType.antonym);
       insertBefore("Ordfamilj", byType.derived_from);
+      insertBefore("Partikelverb", byType.particle_verb);
+      insertBefore("Reflexivt", byType.reflexive);
       if (byType.related.length && relatedSection) {
         relatedSection.querySelector("p, .related-word-list")?.remove();
         relatedSection.append(buildTypedRelatedList(byType.related));
       }
     }
 
-    if (clean(translationDetail?.learning_tip)) {
+    // word.memory_tip (learning_objects column, filled for the whole corpus
+    // 2026-07-26) is now the primary source and already rendered
+    // synchronously above — this only covers the handful of older rows that
+    // have a learning_object_translations.learning_tip but somehow no
+    // memory_tip yet.
+    if (!clean(word.memory_tip) && clean(translationDetail?.learning_tip)) {
       addStudyDetail(details, "Minnesknep", clean(translationDetail.learning_tip));
     }
   });
