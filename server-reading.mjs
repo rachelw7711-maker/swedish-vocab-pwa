@@ -268,6 +268,24 @@ async function matchExpressionsAgainstFraser(supabaseAdmin, expressions) {
   return expressions.map((e) => ({ ...e, expression_id: byText.get(e.expression_text.toLowerCase()) || null }));
 }
 
+// Cross-user by design (service-role bypasses RLS) — only ever reads
+// text_analysis (structured knowledge), never another user's
+// text_resources.original_text/cleaned_text.
+async function findPublicAnalysisByHash(supabaseAdmin, hash) {
+  const { data: resources } = await supabaseAdmin.from("text_resources").select("id").eq("text_hash", hash);
+  const resourceIds = (resources || []).map((r) => r.id);
+  if (!resourceIds.length) return null;
+  const { data: analysis } = await supabaseAdmin
+    .from("text_analysis")
+    .select("*")
+    .in("text_resource_id", resourceIds)
+    .eq("visibility", "public")
+    .order("analysis_version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return analysis || null;
+}
+
 function logUsage(entries, { userId, textResourceId, feature, model, usage, cacheHit }) {
   entries.push({
     user_id: userId || null,
@@ -325,6 +343,23 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
 
   if (existingAnalysis) {
     return { textResource, analysis: existingAnalysis, tier, cached: true };
+  }
+
+  // SPK-ADR-001/SPK-SPEC-003 upgrade (2026-07-27): "Generate Once, Reuse
+  // Forever" — the reusable long-term asset is the structured knowledge
+  // (this analysis), never the article text itself. text_resources.
+  // original_text/cleaned_text of whoever first submitted this text stays
+  // private to them forever; only the analysis (vocabulary/expressions/
+  // summary, all already just references + short generated text, no raw
+  // article content) can be marked public, and only by an admin action —
+  // there is no user-facing "share" button in V1. Look for a public
+  // analysis derived from the same text_hash by ANY user before ever
+  // calling AI. The current user still gets their own private
+  // text_resource row for their own reading history above; nothing about
+  // another user's submission is exposed here beyond the shared analysis.
+  const publicAnalysis = await findPublicAnalysisByHash(supabaseAdmin, hash);
+  if (publicAnalysis) {
+    return { textResource, analysis: publicAnalysis, tier, cached: true, reusedFromPublic: true };
   }
 
   if (tier === "oversized") {
