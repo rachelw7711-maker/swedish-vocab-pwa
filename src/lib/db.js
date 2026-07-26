@@ -524,6 +524,17 @@ export async function loadPhraseObjects() {
   return rows.map((row) => normalizeWord(row, null, translationRowsById.get(clean(row.id))));
 }
 
+// Single-entry lookup by id, for the Läsning reading-page's "查看完整表达卡"
+// link (规范§9.4) — expressions aren't in the main word snapshot (state.words
+// only holds object_type "word"), so this fetches directly.
+export async function loadWordOrPhraseById(id) {
+  const cleanId = clean(id);
+  if (!cleanId) return null;
+  const { data, error } = await supabase.from(TABLES.words).select("*").eq("id", cleanId).maybeSingle();
+  if (error) throw error;
+  return data ? normalizeWord(data) : null;
+}
+
 // "Promote" one collocation line from a word's Fraser section into its own
 // standalone learning_objects entry (object_type "phrase"), so it can be
 // browsed in the Fraser/Uttryck catalog and studied independently — the
@@ -1512,6 +1523,7 @@ function toShadowingItemRow(userId, item = {}) {
     title: clean(item.title) || clean(item.swedish) || "Shadowing",
     swedish: clean(item.swedish),
     chinese: clean(item.chinese),
+    text_resource_id: item.text_resource_id || null,
     category: clean(item.category) || "Ungrouped",
     level: Number(item.level || 1) || 1,
     standard_audio_bucket: clean(item.standard_audio_bucket) || "shadowing-standard-audio",
@@ -1558,6 +1570,7 @@ function fromShadowingItemRow(row) {
     tts_error: row.tts_error,
     category: row.category,
     level: row.level,
+    text_resource_id: row.text_resource_id,
     createdAt,
     updatedAt,
     created_at: createdAt,
@@ -1565,21 +1578,20 @@ function fromShadowingItemRow(row) {
   };
 }
 
-// Läsning V1 — see supabase/migrations/20260725140000_reading_items_v1.sql.
+// Läsning — see supabase/migrations/20260727010000_text_resources_v1.sql.
 // Same authenticated-only, user-owned pattern as shadowing_items (personal
-// content, not the shared learning_objects catalog).
+// content, not the shared learning_objects catalog). reading_items is now a
+// thin per-user wrapper; the text itself and its analysis (key vocabulary/
+// expressions/summary) live in the shared text_resources/text_analysis
+// tables so Läsning and Shadowing never re-analyze the same text — see
+// Reviews/AI成本控制与阅读模块-实施计划-2026-07-26.md.
 function toReadingItemRow(userId, item = {}) {
   return {
     id: item.id || undefined,
     user_id: userId,
     title: clean(item.title),
     source_text: clean(item.source_text || item.sourceText),
-    cefr_level: clean(item.cefr_level || item.cefrLevel) || null,
-    summary_sv: clean(item.summary_sv),
-    summary_zh: clean(item.summary_zh),
-    key_words: Array.isArray(item.key_words) ? item.key_words : [],
-    key_phrases: Array.isArray(item.key_phrases) ? item.key_phrases : [],
-    analyzed_at: item.analyzed_at ? millisToIso(item.analyzed_at) : item.analyzed_at === null ? null : undefined,
+    text_resource_id: item.text_resource_id || null,
     shadowing_item_id: item.shadowing_item_id || null,
     created_at: millisToIso(item.createdAt || item.created_at) || undefined,
     updated_at: new Date().toISOString(),
@@ -1592,12 +1604,7 @@ function fromReadingItemRow(row) {
     id: row.id,
     title: row.title,
     source_text: row.source_text,
-    cefr_level: row.cefr_level,
-    summary_sv: row.summary_sv,
-    summary_zh: row.summary_zh,
-    key_words: row.key_words || [],
-    key_phrases: row.key_phrases || [],
-    analyzed_at: dateToMillis(row.analyzed_at),
+    text_resource_id: row.text_resource_id,
     shadowing_item_id: row.shadowing_item_id,
     createdAt: dateToMillis(row.created_at),
     updatedAt: dateToMillis(row.updated_at),
@@ -1642,11 +1649,28 @@ export async function deleteReadingItem(itemId) {
   return { enabled: true };
 }
 
-// The only step that goes through the server: OpenAI must never be called
-// with a key exposed to the browser. Everything else (create/read/update/
-// delete of the reading_items row itself) goes straight through Supabase
-// like the functions above, gated by RLS.
-export async function analyzeReadingText(text) {
+function fromTextAnalysisRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    textResourceId: row.text_resource_id,
+    selectedVocabulary: row.selected_vocabulary || [],
+    selectedExpressions: row.selected_expressions || [],
+    summarySv: row.summary_sv || "",
+    summaryZh: row.summary_zh || "",
+    summaryGeneratedAt: dateToMillis(row.summary_generated_at),
+  };
+}
+
+// The only steps that go through the server: OpenAI must never be called
+// with a key exposed to the browser, and writing new learning_objects rows
+// needs the service-role key the browser doesn't have. Everything else
+// (create/read/update/delete of the reading_items row itself) goes straight
+// through Supabase like the functions above, gated by RLS. See
+// Reviews/AI成本控制与阅读模块-实施计划-2026-07-26.md — the server checks its
+// own text_hash cache first, so re-analyzing the same text (or switching
+// between Läsning/Shadowing) never re-calls the AI.
+export async function analyzeReadingText(text, sourceType = "paste") {
   const token = await getAccessToken().catch(() => "");
   const response = await fetch("/api/reading/analyze", {
     method: "POST",
@@ -1654,11 +1678,47 @@ export async function analyzeReadingText(text) {
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       "content-type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, sourceType }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte analysera texten.");
-  return payload.analysis;
+  return {
+    textResource: payload.textResource,
+    analysis: fromTextAnalysisRow(payload.analysis),
+    tier: payload.tier,
+    cached: Boolean(payload.cached),
+  };
+}
+
+// 规范§9.3/§10 — summary is a separate, user-initiated call, never bundled
+// into analyzeReadingText above.
+export async function generateReadingSummary(textResourceId) {
+  const token = await getAccessToken().catch(() => "");
+  const response = await fetch("/api/reading/summary", {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ textResourceId }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Kunde inte generera sammanfattning.");
+  return payload.summary;
+}
+
+export async function loadTextAnalysis(textResourceId) {
+  const id = clean(textResourceId);
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from("text_analysis")
+    .select("*")
+    .eq("text_resource_id", id)
+    .order("analysis_version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return fromTextAnalysisRow(data);
 }
 
 function fromShadowingRecordingRow(row) {

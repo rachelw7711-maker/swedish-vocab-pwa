@@ -315,6 +315,7 @@ const state = {
   readingItems: [],
   readingItemsLoaded: false,
   selectedReadingId: "",
+  currentReadingAnalysis: null,
   selectedNotebook: "",
   historyPos: "all",
   historyAction: "all",
@@ -545,6 +546,9 @@ const els = {
   readingSummaryZh: document.querySelector("#readingSummaryZh"),
   readingKeyWords: document.querySelector("#readingKeyWords"),
   readingKeyPhrases: document.querySelector("#readingKeyPhrases"),
+  readingWordCountNote: document.querySelector("#readingWordCountNote"),
+  readingWordPreview: document.querySelector("#readingWordPreview"),
+  generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
   sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
   backToBooksBtn: document.querySelector("#backToBooksBtn"),
   bookActionMenu: document.querySelector("#bookActionMenu"),
@@ -2655,15 +2659,30 @@ function renderReadingList() {
     snippet.className = "reading-item-snippet";
     snippet.textContent = clean(item.source_text).slice(0, 80);
     card.append(title, snippet);
-    if (item.cefr_level) {
-      const badge = document.createElement("span");
-      badge.className = "pos-badge";
-      badge.textContent = item.cefr_level;
-      card.append(badge);
-    }
     fragment.append(card);
   });
   els.readingList.append(fragment);
+}
+
+function readingWordCount(text) {
+  return (clean(text).match(/[a-zA-ZåäöÅÄÖ]+/g) || []).length;
+}
+
+// 规范§5 — surfaces the length tier before the user hits "Analysera", so a
+// long text doesn't look like a silent failure.
+function updateReadingWordCountNote() {
+  if (!els.readingWordCountNote) return;
+  const count = readingWordCount(els.readingTextInput.value);
+  if (!count) {
+    els.readingWordCountNote.hidden = true;
+    return;
+  }
+  let note = `${count} ord.`;
+  if (count > 2000) note += " För lång för att sparas i sin helhet just nu (max 2000 ord).";
+  else if (count > 1000) note += " Över 1000 ord — automatisk analys av hela texten stöds inte än, korta ner texten.";
+  else if (count > 500) note += " Lite längre text — analysen kostar något mer.";
+  els.readingWordCountNote.hidden = false;
+  els.readingWordCountNote.textContent = note;
 }
 
 function updateReadingSteps(stage) {
@@ -2678,25 +2697,36 @@ function updateReadingSteps(stage) {
 
 function openReadingEditor(item = null) {
   state.selectedReadingId = item?.id || "";
+  state.currentReadingAnalysis = null;
   els.readingItemId.value = item?.id || "";
   els.readingTitleInput.value = item?.title || "";
   els.readingTextInput.value = item?.source_text || "";
   els.deleteReadingBtn.hidden = !item?.id;
   els.analyzeReadingBtn.hidden = !item?.id;
-  if (item?.analyzed_at) {
-    renderReadingAnalysis(item);
-    updateReadingSteps("analyzed");
-  } else {
-    els.readingAnalysisPanel.hidden = true;
-    updateReadingSteps(item?.id ? "saved" : "paste");
-  }
+  updateReadingWordCountNote();
+  els.readingAnalysisPanel.hidden = true;
+  updateReadingSteps(item?.id ? "saved" : "paste");
   els.readingListPanel.hidden = true;
   els.readingList.hidden = true;
   els.readingEditorPanel.hidden = false;
+
+  // Async-enhance once any existing analysis loads, same pattern as
+  // enhanceGrammarSectionWithStructuredForms — the panel is already usable
+  // synchronously above.
+  if (item?.text_resource_id) {
+    remoteDb.loadTextAnalysis(item.text_resource_id).then((analysis) => {
+      if (els.readingItemId.value !== item.id) return; // user navigated away
+      if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
+      state.currentReadingAnalysis = analysis;
+      renderReadingAnalysis(analysis);
+      updateReadingSteps("analyzed");
+    }).catch((error) => console.warn("[SpråkLab] Failed to load existing text analysis.", error));
+  }
 }
 
 function closeReadingEditor() {
   state.selectedReadingId = "";
+  state.currentReadingAnalysis = null;
   els.readingListPanel.hidden = false;
   els.readingList.hidden = false;
   els.readingEditorPanel.hidden = true;
@@ -2731,26 +2761,23 @@ async function saveCurrentReadingItem() {
   }
 }
 
+// 规范§3/§8/§9 — the server does DB-first lookup, hash-cache check, and only
+// calls AI for genuinely missing words/expressions (server-reading.mjs).
+// This just saves the item, sends the text, and renders whatever three-layer
+// result comes back — the cost-control logic isn't the client's job.
 async function analyzeCurrentReadingItem() {
   const saved = await saveCurrentReadingItem();
   if (!saved) return;
   els.analyzeReadingBtn.disabled = true;
   els.analyzeReadingBtn.textContent = "Analyserar…";
   try {
-    const analysis = await remoteDb.analyzeReadingText(saved.source_text);
-    const updated = {
-      ...saved,
-      summary_sv: analysis.summary_sv,
-      summary_zh: analysis.summary_zh,
-      cefr_level: analysis.cefr_level,
-      key_words: analysis.key_words || [],
-      key_phrases: analysis.key_phrases || [],
-      analyzed_at: Date.now(),
-    };
+    const { textResource, analysis } = await remoteDb.analyzeReadingText(saved.source_text, "paste");
+    const updated = { ...saved, text_resource_id: textResource.id };
     const result = await remoteDb.upsertReadingItem(updated);
     const finalItem = result?.item || updated;
     state.readingItems = state.readingItems.map((item) => (item.id === finalItem.id ? finalItem : item));
-    renderReadingAnalysis(finalItem);
+    state.currentReadingAnalysis = analysis;
+    renderReadingAnalysis(analysis);
     updateReadingSteps("analyzed");
   } catch (error) {
     console.warn("[SpråkLab] Reading analysis failed.", error);
@@ -2762,41 +2789,140 @@ async function analyzeCurrentReadingItem() {
   }
 }
 
-function renderReadingAnalysis(item) {
+// 规范§9.4: 阅读页面只负责发现与轻量预览 — key vocabulary chips only ever
+// show a lightweight Ordbok-sourced preview inline; key expressions already
+// carry their full display content (expression + meaning + source sentence)
+// per 规范§9.2, so no separate reveal step is needed for those.
+function renderReadingAnalysis(analysis) {
   els.readingAnalysisPanel.hidden = false;
-  els.readingSummarySv.textContent = item.summary_sv || "";
-  els.readingSummaryZh.textContent = item.summary_zh || "";
+  if (els.readingWordPreview) {
+    els.readingWordPreview.hidden = true;
+    els.readingWordPreview.replaceChildren();
+  }
+
+  const hasSummary = Boolean(analysis.summarySv);
+  els.readingSummarySv.textContent = analysis.summarySv || "";
+  els.readingSummaryZh.textContent = analysis.summaryZh || "";
+  els.readingSummarySv.hidden = !hasSummary;
+  els.readingSummaryZh.hidden = !hasSummary;
+  if (els.generateReadingSummaryBtn) els.generateReadingSummaryBtn.hidden = hasSummary;
+
   els.readingKeyWords.replaceChildren();
-  (item.key_words || []).forEach((entry) => {
+  const vocabulary = analysis.selectedVocabulary || [];
+  vocabulary.forEach((entry) => {
+    const word = state.words.find((item) => item.id === entry.word_id);
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "chip reading-keyword-chip";
-    chip.dataset.readingWord = entry.swedish;
-    chip.textContent = `${entry.swedish} · ${entry.chinese}`;
+    chip.dataset.readingWordId = entry.word_id;
+    chip.textContent = word ? `${word.swedish} · ${word.chinese}` : entry.swedish;
     els.readingKeyWords.append(chip);
   });
-  if (!(item.key_words || []).length) {
+  if (!vocabulary.length) {
     const none = document.createElement("span");
     none.className = "empty-state";
     none.textContent = "Inga särskilda ord att lyfta fram i den här texten.";
     els.readingKeyWords.append(none);
   }
+
   els.readingKeyPhrases.replaceChildren();
-  (item.key_phrases || []).forEach((entry) => {
+  const expressions = analysis.selectedExpressions || [];
+  expressions.forEach((entry) => {
     const row = document.createElement("div");
     row.className = "reading-phrase-row";
     const phrase = document.createElement("strong");
-    phrase.textContent = entry.phrase;
+    phrase.textContent = entry.expression_text;
     const meaning = document.createElement("span");
     meaning.textContent = entry.meaning_zh;
-    row.append(phrase, meaning);
+    const example = document.createElement("p");
+    example.className = "reading-phrase-example";
+    example.textContent = entry.source_sentence;
+    const exampleZh = document.createElement("p");
+    exampleZh.className = "reading-phrase-example example-translation";
+    exampleZh.textContent = entry.source_sentence_zh;
+    row.append(phrase, meaning, example, exampleZh);
+    if (entry.expression_id) {
+      const link = document.createElement("button");
+      link.type = "button";
+      link.className = "reading-expression-link";
+      link.dataset.readingExpressionOpenId = entry.expression_id;
+      link.textContent = "Visa i Fraser/Uttryck";
+      row.append(link);
+    }
     els.readingKeyPhrases.append(row);
   });
-  if (!(item.key_phrases || []).length) {
+  if (!expressions.length) {
     const none = document.createElement("span");
     none.className = "empty-state";
     none.textContent = "Inga fasta uttryck hittades i den här texten.";
     els.readingKeyPhrases.append(none);
+  }
+}
+
+// 规范§9.4 — the light preview reads directly from the already-loaded Ordbok
+// snapshot (state.words), no AI call. "Visa hela ordkortet" is the only
+// path into the full word card.
+function showReadingWordPreview(wordId) {
+  const container = els.readingWordPreview;
+  if (!container) return;
+  const word = state.words.find((item) => item.id === wordId);
+  if (!word) {
+    container.hidden = true;
+    return;
+  }
+  container.replaceChildren();
+  container.hidden = false;
+  const title = document.createElement("strong");
+  title.textContent = word.swedish;
+  const pos = document.createElement("span");
+  pos.className = "pos-badge";
+  pos.textContent = posBadgeLabel(word.pos);
+  const meaning = document.createElement("p");
+  meaning.textContent = word.chinese;
+  const example = document.createElement("p");
+  example.className = "example-translation";
+  example.textContent = clean(word.example).split("\n")[0] || "";
+  const openFull = document.createElement("button");
+  openFull.type = "button";
+  openFull.className = "secondary-button";
+  openFull.textContent = "Visa hela ordkortet";
+  openFull.addEventListener("click", () => openWordFromReadingChip(word.swedish));
+  container.append(title, pos, meaning, example, openFull);
+}
+
+async function openExpressionFromReadingLink(expressionId) {
+  try {
+    const entry = await remoteDb.loadWordOrPhraseById(expressionId);
+    if (entry) openWordDetail(entry, "library");
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to open expression detail.", error);
+  }
+}
+
+// 规范§9.3/§10 — summary is only ever generated here, on click, never at
+// import/analyze time.
+async function generateSummaryForCurrentReadingItem() {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  if (!item?.text_resource_id || !els.generateReadingSummaryBtn) return;
+  els.generateReadingSummaryBtn.disabled = true;
+  els.generateReadingSummaryBtn.textContent = "Genererar…";
+  try {
+    const summary = await remoteDb.generateReadingSummary(item.text_resource_id);
+    els.readingSummarySv.textContent = summary.summary_sv;
+    els.readingSummaryZh.textContent = summary.summary_zh;
+    els.readingSummarySv.hidden = false;
+    els.readingSummaryZh.hidden = false;
+    els.generateReadingSummaryBtn.hidden = true;
+    if (state.currentReadingAnalysis) {
+      state.currentReadingAnalysis.summarySv = summary.summary_sv;
+      state.currentReadingAnalysis.summaryZh = summary.summary_zh;
+    }
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to generate reading summary.", error);
+    alert(error.message || "Kunde inte generera sammanfattning just nu.");
+  } finally {
+    els.generateReadingSummaryBtn.disabled = false;
+    els.generateReadingSummaryBtn.textContent = "Generera sammanfattning";
   }
 }
 
@@ -2821,8 +2947,11 @@ async function sendCurrentReadingItemToShadowing() {
     const result = await remoteDb.upsertShadowingItem({
       title: item.title || "Läsning",
       swedish: item.source_text,
-      chinese: item.summary_zh || "",
+      chinese: state.currentReadingAnalysis?.summaryZh || "",
       category: "Läsning",
+      // 规范§4/§13 — same text_resource, so Shadowing never re-analyzes or
+      // re-transcribes what Läsning already processed.
+      text_resource_id: item.text_resource_id || null,
     });
     if (!result?.enabled) {
       els.readingAuthNote.hidden = false;
@@ -2885,7 +3014,7 @@ async function renderContinueLearningPanel() {
   const reading = state.readingItems[0];
   if (reading) {
     els.continueReadingTitle.textContent = reading.title || "(Utan titel)";
-    els.continueReadingSubtitle.textContent = reading.analyzed_at ? "Fortsätt där du slutade" : "Ej analyserad än";
+    els.continueReadingSubtitle.textContent = reading.text_resource_id ? "Fortsätt där du slutade" : "Ej analyserad än";
     els.continueReadingBtn.textContent = "Fortsätt läsa";
   } else {
     els.continueReadingTitle.textContent = "Ingen läsning ännu";
@@ -9225,10 +9354,17 @@ function bindEvents() {
     if (item) openReadingEditor(item);
   });
   els.readingKeyWords?.addEventListener("click", (event) => {
-    const chip = event.target.closest("[data-reading-word]");
+    const chip = event.target.closest("[data-reading-word-id]");
     if (!chip) return;
-    openWordFromReadingChip(chip.dataset.readingWord);
+    showReadingWordPreview(chip.dataset.readingWordId);
   });
+  els.readingKeyPhrases?.addEventListener("click", (event) => {
+    const link = event.target.closest("[data-reading-expression-open-id]");
+    if (!link) return;
+    openExpressionFromReadingLink(link.dataset.readingExpressionOpenId);
+  });
+  els.generateReadingSummaryBtn?.addEventListener("click", generateSummaryForCurrentReadingItem);
+  els.readingTextInput?.addEventListener("input", updateReadingWordCountNote);
 
   els.favoriteCategoryFilter.addEventListener("change", (event) => {
     state.favoriteCategory = event.target.value;

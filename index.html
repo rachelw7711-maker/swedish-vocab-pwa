@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=148" />
+    <link rel="stylesheet" href="/styles.css?v=149" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -326,6 +326,7 @@
               <textarea id="readingTextInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
             </label>
             <p class="reading-auth-note" id="readingAuthNote" hidden>Logga in för att spara dina texter.</p>
+            <p class="reading-word-count-note" id="readingWordCountNote" hidden></p>
             <div class="practice-actions">
               <button class="primary-button" id="saveReadingBtn" type="button">Spara</button>
               <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
@@ -333,12 +334,14 @@
             <section id="readingAnalysisPanel" hidden>
               <div class="reading-summary-block">
                 <h4>Sammanfattning</h4>
+                <button class="secondary-button" id="generateReadingSummaryBtn" type="button">Generera sammanfattning</button>
                 <p id="readingSummarySv"></p>
                 <p id="readingSummaryZh" class="example-translation"></p>
               </div>
               <div class="reading-keywords-block">
                 <h4>Ord värda att lära sig</h4>
                 <div id="readingKeyWords" class="reading-chip-list"></div>
+                <div id="readingWordPreview" class="reading-word-preview" hidden></div>
               </div>
               <div class="reading-phrases-block">
                 <h4>Fasta uttryck i texten</h4>
@@ -1203,6 +1206,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=155" type="module"></script>
+    <script src="/app.js?v=156" type="module"></script>
   </body>
 </html>

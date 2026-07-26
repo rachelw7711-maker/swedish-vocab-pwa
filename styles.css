@@ -4140,6 +4140,43 @@ h2 {
   font-size: 0.84rem;
 }
 
+.reading-phrase-example {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.reading-expression-link {
+  justify-self: start;
+  margin-top: 4px;
+  border: none;
+  background: none;
+  color: var(--accent, #2f7d5f);
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.reading-word-count-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.reading-word-preview {
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--secondary-surface);
+}
+
+.reading-word-preview p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
 .load-more-state {
   display: flex;
   align-items: center;
