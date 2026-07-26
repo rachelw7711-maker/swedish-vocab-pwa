@@ -4116,15 +4116,26 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  max-width: 100%;
 }
 
 .reading-keyword-chip {
   cursor: pointer;
+  /* The base .chip rule sets white-space: nowrap for short category tags —
+     these chips carry a full word + Chinese meaning, which needs to wrap
+     instead of stretching the chip (and its flex ancestors) past the
+     viewport width on mobile. */
+  white-space: normal;
+  max-width: 100%;
+  text-align: left;
+  height: auto;
+  min-height: 40px;
 }
 
 .reading-phrase-list {
   display: grid;
   gap: 8px;
+  max-width: 100%;
 }
 
 .reading-phrase-row {
@@ -4133,6 +4144,8 @@ h2 {
   padding: 8px 12px;
   border-radius: 12px;
   background: var(--secondary-surface);
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 .reading-phrase-row span {
