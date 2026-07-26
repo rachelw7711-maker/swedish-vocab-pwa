@@ -1,0 +1,3887 @@
+[
+  {
+    "id": "27bfcd63-cb20-4b99-bc62-9109100ed4fa",
+    "swedish": "bemanna",
+    "part_of_speech": "verb",
+    "chinese": "为……配备人员；给……安排人手",
+    "swedish_explanation": "att förse en verksamhet, en funktion eller en plats med den personal som behövs för att den ska kunna fungera som avsett"
+  },
+  {
+    "id": "b3e70ba6-cfdf-45dc-90c7-241831eff0a3",
+    "swedish": "ladda",
+    "part_of_speech": "verb",
+    "chinese": "充电；下载；装载。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f7c3fcb2-5a83-402d-ab08-5b8502653499",
+    "swedish": "bädda",
+    "part_of_speech": "verb",
+    "chinese": "铺床。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "4c5d9209-4977-4df6-92de-37476b9d3651",
+    "swedish": "vattna",
+    "part_of_speech": "verb",
+    "chinese": "浇水。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fa17d738-04e1-42db-9086-94a2d752fec5",
+    "swedish": "ämna",
+    "part_of_speech": "verb",
+    "chinese": "打算，准备",
+    "swedish_explanation": "att planera eller ha för avsikt att göra något"
+  },
+  {
+    "id": "38c312d7-59ae-4236-bd53-581c8cb8981a",
+    "swedish": "ena",
+    "part_of_speech": "verb",
+    "chinese": "使一致；使同意",
+    "swedish_explanation": "att få människor att tycka samma eller att bli överens"
+  },
+  {
+    "id": "3c969b99-7f3b-40f2-99c8-61d6569ae04f",
+    "swedish": "liknande",
+    "part_of_speech": "adjective",
+    "chinese": "类似的，相似的",
+    "swedish_explanation": "som är nästan samma som något annat"
+  },
+  {
+    "id": "fa11fc8c-0efc-4837-9dfa-9f979adf3f38",
+    "swedish": "nuvarande",
+    "part_of_speech": "adjective",
+    "chinese": "现在的，当前的",
+    "swedish_explanation": "som finns eller gäller nu"
+  },
+  {
+    "id": "ecc76ae2-ced3-471b-b822-706d5156b3dc",
+    "swedish": "omfatta",
+    "part_of_speech": "verb",
+    "chinese": "包括；涵盖",
+    "swedish_explanation": "att innehålla eller gälla flera delar"
+  },
+  {
+    "id": "2c572d00-9512-46ee-8073-1197af385de6",
+    "swedish": "intresserad",
+    "part_of_speech": "adjective",
+    "chinese": "感兴趣的",
+    "swedish_explanation": "som vill veta mer om något eller tycker om något"
+  },
+  {
+    "id": "cd3a3945-c17c-4277-b008-7519c0e1e8dd",
+    "swedish": "utsätta",
+    "part_of_speech": "verb",
+    "chinese": "使遭受；让……面临",
+    "swedish_explanation": "att göra så att någon eller något måste vara med om något, ofta något svårt eller dåligt"
+  },
+  {
+    "id": "6b0c68df-e3c3-4994-8ce8-38980c29d6d2",
+    "swedish": "kommande",
+    "part_of_speech": "adjective",
+    "chinese": "即将到来的，下一个",
+    "swedish_explanation": "som kommer snart eller senare"
+  },
+  {
+    "id": "055a413f-ee0b-4d2a-9ca6-8e8d77edb811",
+    "swedish": "omfattande",
+    "part_of_speech": "adjective",
+    "chinese": "广泛的；大量的",
+    "swedish_explanation": "som är stor eller innehåller mycket"
+  },
+  {
+    "id": "767719ac-0e5e-4f36-94e3-88a0d6e6c4e8",
+    "swedish": "charmerande",
+    "part_of_speech": "adjective",
+    "chinese": "迷人的，有魅力的",
+    "swedish_explanation": "som på ett tilltalande, behagligt och ofta personligt sätt väcker sympati eller intresse"
+  },
+  {
+    "id": "08f7d315-3a02-4b77-82a1-ccd3012fb6a0",
+    "swedish": "utfiskad",
+    "part_of_speech": "verb",
+    "chinese": "被过度捕捞的；鱼类资源被捕捞过多而减少的。常用于海洋、湖泊或渔业语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b6dfb645-40d4-451f-ba20-f3583b83e8f3",
+    "swedish": "motsvarande",
+    "part_of_speech": "adjective",
+    "chinese": "对应的；相应的",
+    "swedish_explanation": "som passar till något annat eller är lika i en annan grupp"
+  },
+  {
+    "id": "477046e1-172c-4b44-845c-d099ccd9c15a",
+    "swedish": "orätt",
+    "part_of_speech": "adjective",
+    "chinese": "不公正的；错误的；不正当的",
+    "swedish_explanation": "som strider mot rättvisa, sanning eller det som är moraliskt eller juridiskt riktigt"
+  },
+  {
+    "id": "cbe44096-fe76-47af-975c-b820e57013cd",
+    "swedish": "ana",
+    "part_of_speech": "verb",
+    "chinese": "猜到，感觉到",
+    "swedish_explanation": "att förstå eller känna något utan att någon säger det direkt"
+  },
+  {
+    "id": "5dff19d4-42e1-400d-929e-42bc8e57ae24",
+    "swedish": "övertygad",
+    "part_of_speech": "adjective",
+    "chinese": "确信的，相信的",
+    "swedish_explanation": "som är säker på att något är sant eller riktigt"
+  },
+  {
+    "id": "5a047ef2-f091-4777-822f-426f8da18ece",
+    "swedish": "utsatt",
+    "part_of_speech": "adjective",
+    "chinese": "脆弱的；易受影响的；处于不利境地的",
+    "swedish_explanation": "som lätt kan få problem eller bli påverkad av något svårt"
+  },
+  {
+    "id": "f5af553f-4697-47fb-80ed-9888c4af07c8",
+    "swedish": "fadd",
+    "part_of_speech": "adjective",
+    "chinese": "乏味的，平淡无奇的；迟钝的",
+    "swedish_explanation": "Fadd beskriver något som saknar smak, kraft eller liv. Det kan också beskriva en person eller stil som känns trög, blek eller ointressant."
+  },
+  {
+    "id": "2b583aba-0ac2-4527-8347-ba4fe3088d8e",
+    "swedish": "opublicerad",
+    "part_of_speech": "adjective",
+    "chinese": "未发表的；未出版的",
+    "swedish_explanation": "som inte har publicerats eller getts ut offentligt"
+  },
+  {
+    "id": "cda4e62d-e48d-40fe-8127-b342f18d1d05",
+    "swedish": "förtjäna",
+    "part_of_speech": "verb",
+    "chinese": "值得；应得",
+    "swedish_explanation": "att vara värd något eller att ha rätt att få något"
+  },
+  {
+    "id": "83e16f2b-471e-4439-b2a9-e00b86402817",
+    "swedish": "teckna",
+    "part_of_speech": "verb",
+    "chinese": "画；签署；订阅",
+    "swedish_explanation": "att rita något med penna eller att skriva sitt namn på ett papper. Det kan också betyda att skaffa ett abonnemang eller en försäkring."
+  },
+  {
+    "id": "8c9e1715-8d45-4d31-98f0-60aed7eb7d8b",
+    "swedish": "växande",
+    "part_of_speech": "adjective",
+    "chinese": "增长的；不断增加的",
+    "swedish_explanation": "som blir större eller mer"
+  },
+  {
+    "id": "46d7ec21-63fb-4c17-b4bd-e3b827f6bc68",
+    "swedish": "inrätta",
+    "part_of_speech": "verb",
+    "chinese": "设立，建立",
+    "swedish_explanation": "att skapa eller starta något nytt, till exempel en skola, en regel eller en tjänst"
+  },
+  {
+    "id": "ce964457-622f-47f1-8178-fee426d65287",
+    "swedish": "kultiverad",
+    "part_of_speech": "adjective",
+    "chinese": "有教养的；有文化修养的；文雅的",
+    "swedish_explanation": "Kultiverad beskriver en person, ett sätt eller en miljö som präglas av bildning, god smak, förfining och vana vid kultur och intellektuella sammanhang."
+  },
+  {
+    "id": "c98e69c7-e699-411b-af74-9f915317de41",
+    "swedish": "angelägen",
+    "part_of_speech": "adjective",
+    "chinese": "关心的；在意的；急切的",
+    "swedish_explanation": "som tycker att något är viktigt och vill göra det eller få det snart"
+  },
+  {
+    "id": "f405009a-722b-406d-9d07-a422fc0babbe",
+    "swedish": "genomträngande",
+    "part_of_speech": "adjective",
+    "chinese": "穿透性的；洞察力极强的；尖锐刺耳的",
+    "swedish_explanation": "som tränger djupt in, antingen fysiskt eller bildligt; som starkt påverkar sinnena eller visar mycket skarp förståelse"
+  },
+  {
+    "id": "7395df33-32a8-47ea-9b46-3684bcdbddac",
+    "swedish": "pågående",
+    "part_of_speech": "adjective",
+    "chinese": "正在进行的",
+    "swedish_explanation": "som händer nu eller som inte är klart än"
+  },
+  {
+    "id": "73431f0d-f01b-4e3f-ab60-943e4427b25f",
+    "swedish": "överlämna",
+    "part_of_speech": "verb",
+    "chinese": "移交；递交",
+    "swedish_explanation": "att ge något till en annan person, ofta formellt eller direkt i handen"
+  },
+  {
+    "id": "ea37c3b6-cf9d-4dc3-862e-90486ae3c639",
+    "swedish": "övergripande",
+    "part_of_speech": "adjective",
+    "chinese": "总体的，概括性的",
+    "swedish_explanation": "som visar helheten och inte små detaljer"
+  },
+  {
+    "id": "19c4b1ad-e664-46a7-9260-57e2f8c9e921",
+    "swedish": "egenartad",
+    "part_of_speech": "adjective",
+    "chinese": "独特的，古怪而有个性的",
+    "swedish_explanation": "som skiljer sig tydligt från det vanliga och därför uppfattas som mycket speciell, ibland lite märklig"
+  },
+  {
+    "id": "d134d2f6-fab2-46c2-b189-d5dc00683b6d",
+    "swedish": "bestående",
+    "part_of_speech": "adjective",
+    "chinese": "持续的，永久的",
+    "swedish_explanation": "som finns kvar länge och inte snabbt försvinner"
+  },
+  {
+    "id": "09472ef8-5417-4bed-8bcb-6a787c214e31",
+    "swedish": "illamående",
+    "part_of_speech": "adjective",
+    "chinese": "恶心的；反胃的；令人作呕的",
+    "swedish_explanation": "som känner att man vill kräkas, eller som hänger ihop med en sådan känsla"
+  },
+  {
+    "id": "49b3b8d8-a3a4-4399-8d0c-8d8f5c946e59",
+    "swedish": "brinna",
+    "part_of_speech": "verb",
+    "chinese": "燃烧；着火",
+    "swedish_explanation": "att vara i eld och ge ljus och värme"
+  },
+  {
+    "id": "84dd16c6-cce6-4a37-8216-6882ed8e2166",
+    "swedish": "rinna",
+    "part_of_speech": "verb",
+    "chinese": "流，流动",
+    "swedish_explanation": "att flyta som vatten eller annan vätska"
+  },
+  {
+    "id": "692658a3-df57-4806-bd75-2bb5a27df329",
+    "swedish": "vittna",
+    "part_of_speech": "verb",
+    "chinese": "作证，证明",
+    "swedish_explanation": "att säga vad man vet om något, ofta till polis eller i domstol"
+  },
+  {
+    "id": "f0dcbf4a-946b-4606-aa35-6bce43282d03",
+    "swedish": "motsatt",
+    "part_of_speech": "adjective",
+    "chinese": "相反的；对面的",
+    "swedish_explanation": "som är helt annorlunda än något annat, eller som ligger på andra sidan"
+  },
+  {
+    "id": "804d6c13-28f6-47bd-949c-a051b2e486f7",
+    "swedish": "innefatta",
+    "part_of_speech": "verb",
+    "chinese": "包括，包含",
+    "swedish_explanation": "att ha med något som en del av något större"
+  },
+  {
+    "id": "4160c377-cb16-490b-bd31-d8356a25eeab",
+    "swedish": "klarvaken",
+    "part_of_speech": "adjective",
+    "chinese": "完全清醒的，毫无睡意的",
+    "swedish_explanation": "som är helt vaken och mentalt mycket klar, ofta trots att man borde vara trött eller sova"
+  },
+  {
+    "id": "3d3561c6-3bbe-4848-ae8a-c4ce7b14592e",
+    "swedish": "föregående",
+    "part_of_speech": "adjective",
+    "chinese": "前面的；上一个的",
+    "swedish_explanation": "som kommer före något annat; den som var innan"
+  },
+  {
+    "id": "df0e38a6-512c-406e-84cd-112e2ac7813b",
+    "swedish": "slutta",
+    "part_of_speech": "verb",
+    "chinese": "终止；结束；停止",
+    "swedish_explanation": "att upphöra helt eller gradvis, ofta på ett definitivt eller avgörande sätt"
+  },
+  {
+    "id": "c0e74026-b2f6-4262-8fd8-a202bbdfbb64",
+    "swedish": "skrämmande",
+    "part_of_speech": "adjective",
+    "chinese": "可怕的，吓人的",
+    "swedish_explanation": "något som gör att man blir rädd"
+  },
+  {
+    "id": "67b03264-c565-45bc-9ce9-0cb157d8bdd2",
+    "swedish": "ovanstående",
+    "part_of_speech": "adjective",
+    "chinese": "上述的，上面的",
+    "swedish_explanation": "som nämns eller står ovanför i en text"
+  },
+  {
+    "id": "90709058-4810-4609-b168-59cd6c854816",
+    "swedish": "anordna",
+    "part_of_speech": "verb",
+    "chinese": "安排；组织；举办",
+    "swedish_explanation": "att planera och ordna något, till exempel ett möte, en fest eller en aktivitet"
+  },
+  {
+    "id": "bc6a680f-10c5-4603-863d-a26d24f2f7d5",
+    "swedish": "stridslysten",
+    "part_of_speech": "adjective",
+    "chinese": "好斗的，富于争斗欲的",
+    "swedish_explanation": "som gärna söker konflikt eller strid och har en stark vilja att angripa eller ta upp kamp mot någon"
+  },
+  {
+    "id": "03a7ec8f-a152-428c-b758-2a4bc3b0eba9",
+    "swedish": "dåvarande",
+    "part_of_speech": "adjective",
+    "chinese": "当时的；那时的",
+    "swedish_explanation": "som gällde eller fanns vid den tiden"
+  },
+  {
+    "id": "872dec8d-73b4-426b-b2e2-37fafe7abfd5",
+    "swedish": "pantsätta",
+    "part_of_speech": "verb",
+    "chinese": "典当；抵押",
+    "swedish_explanation": "att lämna något värdefullt som säkerhet för ett lån, eller att använda egendom som pant för att få pengar"
+  },
+  {
+    "id": "92c1f7a1-21b4-4c12-b28a-b151f6ad5ec9",
+    "swedish": "blandad",
+    "part_of_speech": "adjective",
+    "chinese": "混合的；各式各样的",
+    "swedish_explanation": "Blandad betyder att något består av olika saker tillsammans eller att olika typer finns med."
+  },
+  {
+    "id": "ee2eb480-1c44-41ee-8211-fe7c1b7460ab",
+    "swedish": "lätt",
+    "part_of_speech": "adjective",
+    "chinese": "容易的；轻的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7f85d9e0-3311-4351-aab5-7f229b575444",
+    "swedish": "rådande",
+    "part_of_speech": "adjective",
+    "chinese": "现行的；当前占主导的",
+    "swedish_explanation": "som finns nu och som är vanligast eller starkast just nu"
+  },
+  {
+    "id": "0045de03-fac6-4308-8048-1bb680c0eecb",
+    "swedish": "förvåna",
+    "part_of_speech": "verb",
+    "chinese": "使惊讶，使吃惊",
+    "swedish_explanation": "att göra någon överraskad eller lite chockad"
+  },
+  {
+    "id": "c86a9cbc-be8a-46d0-9aaa-213825e807fe",
+    "swedish": "godkänna",
+    "part_of_speech": "verb",
+    "chinese": "批准；认可；通过。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "db60c7cf-f888-441f-98e3-082c64fe345c",
+    "swedish": "liten",
+    "part_of_speech": "adjective",
+    "chinese": "小的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c33ee028-d6f6-4dda-b247-13be76f8328f",
+    "swedish": "återkommande",
+    "part_of_speech": "adjective",
+    "chinese": "经常出现的；反复发生的",
+    "swedish_explanation": "som kommer tillbaka flera gånger eller händer ofta igen"
+  },
+  {
+    "id": "4fbab25f-8045-487d-825d-bedb81e99909",
+    "swedish": "främmande",
+    "part_of_speech": "adjective",
+    "chinese": "陌生的；外国的",
+    "swedish_explanation": "Främmande betyder att man inte känner något eller någon. Det kan också betyda från ett annat land."
+  },
+  {
+    "id": "81cc4c84-7e8c-49d4-b8fa-dd4e05625119",
+    "swedish": "löpande",
+    "part_of_speech": "adjective",
+    "chinese": "持续的；进行中的",
+    "swedish_explanation": "något som fortsätter utan avbrott eller händer hela tiden under en period"
+  },
+  {
+    "id": "4502402d-5673-45bf-bf95-897f58feffec",
+    "swedish": "bosatt",
+    "part_of_speech": "adjective",
+    "chinese": "定居的，居住在……的",
+    "swedish_explanation": "som bor på en viss plats under en längre tid"
+  },
+  {
+    "id": "2f5ad73a-f747-4cb8-bb36-eb10147412b0",
+    "swedish": "blivande",
+    "part_of_speech": "adjective",
+    "chinese": "未来的，即将成为的",
+    "swedish_explanation": "som snart ska bli något eller ha en viss roll i framtiden"
+  },
+  {
+    "id": "906b64c7-020c-4819-912b-2223f01a040c",
+    "swedish": "förvirrad",
+    "part_of_speech": "adjective",
+    "chinese": "困惑的，迷惑的",
+    "swedish_explanation": "Förvirrad betyder att man inte riktigt förstår vad som händer eller vad man ska göra."
+  },
+  {
+    "id": "839ca32f-a069-44cd-94f6-cd4ab7072421",
+    "swedish": "stigande",
+    "part_of_speech": "adjective",
+    "chinese": "上升的；增长的",
+    "swedish_explanation": "som går upp eller blir större"
+  },
+  {
+    "id": "7b1da450-31e2-46e3-87a1-869b12290413",
+    "swedish": "livad",
+    "part_of_speech": "adjective",
+    "chinese": "兴奋的，来劲的",
+    "swedish_explanation": "som är glad, energisk och mycket intresserad av något"
+  },
+  {
+    "id": "0e832872-6687-4435-8418-a55798b08f21",
+    "swedish": "trött",
+    "part_of_speech": "adjective",
+    "chinese": "累的；疲倦的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "08a58a3c-8612-452b-822f-6fea8ac99010",
+    "swedish": "sen",
+    "part_of_speech": "adjective",
+    "chinese": "迟的；晚的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "06cb48a9-13ca-4216-8653-9a32dc32ffa9",
+    "swedish": "öppen",
+    "part_of_speech": "adjective",
+    "chinese": "开着的；开放的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "deae1cdb-0830-4cb4-b108-ece21b3db61b",
+    "swedish": "berätta",
+    "part_of_speech": "verb",
+    "chinese": "讲述；告诉。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "69e5939a-2872-4431-a1b7-40c6bcf756a0",
+    "swedish": "berättigad",
+    "part_of_speech": "adjective",
+    "chinese": "有正当理由的；应得的",
+    "swedish_explanation": "som är rimlig eller rätt; som man har rätt till"
+  },
+  {
+    "id": "374ac749-55a5-4c0f-a66d-6dbb9dc8fc87",
+    "swedish": "benämna",
+    "part_of_speech": "verb",
+    "chinese": "称作，命名为",
+    "swedish_explanation": "att ge något ett namn eller att kalla något på ett visst sätt"
+  },
+  {
+    "id": "ae236803-3c8f-467a-82cf-598cb2428d6e",
+    "swedish": "tillhörande",
+    "part_of_speech": "adjective",
+    "chinese": "附属的；相关的；随附的",
+    "swedish_explanation": "som hör till något eller har samband med något"
+  },
+  {
+    "id": "78c94e2d-dad0-45d9-97d5-f1ec456eed7f",
+    "swedish": "inledande",
+    "part_of_speech": "adjective",
+    "chinese": "开始的；开头的；引言性的",
+    "swedish_explanation": "som kommer i början och fungerar som en introduktion"
+  },
+  {
+    "id": "14ca71d4-afb1-4817-8b5c-cbffa4fca1f5",
+    "swedish": "fatta",
+    "part_of_speech": "verb",
+    "chinese": "明白；理解（口语）。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f2066821-8d0b-491b-986b-6c38cc3c486c",
+    "swedish": "känna",
+    "part_of_speech": "verb",
+    "chinese": "认识；感觉；感到。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "2224cebb-f6a4-4ede-aee1-277f905d5260",
+    "swedish": "strålande",
+    "part_of_speech": "adjective",
+    "chinese": "极好的；灿烂的",
+    "swedish_explanation": "något som är mycket bra, eller som lyser starkt"
+  },
+  {
+    "id": "441ba368-5d9f-40c7-b572-5bf92f037154",
+    "swedish": "bindande",
+    "part_of_speech": "adjective",
+    "chinese": "有约束力的；必须遵守的",
+    "swedish_explanation": "Något som gäller och måste följas, ofta enligt lag, avtal eller beslut."
+  },
+  {
+    "id": "5320e9ce-901c-4b50-bd5b-9c26d1af9d38",
+    "swedish": "avrätta",
+    "part_of_speech": "verb",
+    "chinese": "处决，执行死刑",
+    "swedish_explanation": "att döda någon som straff efter en dom"
+  },
+  {
+    "id": "57944623-dae3-46ad-b38e-00fc83446c02",
+    "swedish": "glädjande",
+    "part_of_speech": "adjective",
+    "chinese": "令人高兴的，喜人的",
+    "swedish_explanation": "som gör att man blir glad eller känner hopp"
+  },
+  {
+    "id": "b6a9a9da-2506-4ed9-a1bb-e0cf970b35bd",
+    "swedish": "underhållande",
+    "part_of_speech": "adjective",
+    "chinese": "有趣的，娱乐性的",
+    "swedish_explanation": "som är rolig och gör att man har kul eller blir intresserad"
+  },
+  {
+    "id": "c9569ac7-7fec-4fb1-b13c-e83277009cdb",
+    "swedish": "hinna",
+    "part_of_speech": "verb",
+    "chinese": "来得及；有时间做。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a947eb8e-0ada-4dbc-a765-cc02ab05b2cb",
+    "swedish": "galen",
+    "part_of_speech": "adjective",
+    "chinese": "疯狂的；疯的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c7227be3-33bc-48e4-b234-a2e8080d98dc",
+    "swedish": "givande",
+    "part_of_speech": "adjective",
+    "chinese": "有收获的；有启发的；有意义的",
+    "swedish_explanation": "som ger mycket tillbaka, till exempel ny kunskap, erfarenhet eller personlig utveckling"
+  },
+  {
+    "id": "abe1f627-c731-4be5-8ed9-121bd10eb63d",
+    "swedish": "belöna",
+    "part_of_speech": "verb",
+    "chinese": "奖励，奖赏",
+    "swedish_explanation": "att ge någon något bra för att personen har gjort något bra eller viktigt"
+  },
+  {
+    "id": "949061b9-dd73-4f20-bb43-625d4bf53408",
+    "swedish": "flytande",
+    "part_of_speech": "adjective",
+    "chinese": "流利的；流动的",
+    "swedish_explanation": "som man kan använda lätt och utan problem, särskilt om språk; som rör sig som en vätska"
+  },
+  {
+    "id": "3486386a-66de-49be-a538-08b2d05c4c30",
+    "swedish": "samordna",
+    "part_of_speech": "verb",
+    "chinese": "协调，统筹",
+    "swedish_explanation": "att planera och ordna olika delar eller personers arbete så att de fungerar bra tillsammans"
+  },
+  {
+    "id": "45aab051-ef3e-4ce6-9da0-09b76c24bb43",
+    "swedish": "sätta",
+    "part_of_speech": "verb",
+    "chinese": "放置；设置；坐落；使处于。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "51182fc2-6a9f-44b1-8be2-023c431c8ad4",
+    "swedish": "irriterad",
+    "part_of_speech": "adjective",
+    "chinese": "恼火的；受刺激的；发炎不适的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "57280c57-4813-4106-a744-e0200d393693",
+    "swedish": "beväpnad",
+    "part_of_speech": "adjective",
+    "chinese": "武装的，携带武器的",
+    "swedish_explanation": "som har vapen eller är utrustad med vapen"
+  },
+  {
+    "id": "fff9dd4e-c8ef-4d89-a979-82ef03d000b7",
+    "swedish": "ingående",
+    "part_of_speech": "adjective",
+    "chinese": "详尽的，深入的",
+    "swedish_explanation": "som är mycket noggrann och går djupt in i ett ämne eller en fråga"
+  },
+  {
+    "id": "d62184c2-1e37-4941-9f09-ab8e33da998a",
+    "swedish": "verkställande",
+    "part_of_speech": "adjective",
+    "chinese": "执行的；行政的",
+    "swedish_explanation": "som har ansvar för att leda och genomföra beslut i en organisation eller ett företag"
+  },
+  {
+    "id": "0aae5e72-bbe0-4452-9fe9-69c51ca47c8d",
+    "swedish": "avlägsna",
+    "part_of_speech": "verb",
+    "chinese": "移走；清除；使离开",
+    "swedish_explanation": "att ta bort något eller få någon att försvinna från en plats"
+  },
+  {
+    "id": "c773b8d5-bad3-423e-9933-1f86e7190d86",
+    "swedish": "iaktta",
+    "part_of_speech": "verb",
+    "chinese": "观察，留意",
+    "swedish_explanation": "att noggrant se på eller lägga märke till något"
+  },
+  {
+    "id": "9d0990e6-95b3-4fa1-b7cf-190ad2b3c16f",
+    "swedish": "bekänna",
+    "part_of_speech": "verb",
+    "chinese": "承认；坦白；供认",
+    "swedish_explanation": "att säga öppet att man har gjort något, tycker något eller känner något, ofta något personligt eller svårt"
+  },
+  {
+    "id": "ff37c3c7-cab1-4458-8107-c2f36f074b58",
+    "swedish": "långtgående",
+    "part_of_speech": "adjective",
+    "chinese": "深远的；广泛的",
+    "swedish_explanation": "som påverkar mycket eller har stora följder"
+  },
+  {
+    "id": "a074d031-7d5a-45c0-ad9e-96b25a1d62b7",
+    "swedish": "nyfödd",
+    "part_of_speech": "adjective",
+    "chinese": "新生的；刚出生的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fc0de9fd-abdf-4a43-a136-48bd162729c2",
+    "swedish": "bevittna",
+    "part_of_speech": "verb",
+    "chinese": "目击；见证",
+    "swedish_explanation": "att se eller vara med när något händer, särskilt en viktig eller ovanlig händelse"
+  },
+  {
+    "id": "86d59cbd-0025-4dc3-847f-29adf64608cb",
+    "swedish": "avliden",
+    "part_of_speech": "adjective",
+    "chinese": "已故的，去世的",
+    "swedish_explanation": "som har dött; ett formellt ord för någon som inte lever längre"
+  },
+  {
+    "id": "732c5bd1-62d6-43af-b9fe-12fa7f9da782",
+    "swedish": "utomstående",
+    "part_of_speech": "adjective",
+    "chinese": "外部的；局外的",
+    "swedish_explanation": "som inte hör till en grupp, en familj eller en situation"
+  },
+  {
+    "id": "7dc808cf-a7ee-496c-9031-f68fa1b66a08",
+    "swedish": "återstående",
+    "part_of_speech": "adjective",
+    "chinese": "剩余的，余下的",
+    "swedish_explanation": "som finns kvar och inte har använts eller gjorts än"
+  },
+  {
+    "id": "62bd0ea9-1685-4c7d-98a9-1538c9a39d9a",
+    "swedish": "utnämna",
+    "part_of_speech": "verb",
+    "chinese": "任命，指定",
+    "swedish_explanation": "att ge någon en officiell roll eller ett viktigt uppdrag"
+  },
+  {
+    "id": "c75dfbc9-1bef-427d-9919-4ebb08cc9e85",
+    "swedish": "balanserad",
+    "part_of_speech": "adjective",
+    "chinese": "平衡的；均衡的；沉着稳重的",
+    "swedish_explanation": "som är i bra balans, till exempel i kroppen, i livet eller i sitt sätt att reagera"
+  },
+  {
+    "id": "41ffa15e-588b-49d6-a3a8-4dcbbd725af3",
+    "swedish": "ensamstående",
+    "part_of_speech": "adjective",
+    "chinese": "单身的；独自抚养孩子的",
+    "swedish_explanation": "Ensamstående beskriver en person som inte lever tillsammans med en partner. Ordet används ofta om en förälder som bor ensam med sitt barn eller sina barn."
+  },
+  {
+    "id": "f6c4170d-d6f3-4905-8356-1931db8a554d",
+    "swedish": "övertygande",
+    "part_of_speech": "adjective",
+    "chinese": "有说服力的，令人信服的",
+    "swedish_explanation": "Något som får andra att tro på en idé, en förklaring eller ett argument eftersom det verkar starkt och trovärdigt."
+  },
+  {
+    "id": "46eeaceb-0034-4c8b-94e8-873bf1bba4be",
+    "swedish": "kvarvarande",
+    "part_of_speech": "adjective",
+    "chinese": "剩余的；尚存的",
+    "swedish_explanation": "som finns kvar efter att en del har använts, tagits bort eller försvunnit"
+  },
+  {
+    "id": "4f6868fa-eddf-4f14-8c08-8e53550849b7",
+    "swedish": "förebyggande",
+    "part_of_speech": "adjective",
+    "chinese": "预防性的，防范性的",
+    "swedish_explanation": "som görs för att förhindra att problem, sjukdomar eller skador uppstår"
+  },
+  {
+    "id": "a2e6561b-1c77-473f-babc-86c88cdbf7fb",
+    "swedish": "närstående",
+    "part_of_speech": "adjective",
+    "chinese": "近亲的；关系密切的",
+    "swedish_explanation": "som har nära relation till någon, till exempel i familjen eller som står en person mycket nära"
+  },
+  {
+    "id": "6cccb57d-a10f-4ee0-85af-efebdf968662",
+    "swedish": "opassande",
+    "part_of_speech": "adjective",
+    "chinese": "不合适的，不得体的",
+    "swedish_explanation": "som inte passar i en viss situation eller som känns olämplig"
+  },
+  {
+    "id": "aef9717e-e09f-499f-9fc8-533b4e72eeef",
+    "swedish": "begåvad",
+    "part_of_speech": "adjective",
+    "chinese": "有天赋的，有才能的",
+    "swedish_explanation": "Någon som är begåvad har naturlig förmåga att lära sig eller göra något mycket bra."
+  },
+  {
+    "id": "46e8f4ea-f341-467d-9686-604327416714",
+    "swedish": "anklagad",
+    "part_of_speech": "adjective",
+    "chinese": "被指控的，被控告的",
+    "swedish_explanation": "som har fått en anklagelse mot sig, ofta i en rättslig situation"
+  },
+  {
+    "id": "db217b27-97d4-44b1-8f7f-d6af6e9f19b0",
+    "swedish": "lovande",
+    "part_of_speech": "adjective",
+    "chinese": "有前途的；有希望的",
+    "swedish_explanation": "som verkar kunna bli mycket bra eller ge ett bra resultat i framtiden"
+  },
+  {
+    "id": "b676bf83-0aee-4f9c-8506-44e9f8efa29f",
+    "swedish": "skadad",
+    "part_of_speech": "adjective",
+    "chinese": "受伤的；损坏的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "496d7a50-4623-4944-80c2-8b4f69b62636",
+    "swedish": "beskatta",
+    "part_of_speech": "verb",
+    "chinese": "对……征税，课税",
+    "swedish_explanation": "att ta ut skatt på något eller någon"
+  },
+  {
+    "id": "e0dc2b03-bf2c-40c1-b330-75cd6f85404a",
+    "swedish": "tillåten",
+    "part_of_speech": "adjective",
+    "chinese": "被允许的，许可的",
+    "swedish_explanation": "Något som är tillåtet får man göra enligt regler, lag eller ett beslut."
+  },
+  {
+    "id": "a6e8549d-c1e5-4a21-b26b-5c4dbaefadb5",
+    "swedish": "sammanhängande",
+    "part_of_speech": "adjective",
+    "chinese": "连贯的；有条理的；相互关联的",
+    "swedish_explanation": "som hänger ihop på ett tydligt och logiskt sätt"
+  },
+  {
+    "id": "1fc448d0-9983-4335-b989-3208f0d9a143",
+    "swedish": "bekymrad",
+    "part_of_speech": "adjective",
+    "chinese": "担心的，忧虑的",
+    "swedish_explanation": "som känner oro eller är lite rädd för att något ska gå dåligt"
+  },
+  {
+    "id": "8829f54d-d2d8-42d3-abbd-f6194eaced73",
+    "swedish": "rasande",
+    "part_of_speech": "adjective",
+    "chinese": "愤怒的；怒不可遏的",
+    "swedish_explanation": "Rasande betyder mycket arg. Det kan också betyda att något är mycket starkt eller intensivt."
+  },
+  {
+    "id": "ea6f2ec8-8df0-4a87-ac32-680eab709b1c",
+    "swedish": "prostituerad",
+    "part_of_speech": "adjective",
+    "chinese": "卖淫的；从事性交易的",
+    "swedish_explanation": "som säljer sexuella tjänster mot pengar"
+  },
+  {
+    "id": "eee187f0-a73b-45c9-b84d-04b5aa5fca6c",
+    "swedish": "benägen",
+    "part_of_speech": "adjective",
+    "chinese": "倾向于……的；易于……的",
+    "swedish_explanation": "som lätt gör något eller som har en tydlig tendens att göra eller känna något"
+  },
+  {
+    "id": "5312dc9f-2fb5-4a98-92f9-35d19570bbd4",
+    "swedish": "närliggande",
+    "part_of_speech": "adjective",
+    "chinese": "附近的；邻近的；密切相关的",
+    "swedish_explanation": "som ligger nära något annat, eller som har tydlig koppling till något"
+  },
+  {
+    "id": "dfc1ac83-a8c5-4aae-92a6-84d1d8deb53e",
+    "swedish": "egen",
+    "part_of_speech": "adjective",
+    "chinese": "自己的；独有的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "92acda7b-5997-4e27-8ec1-63052c673063",
+    "swedish": "frånvarande",
+    "part_of_speech": "adjective",
+    "chinese": "缺席的；不在场的；心不在焉的",
+    "swedish_explanation": "Frånvarande betyder att någon inte är på en plats där han eller hon borde vara, eller att någon inte är uppmärksam."
+  },
+  {
+    "id": "9aa4123d-85df-4649-bbfe-2a50c66920fd",
+    "swedish": "krävande",
+    "part_of_speech": "adjective",
+    "chinese": "要求高的；费力的；要求严格的",
+    "swedish_explanation": "Något som behöver mycket arbete, tid eller energi, eller en person/situation som ställer höga krav."
+  },
+  {
+    "id": "c481f472-0fcc-4cd8-9e57-ffb38f06b02d",
+    "swedish": "underskatta",
+    "part_of_speech": "verb",
+    "chinese": "低估，小看",
+    "swedish_explanation": "att tycka att något eller någon är mindre viktigt, mindre svårt eller sämre än det verkligen är"
+  },
+  {
+    "id": "5ac2429a-cb90-411c-8c89-fcad73c66b55",
+    "swedish": "övergiven",
+    "part_of_speech": "adjective",
+    "chinese": "被遗弃的；被抛弃的",
+    "swedish_explanation": "övergiven betyder att någon eller något har lämnats ensam och inte längre får hjälp, omsorg eller sällskap."
+  },
+  {
+    "id": "8c0cc8ff-9445-4921-a2ff-4d5ca803209d",
+    "swedish": "fortlöpande",
+    "part_of_speech": "adjective",
+    "chinese": "持续的，连续进行的",
+    "swedish_explanation": "som fortsätter hela tiden eller under en längre tid utan större avbrott"
+  },
+  {
+    "id": "2a59a956-8d69-4d08-b789-6f812baf06a0",
+    "swedish": "nedanstående",
+    "part_of_speech": "adjective",
+    "chinese": "下列的，以下的",
+    "swedish_explanation": "som står eller kommer längre ner i en text eller lista"
+  },
+  {
+    "id": "a0af000d-8d4f-4a2b-b32b-495384b2454f",
+    "swedish": "stötta",
+    "part_of_speech": "verb",
+    "chinese": "支持；扶持；支撑。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5d300187-8371-4dd6-a14b-204ce3c668da",
+    "swedish": "misslyckad",
+    "part_of_speech": "adjective",
+    "chinese": "失败的，不成功的",
+    "swedish_explanation": "som inte har lyckats eller gett ett bra resultat"
+  },
+  {
+    "id": "4232ff9e-88fc-4cf7-84f2-3c42691d5ddb",
+    "swedish": "avsedd",
+    "part_of_speech": "adjective",
+    "chinese": "预定的；指定用于……的",
+    "swedish_explanation": "som är tänkt eller planerad för något eller någon"
+  },
+  {
+    "id": "7d219fd3-0d04-4c28-95ca-6644d98a9f81",
+    "swedish": "omnämna",
+    "part_of_speech": "verb",
+    "chinese": "提及，提到",
+    "swedish_explanation": "att nämna något eller någon kort, ofta utan att säga mycket mer"
+  },
+  {
+    "id": "500775a8-5661-474d-a0f2-e238ae593e4e",
+    "swedish": "hamna",
+    "part_of_speech": "verb",
+    "chinese": "落到；最终处于；碰巧来到。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ee3857a6-328b-437c-a418-7ccd1a28ae4e",
+    "swedish": "nämna",
+    "part_of_speech": "verb",
+    "chinese": "提到，顺便说；点名；举出。用于说话时“提及某事/某人”，比直接详细说明更简短。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e4654925-10ac-49c5-baa9-131497241ab6",
+    "swedish": "kanderad",
+    "part_of_speech": "adjective",
+    "chinese": "糖渍的；用糖煮过、包上一层糖的，常见于水果或坚果。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "46f13b5a-0f6f-4f57-acd7-dada621b7c48",
+    "swedish": "ansluten",
+    "part_of_speech": "adjective",
+    "chinese": "已连接的；已接入的；隶属的",
+    "swedish_explanation": "som är kopplad till ett system, nätverk eller en organisation"
+  },
+  {
+    "id": "646f5ee0-bfdf-40f6-9c8a-27f03ba12234",
+    "swedish": "etablerad",
+    "part_of_speech": "adjective",
+    "chinese": "已确立的；有地位的；被认可的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "acbb19da-e9a0-4a5f-880f-eec6eda11c06",
+    "swedish": "snatta",
+    "part_of_speech": "verb",
+    "chinese": "偷拿小东西，顺手牵羊。通常指在商店里偷走小额商品，语气口语但意思很明确。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c972e9c9-2674-4815-82fe-bbd8ca07ab4a",
+    "swedish": "lugna",
+    "part_of_speech": "verb",
+    "chinese": "使平静；安抚；冷静下来。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "035f5488-d463-45e4-bff9-fe60fab57a9a",
+    "swedish": "storslagen",
+    "part_of_speech": "adjective",
+    "chinese": "宏伟的；壮丽的；气势恢宏的",
+    "swedish_explanation": "något som är mycket imponerande, vackert eller stort och som väcker stark beundran"
+  },
+  {
+    "id": "1363b5a8-8f28-40a5-89a1-463b09cb2107",
+    "swedish": "benådad",
+    "part_of_speech": "verb",
+    "chinese": "被赦免的；常指被判刑后获得特赦、减轻或取消处罚，语体较正式。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "68786b55-2d1d-474a-a1fa-9cc71d653285",
+    "swedish": "otrogen",
+    "part_of_speech": "adjective",
+    "chinese": "不忠的；不忠诚的；有外遇的",
+    "swedish_explanation": "som inte är trogen mot en partner, en person, en idé eller en princip"
+  },
+  {
+    "id": "86f7c65a-8f0b-4d43-8932-4514ad782a5c",
+    "swedish": "genomgripande",
+    "part_of_speech": "adjective",
+    "chinese": "深远的；全面的；根本性的",
+    "swedish_explanation": "som påverkar mycket och förändrar något på ett djupt och omfattande sätt"
+  },
+  {
+    "id": "d6dcd6bc-ec37-4d41-a8ae-b5d3cb0a90f7",
+    "swedish": "likartad",
+    "part_of_speech": "adjective",
+    "chinese": "类似的，相近的",
+    "swedish_explanation": "som är nästan samma som något annat, med många gemensamma drag"
+  },
+  {
+    "id": "4c22a7a9-2e87-4792-ad6a-d9e14e56dea4",
+    "swedish": "lyckad",
+    "part_of_speech": "adjective",
+    "chinese": "成功的，顺利的",
+    "swedish_explanation": "något som går bra eller blir bra"
+  },
+  {
+    "id": "9bac7e12-d006-42e7-b1c5-d63d5405b1ed",
+    "swedish": "avlyssna",
+    "part_of_speech": "verb",
+    "chinese": "窃听；监听",
+    "swedish_explanation": "att i hemlighet lyssna på ett samtal eller teknisk kommunikation för att få information"
+  },
+  {
+    "id": "e55cadb6-5d19-4ad1-8641-5013d4226cce",
+    "swedish": "författa",
+    "part_of_speech": "verb",
+    "chinese": "撰写，起草，编写（较正式）",
+    "swedish_explanation": "att skriva eller utforma en text, ett dokument eller ett verk på ett genomtänkt och ofta formellt sätt"
+  },
+  {
+    "id": "8fb2d529-be01-4530-af3b-af0b43af0331",
+    "swedish": "vinnande",
+    "part_of_speech": "adjective",
+    "chinese": "获胜的；制胜的；有成功希望的",
+    "swedish_explanation": "som vinner eller har stor chans att lyckas; som ger framgång i en tävling, diskussion eller strategi"
+  },
+  {
+    "id": "6d2a891b-4882-4a1c-9d80-253b54939ba8",
+    "swedish": "grädda",
+    "part_of_speech": "verb",
+    "chinese": "烘烤；把面糊、面团放进烤箱烤熟，常用于面包、蛋糕、薄饼等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7eeaf1ab-a65b-453b-8b24-9bb2c5abbc72",
+    "swedish": "återfinna",
+    "part_of_speech": "verb",
+    "chinese": "找回，重新找到",
+    "swedish_explanation": "att hitta något eller någon igen"
+  },
+  {
+    "id": "a191149c-af79-422d-b88c-222ee948acca",
+    "swedish": "besläktad",
+    "part_of_speech": "adjective",
+    "chinese": "有亲缘关系的；相关联的",
+    "swedish_explanation": "Besläktad betyder att något har samma ursprung, hör nära ihop eller liknar något annat på ett tydligt sätt."
+  },
+  {
+    "id": "9a3432b9-bba0-4522-80bc-00b973cdef60",
+    "swedish": "avslöjad",
+    "part_of_speech": "verb",
+    "chinese": "被揭穿的；被曝光的；被发现真相的。常用于秘密、谎言、身份等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "15fc4aeb-baaa-42bb-89bf-c7b01f11cf0a",
+    "swedish": "oroväckande",
+    "part_of_speech": "adjective",
+    "chinese": "令人担忧的，令人不安的",
+    "swedish_explanation": "som gör att man känner oro eller tycker att något verkar allvarligt eller osäkert"
+  },
+  {
+    "id": "6002b8be-518e-464b-85dd-61898979cb0b",
+    "swedish": "planerad",
+    "part_of_speech": "adjective",
+    "chinese": "计划好的，预定的",
+    "swedish_explanation": "som man har tänkt eller bestämt före"
+  },
+  {
+    "id": "00355eb8-d2a3-4d2c-8ea8-836cf17505e9",
+    "swedish": "utmanande",
+    "part_of_speech": "adjective",
+    "chinese": "有挑战性的；要求高的",
+    "swedish_explanation": "som är svår på ett sätt som kräver mycket arbete, tanke eller förmåga"
+  },
+  {
+    "id": "fd7b6c4d-0938-432b-b3f3-b7c8f3328287",
+    "swedish": "föråldrad",
+    "part_of_speech": "adjective",
+    "chinese": "过时的；陈旧的",
+    "swedish_explanation": "något som inte längre passar bra i nutiden, eftersom det är gammalt eller inte används på samma sätt längre"
+  },
+  {
+    "id": "148f3bcc-b9fa-4f9b-a610-da86308714be",
+    "swedish": "vägledande",
+    "part_of_speech": "adjective",
+    "chinese": "指导性的；有引导作用的",
+    "swedish_explanation": "som ger hjälp, riktning eller stöd för hur man ska tänka eller handla"
+  },
+  {
+    "id": "c8bc422e-8b06-4ef6-acaf-e390c32e87ae",
+    "swedish": "väldokumenterad",
+    "part_of_speech": "verb",
+    "chinese": "有充分记录的；资料非常完整、证据充分的。常用于研究、历史、医学或新闻语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "4c744e84-c5bc-4bbe-aebe-b9352e683828",
+    "swedish": "infödd",
+    "part_of_speech": "adjective",
+    "chinese": "本地出生的；土生土长的",
+    "swedish_explanation": "som är född i ett visst land eller område och hör hemma där från början"
+  },
+  {
+    "id": "eeac6c95-ab21-4c5f-915f-1bef0ba8f7bc",
+    "swedish": "förtvivlad",
+    "part_of_speech": "adjective",
+    "chinese": "绝望的，悲痛欲绝的",
+    "swedish_explanation": "mycket ledsen och utan hopp i en svår situation"
+  },
+  {
+    "id": "5a1ff51a-9b1a-4a57-a02d-f982c931e360",
+    "swedish": "återvinna",
+    "part_of_speech": "verb",
+    "chinese": "回收利用；再利用",
+    "swedish_explanation": "att samla in och använda material eller avfall igen så att det kan bli nya produkter eller användas på nytt"
+  },
+  {
+    "id": "c0d20159-d2aa-47b9-a706-da7029d22e34",
+    "swedish": "otillåten",
+    "part_of_speech": "adjective",
+    "chinese": "不被允许的，非法的，违规的",
+    "swedish_explanation": "som inte är tillåten enligt regler, lag eller avtal"
+  },
+  {
+    "id": "918ce0a8-5460-4ea7-b26e-9097361aca65",
+    "swedish": "utelämna",
+    "part_of_speech": "verb",
+    "chinese": "省略；遗漏；删去",
+    "swedish_explanation": "att medvetet eller omedvetet inte ta med något i tal, skrift eller annan information"
+  },
+  {
+    "id": "77494490-7416-4e9a-b5d6-18bd3bb28648",
+    "swedish": "homogen",
+    "part_of_speech": "adjective",
+    "chinese": "同质的；均一的；同类的",
+    "swedish_explanation": "som består av delar som är lika varandra eller har samma typ av egenskaper"
+  },
+  {
+    "id": "03b90005-7576-4b89-97f2-6c7941c0081b",
+    "swedish": "deprimerad",
+    "part_of_speech": "adjective",
+    "chinese": "抑郁的；情绪很低落的。可指医学上的抑郁状态，也可口语中表示非常沮丧，但正式写作要注意区分。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "01b8b39b-91b3-4fe3-8164-7789d5710d18",
+    "swedish": "uttråkad",
+    "part_of_speech": "adjective",
+    "chinese": "无聊的，厌倦的",
+    "swedish_explanation": "som känner att något inte är intressant eller stimulerande längre"
+  },
+  {
+    "id": "dc330cd6-a737-429c-8ea9-bd8a6924c2da",
+    "swedish": "förälskad",
+    "part_of_speech": "adjective",
+    "chinese": "坠入爱河的，迷恋的。常比一般的“gilla”更强，表示明显的爱情感情。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "14a2cc64-eb6b-4c28-80dd-c1a245585fb3",
+    "swedish": "besviken",
+    "part_of_speech": "adjective",
+    "chinese": "失望的；感到不满意或期待落空。常用于人的感受。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b1ac22d0-666b-4e88-8c74-1084e4503147",
+    "swedish": "påfallande",
+    "part_of_speech": "adjective",
+    "chinese": "显著的，明显的，引人注目的",
+    "swedish_explanation": "som märks tydligt och därför drar till sig uppmärksamhet"
+  },
+  {
+    "id": "0e97ecac-025a-45c6-aa5b-950b89c4fa74",
+    "swedish": "ovetande",
+    "part_of_speech": "adjective",
+    "chinese": "不知情的；未察觉的",
+    "swedish_explanation": "som inte vet om något eller inte märker vad som händer"
+  },
+  {
+    "id": "21a88a97-ea39-462d-9a24-47bec0493aba",
+    "swedish": "rekommenderad",
+    "part_of_speech": "adjective",
+    "chinese": "被推荐的，建议使用的",
+    "swedish_explanation": "som någon har sagt är bra, lämplig eller värd att välja"
+  },
+  {
+    "id": "4ac41f37-9e53-4afb-a1cc-bcb1ef7e6b28",
+    "swedish": "bosätta",
+    "part_of_speech": "verb",
+    "chinese": "定居；安家；搬到某地长期居住。通常和“sig”连用：bosätta sig.",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0617bce4-2599-4758-8ccd-74bf88628e92",
+    "swedish": "trötta",
+    "part_of_speech": "verb",
+    "chinese": "使疲倦；让人累，常见于短语 trötta ut。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "20d29632-b531-4a63-a22a-561386cee9ae",
+    "swedish": "uppfinna",
+    "part_of_speech": "verb",
+    "chinese": "发明；创造出本来不存在的东西或方法。也可表示“编造（故事、借口）”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "37531e97-2e20-4abe-ba7f-b98dfb9ef4c7",
+    "swedish": "sammansatt",
+    "part_of_speech": "adjective",
+    "chinese": "复合的；由几个部分组成的，也可指复杂、混合的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "eaec1275-9dd5-4141-95a6-e9032efeaa75",
+    "swedish": "skrattretande",
+    "part_of_speech": "adjective",
+    "chinese": "可笑的，荒谬得令人发笑的",
+    "swedish_explanation": "som är så dumt, konstigt eller överdrivet att man nästan måste skratta åt det"
+  },
+  {
+    "id": "7464f07c-467f-4adb-9962-d66597e2c28c",
+    "swedish": "splittrad",
+    "part_of_speech": "verb",
+    "chinese": "心绪分散的，注意力不集中的；也可指“分裂的、支离破碎的”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b54d2509-6ae2-4a97-83d4-dd73f12e74b4",
+    "swedish": "privilegierad",
+    "part_of_speech": "adjective",
+    "chinese": "享有特权的；条件优越的",
+    "swedish_explanation": "som har fler möjligheter, fördelar eller rättigheter än andra"
+  },
+  {
+    "id": "5d7b6f4f-359d-4db3-88e0-52e54ce10a41",
+    "swedish": "medfödd",
+    "part_of_speech": "adjective",
+    "chinese": "天生的，先天的",
+    "swedish_explanation": "som man har redan när man föds, och inte lär sig senare"
+  },
+  {
+    "id": "1b387c7f-763c-43fc-86be-7fab1439f8c1",
+    "swedish": "värdesätta",
+    "part_of_speech": "verb",
+    "chinese": "重视；高度评价；珍视",
+    "swedish_explanation": "att ge något eller någon ett högt värde, både konkret och bildligt; att uppskatta och bedöma som viktigt eller värdefullt"
+  },
+  {
+    "id": "0cd3e17d-cb2e-468c-896a-bbb9000db22a",
+    "swedish": "övervakad",
+    "part_of_speech": "verb",
+    "chinese": "被监控的；受到监督或观察的。常用于摄像头、系统、考试、场所或人的活动被看管的情况。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1cde8a48-59b1-4187-b475-d4759e20121b",
+    "swedish": "förflytta",
+    "part_of_speech": "verb",
+    "chinese": "移动；转移；搬运到另一个地方。也可指“调动、转岗、转移人员或物资”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ee884754-cb89-4315-b44f-ee7da7e7f704",
+    "swedish": "omedveten",
+    "part_of_speech": "adjective",
+    "chinese": "无意的；没意识到的；不知情的。也可指“无意识的”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "db6a589a-b163-4e9e-a556-5214a5f69654",
+    "swedish": "besätta",
+    "part_of_speech": "verb",
+    "chinese": "占领；占据；使充满",
+    "swedish_explanation": "att ta kontroll över en plats med makt eller att fylla något helt med en stark känsla eller tanke"
+  },
+  {
+    "id": "02ee5706-dce6-4c5d-979d-a33328479741",
+    "swedish": "slappna",
+    "part_of_speech": "verb",
+    "chinese": "放松；常见于 slappna av，表示让身体或情绪变轻松、解除紧张。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ec415b92-9aff-4744-b78f-045c5a1886bf",
+    "swedish": "förbannad",
+    "part_of_speech": "adjective",
+    "chinese": "非常生气的；气坏了的。口语中比 arg 更强烈，也可带一点粗口色彩。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "8cc53feb-0766-46aa-8eb5-c8aa1d2f245f",
+    "swedish": "utsliten",
+    "part_of_speech": "adjective",
+    "chinese": "磨损严重的；筋疲力尽的",
+    "swedish_explanation": "som är mycket sliten efter lång användning, eller som är mycket trött och utmattad"
+  },
+  {
+    "id": "2c791531-a4ba-4dd8-99fc-58b84ff00dbb",
+    "swedish": "utlämna",
+    "part_of_speech": "verb",
+    "chinese": "省略；略去；交出，移交（给当局）",
+    "swedish_explanation": "att medvetet ta bort något ur en text eller en berättelse, eller att lämna över en person till en myndighet eller ett annat land"
+  },
+  {
+    "id": "63ce7ecf-7550-48ea-a364-25cb01dd9bf1",
+    "swedish": "jämförande",
+    "part_of_speech": "adjective",
+    "chinese": "比较的；对比性的",
+    "swedish_explanation": "som gäller att jämföra olika saker, texter, språk eller resultat för att se likheter och skillnader"
+  },
+  {
+    "id": "35ceabe9-2e5b-474f-ab87-8cd7ac8a5d92",
+    "swedish": "övernatta",
+    "part_of_speech": "verb",
+    "chinese": "过夜，留宿",
+    "swedish_explanation": "att stanna och sova någonstans under natten utan att det behöver vara ens eget hem"
+  },
+  {
+    "id": "955be09a-425b-4004-bc3a-f92af57bd755",
+    "swedish": "närbelägen",
+    "part_of_speech": "adjective",
+    "chinese": "附近的，邻近的",
+    "swedish_explanation": "som ligger nära en viss plats eller i omedelbar närhet av något"
+  },
+  {
+    "id": "f0363db3-3727-4aeb-9515-6dd256d417d2",
+    "swedish": "oerfaren",
+    "part_of_speech": "adjective",
+    "chinese": "缺乏经验的；无经验的",
+    "swedish_explanation": "som inte har mycket erfarenhet av något och därför ofta saknar rutin, omdöme eller säkerhet i situationen"
+  },
+  {
+    "id": "3406f8f8-5519-4d07-af19-2051d99cd202",
+    "swedish": "ägna",
+    "part_of_speech": "verb",
+    "chinese": "致力于；花时间做某事。常见搭配 ägna sig åt 表示“从事、专注于”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "d9959428-c8d4-489d-af77-5ef7980f850a",
+    "swedish": "komplicerad",
+    "part_of_speech": "adjective",
+    "chinese": "复杂的；难处理的。用于事情、关系、问题等，常带“比想的更难”的感觉。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "44ce1c89-e3bb-4862-9edb-f33f3c07faf2",
+    "swedish": "underlätta",
+    "part_of_speech": "verb",
+    "chinese": "使更容易；帮助顺利进行，强调减少困难、让事情变简单。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3ace041d-f7b7-412d-bf29-71676a1bc5bd",
+    "swedish": "överdriven",
+    "part_of_speech": "adjective",
+    "chinese": "夸张的，过头的；超出合理程度的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "9b8f3269-66c3-4c27-becf-0496da79bcc2",
+    "swedish": "förbipasserande",
+    "part_of_speech": "adjective",
+    "chinese": "路过的，经过的",
+    "swedish_explanation": "som passerar förbi en plats eller en person"
+  },
+  {
+    "id": "11781424-f312-439f-a60e-90797be8b9c9",
+    "swedish": "glänsande",
+    "part_of_speech": "adjective",
+    "chinese": "闪亮的；辉煌的；卓越的",
+    "swedish_explanation": "som lyser starkt eller verkar mycket klar och vacker; också bildligt om något mycket framstående eller imponerande"
+  },
+  {
+    "id": "12a1bdcc-ca4b-48d5-91e1-698f99ae24e5",
+    "swedish": "världsomfattande",
+    "part_of_speech": "adjective",
+    "chinese": "全球性的，遍及全世界的",
+    "swedish_explanation": "som finns, gäller eller har effekt i hela världen"
+  },
+  {
+    "id": "2827d529-9bec-4a9a-b4f8-9eb8893bf0c6",
+    "swedish": "frikänna",
+    "part_of_speech": "verb",
+    "chinese": "宣判无罪；判定无责",
+    "swedish_explanation": "att i domstol säga att någon inte är skyldig till brott, eller att någon inte har ansvar för något"
+  },
+  {
+    "id": "34bd9f7e-8152-4a9b-9a07-00da94c5b204",
+    "swedish": "mörkhyad",
+    "part_of_speech": "adjective",
+    "chinese": "深色皮肤的，黑皮肤的",
+    "swedish_explanation": "som har mörk hudfärg"
+  },
+  {
+    "id": "5b0fe006-c281-4e7a-8be8-c8650d30c8e9",
+    "swedish": "rangordna",
+    "part_of_speech": "verb",
+    "chinese": "排列等级；按重要性排序",
+    "swedish_explanation": "att ordna något eller någon efter rang, prioritet eller betydelse"
+  },
+  {
+    "id": "62e2a236-6313-4d1e-b2bb-4a12c0e0647f",
+    "swedish": "mellanliggande",
+    "part_of_speech": "adjective",
+    "chinese": "中间的；介于两者之间的",
+    "swedish_explanation": "som ligger mellan två andra saker, nivåer, tider eller platser; som utgör ett steg eller led mellan något tidigare och något senare"
+  },
+  {
+    "id": "13af1390-4b81-4876-9608-4dee9b832302",
+    "swedish": "förorena",
+    "part_of_speech": "verb",
+    "chinese": "污染，使受污染",
+    "swedish_explanation": "att smutsa ner luft, vatten, mark eller annan miljö så att den skadas eller blir farlig"
+  },
+  {
+    "id": "998f7d7a-1405-4f0b-b383-e3d3aa95d39e",
+    "swedish": "organiserad",
+    "part_of_speech": "adjective",
+    "chinese": "有条理的；井井有条的",
+    "swedish_explanation": "som planerar och håller ordning på saker"
+  },
+  {
+    "id": "18b58277-9cc6-481a-ae4c-cc2ed5cbc349",
+    "swedish": "skratta",
+    "part_of_speech": "verb",
+    "chinese": "笑。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6469a2ae-17c6-40c1-bbe8-c4f989e74f48",
+    "swedish": "återberätta",
+    "part_of_speech": "verb",
+    "chinese": "复述；重新讲述。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3b1a524c-d3f6-4708-bd1d-02136caddac9",
+    "swedish": "underlydande",
+    "part_of_speech": "adjective",
+    "chinese": "潜在的；根本的；底层的",
+    "swedish_explanation": "som finns under ytan eller bakom något annat och som ofta är den verkliga orsaken eller strukturen"
+  },
+  {
+    "id": "c542872c-0dc2-412d-93dc-873d7e85a128",
+    "swedish": "betecknande",
+    "part_of_speech": "adjective",
+    "chinese": "有代表性的，典型地体现某种特征的",
+    "swedish_explanation": "som tydligt visar eller uttrycker något typiskt för en person, en grupp, en tid eller en situation"
+  },
+  {
+    "id": "cc2c0e85-94bb-4097-afd9-fd0b801b0a04",
+    "swedish": "betyg(s)sätta",
+    "part_of_speech": "verb",
+    "chinese": "给……评分；给……定成绩",
+    "swedish_explanation": "att sätta betyg på en elevs prestation, ett arbete eller något annat som bedöms enligt vissa kriterier"
+  },
+  {
+    "id": "08062f0f-664e-425b-a704-1448761f6d4b",
+    "swedish": "öppna",
+    "part_of_speech": "verb",
+    "chinese": "打开；开启。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5bc755a6-4de8-4a15-adf6-d1bbe2beb9c6",
+    "swedish": "räkna",
+    "part_of_speech": "verb",
+    "chinese": "数；计算；认为。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "21a64e44-5a0f-4706-a4ac-e8f305dc417d",
+    "swedish": "inlämna",
+    "part_of_speech": "verb",
+    "chinese": "提交，递交",
+    "swedish_explanation": "att formellt ge in något, till exempel en ansökan, rapport eller uppgift, till en myndighet, institution eller annan mottagare"
+  },
+  {
+    "id": "cd464c5d-feb5-40b3-a62d-da07c9235cb9",
+    "swedish": "sitta",
+    "part_of_speech": "verb",
+    "chinese": "坐；位于；贴着。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "bb4febc4-5576-48ce-8531-d9970b1a04a1",
+    "swedish": "motsägande",
+    "part_of_speech": "adjective",
+    "chinese": "矛盾的；前后不一致的",
+    "swedish_explanation": "som inte stämmer överens med något annat, eller som innehåller motstridiga uppgifter eller tankar"
+  },
+  {
+    "id": "02e07278-4495-4891-b04d-333b5fe07e1a",
+    "swedish": "flytta",
+    "part_of_speech": "verb",
+    "chinese": "搬家；移动。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "78292f3a-3712-42c7-982b-5e9cb0863df1",
+    "swedish": "sammanfatta",
+    "part_of_speech": "verb",
+    "chinese": "总结，概括",
+    "swedish_explanation": "att säga eller skriva det viktigaste kort"
+  },
+  {
+    "id": "4b312dcd-b3e7-423c-a870-cc980574195d",
+    "swedish": "forcerad",
+    "part_of_speech": "adjective",
+    "chinese": "强行的；勉强推进的；不自然的",
+    "swedish_explanation": "som sker med tvång, för snabbt eller på ett sätt som känns onaturligt och inte spontant"
+  },
+  {
+    "id": "cdba88e1-a5f4-41cc-9c9a-a9bf64390e26",
+    "swedish": "sårande",
+    "part_of_speech": "adjective",
+    "chinese": "伤人的，刺痛人的",
+    "swedish_explanation": "som gör någon ledsen eller kränkt genom ord, handlingar eller ton"
+  },
+  {
+    "id": "024aeb43-a635-472b-a988-431d209dadc0",
+    "swedish": "försvinna",
+    "part_of_speech": "verb",
+    "chinese": "消失；不见。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f8dfaa04-00a7-48ee-938e-f67e17319190",
+    "swedish": "beteckna",
+    "part_of_speech": "verb",
+    "chinese": "表示；意指",
+    "swedish_explanation": "att visa eller säga vad något betyder eller står för"
+  },
+  {
+    "id": "e73c0410-fd53-41b3-9018-a069fa484d6a",
+    "swedish": "uppdykande",
+    "part_of_speech": "adjective",
+    "chinese": "突然出现的；意外现身的",
+    "swedish_explanation": "som dyker upp plötsligt eller oväntat, ofta i ett visst sammanhang eller i medvetandet"
+  },
+  {
+    "id": "ac88e260-3179-4c76-a1cd-7dc4337c6309",
+    "swedish": "mena",
+    "part_of_speech": "verb",
+    "chinese": "意思是；认为；打算。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "25186005-a81c-4590-b630-845a0545951e",
+    "swedish": "vinna",
+    "part_of_speech": "verb",
+    "chinese": "赢；获胜；获得。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "4888a573-cb82-4dd0-bef0-ab542616aa37",
+    "swedish": "bränna",
+    "part_of_speech": "verb",
+    "chinese": "燃烧；烧伤；烧毁。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6d62c7c5-1fbe-4bb2-9b02-d6a4843a0094",
+    "swedish": "cirkelformad",
+    "part_of_speech": "adjective",
+    "chinese": "圆形的，环状的",
+    "swedish_explanation": "som har form av en cirkel eller liknar en cirkel i struktur eller rörelse"
+  },
+  {
+    "id": "5486ee6a-7525-4246-af3b-558cdb76cb8f",
+    "swedish": "råna",
+    "part_of_speech": "verb",
+    "chinese": "抢劫；抢夺。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "8164f64c-2d48-416b-ac3a-a4f5882f977f",
+    "swedish": "okultiverad",
+    "part_of_speech": "adjective",
+    "chinese": "粗鄙的；缺乏教养的；未开化的",
+    "swedish_explanation": "Okultiverad beskriver en person, ett beteende eller ett sätt att uttrycka sig som saknar bildning, finess eller socialt omdöme."
+  },
+  {
+    "id": "83f67844-af51-4309-b30d-946bd00a6f10",
+    "swedish": "regna",
+    "part_of_speech": "verb",
+    "chinese": "下雨。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b26b4b36-b65f-4f5f-9bfe-f00bdc39c947",
+    "swedish": "tvätta",
+    "part_of_speech": "verb",
+    "chinese": "洗；洗衣服。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "51d76859-6be6-4ef3-8d51-d914e55c3ebd",
+    "swedish": "enastående",
+    "part_of_speech": "adjective",
+    "chinese": "杰出的；非凡的；卓越的",
+    "swedish_explanation": "som är mycket bättre än det vanliga; mycket bra och ovanligt imponerande"
+  },
+  {
+    "id": "558e76eb-fe10-4be3-b844-31f7dbd741d8",
+    "swedish": "unna",
+    "part_of_speech": "verb",
+    "chinese": "享受；犒劳自己；舍得让自己得到",
+    "swedish_explanation": "att ge sig själv eller någon annan något gott eller trevligt"
+  },
+  {
+    "id": "d507d361-1caf-4785-9cd7-e2724084e888",
+    "swedish": "grundläggande",
+    "part_of_speech": "adjective",
+    "chinese": "基本的，基础的",
+    "swedish_explanation": "som är viktig från början och behövs för att förstå eller göra något"
+  },
+  {
+    "id": "2ff85ce7-7386-4f0c-8d55-71ff48138710",
+    "swedish": "spännande",
+    "part_of_speech": "adjective",
+    "chinese": "令人兴奋的；精彩的",
+    "swedish_explanation": "något som är intressant och gör att man vill veta mer"
+  },
+  {
+    "id": "5b9a827b-8c28-453e-8668-d673c3d13c0f",
+    "swedish": "lagstiftande",
+    "part_of_speech": "adjective",
+    "chinese": "立法的",
+    "swedish_explanation": "som har att göra med att stifta lagar eller med den del av staten som beslutar om lagar"
+  },
+  {
+    "id": "06564413-81ea-4966-b772-35aabba2cea7",
+    "swedish": "betydande",
+    "part_of_speech": "adjective",
+    "chinese": "相当大的；重要的",
+    "swedish_explanation": "något som är ganska stort eller viktigt"
+  },
+  {
+    "id": "4bca5c58-ac46-46a3-b42b-6bd66e36eb93",
+    "swedish": "begränsad",
+    "part_of_speech": "adjective",
+    "chinese": "有限的；受限制的",
+    "swedish_explanation": "som inte är stor eller fri, och som har gränser"
+  },
+  {
+    "id": "708d2450-300b-452e-9a5a-74f5f4743673",
+    "swedish": "avancerad",
+    "part_of_speech": "adjective",
+    "chinese": "高级的；复杂的",
+    "swedish_explanation": "något som är svårt eller på en hög nivå"
+  },
+  {
+    "id": "dd4467b8-6bab-417d-a609-c8405fe82e57",
+    "swedish": "uppskatta",
+    "part_of_speech": "verb",
+    "chinese": "欣赏；感激；估计",
+    "swedish_explanation": "att tycka om något eller någon och visa att det är bra; också att säga ungefär hur mycket eller hur stort något är"
+  },
+  {
+    "id": "d3f20630-2eb2-4a6e-8f03-d956eac6b349",
+    "swedish": "levande",
+    "part_of_speech": "adjective",
+    "chinese": "活的；活着的",
+    "swedish_explanation": "som lever, inte död"
+  },
+  {
+    "id": "4c6cfc56-62fb-4bf6-abb7-fae97a1f796a",
+    "swedish": "ifrågasätta",
+    "part_of_speech": "verb",
+    "chinese": "质疑；提出疑问。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e19fe183-52f2-40bf-b4bb-257a653f2ea8",
+    "swedish": "nyanserad",
+    "part_of_speech": "adjective",
+    "chinese": "有层次的；不片面的；细致平衡的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7038af37-4a80-44d6-bdfb-b81eeab46b66",
+    "swedish": "lämna",
+    "part_of_speech": "verb",
+    "chinese": "留下；交；送到；离开。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "4cdba8a7-5c97-4d5c-a80a-3a720c72b50e",
+    "swedish": "dra slutsatsen",
+    "part_of_speech": "verb",
+    "chinese": "得出结论。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "482d5cf8-295c-47a3-aa32-32c9d6cc6e46",
+    "swedish": "betona",
+    "part_of_speech": "verb",
+    "chinese": "强调；着重说明。常用于表达说话者想让某一点更重要。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "68722160-49eb-48c7-9a72-9ced485c69b5",
+    "swedish": "lyssna",
+    "part_of_speech": "verb",
+    "chinese": "听；倾听。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a4a84335-401a-4e37-ac9c-4bf584c01727",
+    "swedish": "rädda",
+    "part_of_speech": "verb",
+    "chinese": "拯救；救助；抢救。也可表示“设法保住、挽回”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c9d41c44-8b4f-474d-a3d6-7726eb0e0ae7",
+    "swedish": "rätt",
+    "part_of_speech": "adjective",
+    "chinese": "正确的；对的；也可指权利或菜肴。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "19d71b70-97f1-4b8a-8efa-5e393d09935d",
+    "swedish": "separerad",
+    "part_of_speech": "adjective",
+    "chinese": "分居的；分开的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3d8b1f23-60dd-4cea-8bcf-f553c994ce4f",
+    "swedish": "översätta",
+    "part_of_speech": "verb",
+    "chinese": "翻译。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "07979bea-899d-4981-bb81-017600992650",
+    "swedish": "träna",
+    "part_of_speech": "verb",
+    "chinese": "训练；锻炼；练习。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b77cfa71-3309-4005-8c66-84db045a8f8f",
+    "swedish": "välkommen",
+    "part_of_speech": "adjective",
+    "chinese": "受欢迎的；欢迎。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7e7a2065-25bb-4604-a383-b34108e84a36",
+    "swedish": "född",
+    "part_of_speech": "adjective",
+    "chinese": "出生的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "712930fe-b649-44cc-836b-33ef0a726c76",
+    "swedish": "vakna",
+    "part_of_speech": "verb",
+    "chinese": "醒来。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "8cd95eb7-6b5b-450d-b78d-f4a9d6d7bd0a",
+    "swedish": "chatta",
+    "part_of_speech": "verb",
+    "chinese": "在线聊天；发聊天消息。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6a2db185-41c4-49ac-ae75-85b2702bc196",
+    "swedish": "somna",
+    "part_of_speech": "verb",
+    "chinese": "入睡；睡着。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "166e0855-3825-48f2-86fc-1d4bd145daef",
+    "swedish": "vaken",
+    "part_of_speech": "adjective",
+    "chinese": "醒着的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "d2d03057-efd9-4945-9626-d8470488640f",
+    "swedish": "stanna",
+    "part_of_speech": "verb",
+    "chinese": "停留；留下；停止。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "09391f2e-67f7-4c0b-9515-e062c8218ace",
+    "swedish": "glad",
+    "part_of_speech": "adjective",
+    "chinese": "高兴的；快乐的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6b6a936a-9861-4673-9fcd-1031bb93ffba",
+    "swedish": "uppmana",
+    "part_of_speech": "verb",
+    "chinese": "敦促；号召；要求别人去做某事，语气比“建议”更强，比“命令”更委婉正式。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "381eba95-fb9b-4559-aa3e-6f1d3e5021ce",
+    "swedish": "hitta",
+    "part_of_speech": "verb",
+    "chinese": "找到；发现。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "04c0ad48-bbad-4297-9c2c-401761356f5f",
+    "swedish": "drunkna",
+    "part_of_speech": "verb",
+    "chinese": "淹死；因溺水而死亡，也可指“被淹没、淹没在……”的比喻用法。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "541e92e3-9490-491e-b1d7-eb24b8c4052c",
+    "swedish": "underteckna",
+    "part_of_speech": "verb",
+    "chinese": "签署；正式签字，常用于合同、协议、声明等书面正式场合。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fca6eac9-f0c4-4639-bee0-a1fdf4614504",
+    "swedish": "sakna",
+    "part_of_speech": "verb",
+    "chinese": "想念；缺少。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "10f19aa3-a7a8-4650-a588-9440f372fbe8",
+    "swedish": "tjäna",
+    "part_of_speech": "verb",
+    "chinese": "赚；挣得；服务。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f4edd1ec-5174-4bf4-a730-f5530c751230",
+    "swedish": "befinna",
+    "part_of_speech": "verb",
+    "chinese": "处于；位于。常见固定表达是 befinna sig，表示某人/某物在某个地点、状态或情况中。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "835531da-0d59-424e-a75d-99688ab6e951",
+    "swedish": "begagnad",
+    "part_of_speech": "adjective",
+    "chinese": "二手的；用过的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "53f8bb88-c9d5-4440-9ec2-cffc01e7687c",
+    "swedish": "låna",
+    "part_of_speech": "verb",
+    "chinese": "借；借用；借出。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "56342465-789b-44a2-b76e-14433567eaf0",
+    "swedish": "mönstrad",
+    "part_of_speech": "adjective",
+    "chinese": "有图案的；带花纹的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5828c7d6-4ad6-4dc6-ac44-76c40e33e095",
+    "swedish": "rädd",
+    "part_of_speech": "adjective",
+    "chinese": "害怕的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "239d63da-0309-4285-a43e-267850c38ce1",
+    "swedish": "skina",
+    "part_of_speech": "verb",
+    "chinese": "照耀；发光。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "84a8e2af-6ccf-414c-89a9-445f35ebe64a",
+    "swedish": "försenad",
+    "part_of_speech": "adjective",
+    "chinese": "延误的；迟到的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b6936959-3509-4fe1-91d5-821761a87621",
+    "swedish": "obetonad",
+    "part_of_speech": "adjective",
+    "chinese": "非重读的；无重音的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1a7aa393-8524-443b-9f95-3ae9bfd1b7a7",
+    "swedish": "betonad",
+    "part_of_speech": "adjective",
+    "chinese": "重读的；有重音的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c9a69a60-5cc3-40b3-995c-b4816a7e9c31",
+    "swedish": "platt",
+    "part_of_speech": "adjective",
+    "chinese": "平的；扁平的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "8aeb3126-8fdc-42c5-ab6e-b7b3d3c941a2",
+    "swedish": "tätbefolkad",
+    "part_of_speech": "adjective",
+    "chinese": "人口密集的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "d6adecf2-55bb-4b9f-9f4e-7a506de571a6",
+    "swedish": "glesbefolkad",
+    "part_of_speech": "adjective",
+    "chinese": "人口稀少的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3cda18d4-a711-4a38-a26f-b5b631bc4701",
+    "swedish": "högutbildad",
+    "part_of_speech": "adjective",
+    "chinese": "受过高等教育的；高学历的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3ce79302-994c-4696-a3b9-3d1dc66121b0",
+    "swedish": "kristen",
+    "part_of_speech": "adjective",
+    "chinese": "基督教的；基督徒的；基督徒。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b03ad3f1-c2e6-4f82-8d76-5808f2a942e9",
+    "swedish": "nyfiken",
+    "part_of_speech": "adjective",
+    "chinese": "好奇的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "77cf92dc-0aa8-4136-b60c-387550c9ac5d",
+    "swedish": "erkänna",
+    "part_of_speech": "verb",
+    "chinese": "承认；也可表示供认罪行、事实或情感，常见于法律和日常语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6c580201-1714-4176-b61d-0ea625133dc6",
+    "swedish": "hackad",
+    "part_of_speech": "adjective",
+    "chinese": "被黑客入侵的；切碎的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "63ba6636-a386-4435-9e6a-d42584fbef80",
+    "swedish": "titta",
+    "part_of_speech": "verb",
+    "chinese": "看；瞧。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5bbfa50a-f474-48bc-85dc-99ea1e8673d0",
+    "swedish": "närproducerad",
+    "part_of_speech": "adjective",
+    "chinese": "本地生产的；近距离生产的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "470ac3ce-7915-4a29-8f21-efd8ffea0a1d",
+    "swedish": "syrad",
+    "part_of_speech": "adjective",
+    "chinese": "发酵变酸的；酸化的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "72871104-b20d-4d01-9d7b-4e6f1640efae",
+    "swedish": "fermenterad",
+    "part_of_speech": "adjective",
+    "chinese": "发酵的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7b9a6ac3-53aa-4d0b-a54e-84eca2fdeb72",
+    "swedish": "uppfatta",
+    "part_of_speech": "verb",
+    "chinese": "感知；听见/看见并理解；认为，觉得。常用于“uppfatta något som …”表示把某事理解成某种意思。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "eab8b585-97bc-4a12-9810-86861c7e959a",
+    "swedish": "importerad",
+    "part_of_speech": "adjective",
+    "chinese": "进口的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "575268a6-f8be-40d1-8c6d-a664153d352e",
+    "swedish": "mogen",
+    "part_of_speech": "adjective",
+    "chinese": "成熟的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "91e82a00-1dbb-426e-b022-3e2831462a36",
+    "swedish": "mätt",
+    "part_of_speech": "adjective",
+    "chinese": "吃饱的；饱的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "31edc4b9-f037-4e8e-845f-5415a2e32e4e",
+    "swedish": "hemlagad",
+    "part_of_speech": "adjective",
+    "chinese": "自家做的；家常的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e9ca667c-f758-402e-9766-4f3f573f6a41",
+    "swedish": "jättesugen",
+    "part_of_speech": "adjective",
+    "chinese": "非常想要的；特别馋的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a453b624-73fd-4c0f-81e5-3cbf440bb8fd",
+    "swedish": "serviceinriktad",
+    "part_of_speech": "adjective",
+    "chinese": "服务导向的；注重服务的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "71fd8bc4-f142-41da-b063-8a8dd98ae5fe",
+    "swedish": "förvånad",
+    "part_of_speech": "adjective",
+    "chinese": "惊讶的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c5d1d84c-bc66-444c-8ea5-2abf96fe7c73",
+    "swedish": "oberoende",
+    "part_of_speech": "adjective",
+    "chinese": "独立的；不依赖他人的",
+    "swedish_explanation": "som klarar sig själv och inte behöver hjälp av andra"
+  },
+  {
+    "id": "64448550-bd3f-4732-839e-ec18c986ed6e",
+    "swedish": "naken",
+    "part_of_speech": "adjective",
+    "chinese": "裸露的；裸体的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "39cf1974-e058-49cb-a84d-b9a7c64092e7",
+    "swedish": "förbjuden",
+    "part_of_speech": "adjective",
+    "chinese": "被禁止的；不允许的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "371ff9ad-1410-4580-96fe-13f8bf363abe",
+    "swedish": "dubbelbokad",
+    "part_of_speech": "adjective",
+    "chinese": "被重复预约的；时间冲突的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "972c41de-bc35-49ae-af70-e7bbd58ac90c",
+    "swedish": "peppad",
+    "part_of_speech": "adjective",
+    "chinese": "兴奋的；有动力的；受到鼓舞的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "9ed61465-a077-4d65-bbb6-19fb840a39fc",
+    "swedish": "kunna",
+    "part_of_speech": "verb",
+    "chinese": "会；能够；知道如何做。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a2bc53c7-a734-4b4f-b228-b74afbb23b1c",
+    "swedish": "sugen",
+    "part_of_speech": "adjective",
+    "chinese": "想要的；有兴趣的；嘴馋的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "11121776-7689-4b97-a973-36567ff6ba8c",
+    "swedish": "taggad",
+    "part_of_speech": "adjective",
+    "chinese": "兴奋的；很期待的；有干劲的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ae8203f3-60b1-41ce-a872-a45c1d5e7260",
+    "swedish": "skoltrött",
+    "part_of_speech": "adjective",
+    "chinese": "厌学的；对上学感到疲倦的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "2e495a8e-b709-457e-9443-97db0af65189",
+    "swedish": "motiverad",
+    "part_of_speech": "adjective",
+    "chinese": "有动力的；有积极性的；有理由的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e3318f11-7433-45c2-836c-afe5d8eb8619",
+    "swedish": "nyrenoverad",
+    "part_of_speech": "adjective",
+    "chinese": "新装修的；刚翻新的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0107259b-deb1-4112-a282-3020af2aadae",
+    "swedish": "anteckna",
+    "part_of_speech": "verb",
+    "chinese": "记笔记；记录。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "29839eba-15fa-4f14-97f2-3be3318b4200",
+    "swedish": "murad",
+    "part_of_speech": "adjective",
+    "chinese": "砌成的；砖砌的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "79f0fc1c-3f09-4650-bb64-975d49ac71cc",
+    "swedish": "välplanerad",
+    "part_of_speech": "adjective",
+    "chinese": "规划合理的；布局好的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "8472219b-6788-4f6b-859a-f64bf93ebb50",
+    "swedish": "stajlad",
+    "part_of_speech": "adjective",
+    "chinese": "经过布置/造型的；被精心装饰的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "bbc08984-a294-4988-9296-35d301ca31ed",
+    "swedish": "ordna",
+    "part_of_speech": "verb",
+    "chinese": "安排；整理；解决。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "616db140-c084-4fb4-a6a9-e89256437dc9",
+    "swedish": "pytteliten",
+    "part_of_speech": "adjective",
+    "chinese": "极小的；非常小的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "48824807-7226-4106-aa56-b2f625eb977c",
+    "swedish": "fixerad",
+    "part_of_speech": "adjective",
+    "chinese": "固定的；被固定住的；执着于某事的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ac747a18-6715-4f38-bbd3-77845b981cc3",
+    "swedish": "sjukskriven",
+    "part_of_speech": "adjective",
+    "chinese": "病假中的；被医生开病假证明的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "caa897f3-01cb-4b5a-9a98-2e7347270c48",
+    "swedish": "strukturerad",
+    "part_of_speech": "adjective",
+    "chinese": "有条理的；结构化的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1a5fed8e-fb45-470f-831f-0730cd333c72",
+    "swedish": "superkoncentrerad",
+    "part_of_speech": "adjective",
+    "chinese": "超级专注的；高度集中的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c32626c8-d9e0-41ef-a71e-88b47d812b22",
+    "swedish": "koncentrerad",
+    "part_of_speech": "adjective",
+    "chinese": "专注的；集中的；浓缩的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6a3b533e-e7f8-4e2d-be94-b22d67d963b5",
+    "swedish": "oväntad",
+    "part_of_speech": "adjective",
+    "chinese": "意外的；出乎意料的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "76455004-7353-48f5-a6f4-e278504c5da6",
+    "swedish": "fortsätta",
+    "part_of_speech": "verb",
+    "chinese": "继续。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "774b2c5d-15e9-435c-8f34-22f698cdcb9c",
+    "swedish": "varierad",
+    "part_of_speech": "adjective",
+    "chinese": "多样的；有变化的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "add6c64e-eeaa-4870-a069-b27729529b2a",
+    "swedish": "dödstrött",
+    "part_of_speech": "adjective",
+    "chinese": "累极了的；筋疲力尽的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b2e23680-80ca-4a44-a58d-e9ef49ba87de",
+    "swedish": "understuken",
+    "part_of_speech": "adjective",
+    "chinese": "画了下划线的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e64c8811-9f43-452a-b784-f76010851042",
+    "swedish": "tröttna",
+    "part_of_speech": "verb",
+    "chinese": "厌倦；失去兴趣。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "bfbd4998-fa90-4b16-baf8-65a655c02466",
+    "swedish": "stressad",
+    "part_of_speech": "adjective",
+    "chinese": "有压力的；紧张的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3631565a-05b6-4fd7-9268-dd8172e7ca15",
+    "swedish": "utåtriktad",
+    "part_of_speech": "adjective",
+    "chinese": "外向的；善于交际的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "56b1aba2-3060-4205-8358-dd168755440b",
+    "swedish": "modeintresserad",
+    "part_of_speech": "adjective",
+    "chinese": "对时尚感兴趣的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fbff19ec-e818-4be3-9b85-090c9f57d3c4",
+    "swedish": "intagen",
+    "part_of_speech": "adjective",
+    "chinese": "被收治的；被录取的；着迷的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "4dec180e-ca6b-4899-a593-7e55873a77ab",
+    "swedish": "kulturintresserad",
+    "part_of_speech": "adjective",
+    "chinese": "对文化感兴趣的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "26ff426f-9ca4-417d-a9ba-eeb213772702",
+    "swedish": "högavlönad",
+    "part_of_speech": "adjective",
+    "chinese": "高薪的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e1b55eb2-48a8-42fd-a246-b57f063d249d",
+    "swedish": "lågavlönad",
+    "part_of_speech": "adjective",
+    "chinese": "低薪的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "84488323-e55c-4077-a2fa-0cdab2dedd95",
+    "swedish": "ilsken",
+    "part_of_speech": "adjective",
+    "chinese": "愤怒的；怒气冲冲的。比“arg”更强，常表示情绪很激烈，甚至带攻击性。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fdcc6245-31bd-4328-b6f9-157d3bc3c157",
+    "swedish": "korkad",
+    "part_of_speech": "verb",
+    "chinese": "蠢的，傻的；口语中常带有轻微或明显的贬义，也可用于形容一个想法、行为很笨。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3efbcfd0-4111-440c-9fbb-11c91b9bb6c9",
+    "swedish": "kratta",
+    "part_of_speech": "verb",
+    "chinese": "耙；用耙子清理。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f8923eef-266d-4c19-8aad-6cf918431eb3",
+    "swedish": "lidande",
+    "part_of_speech": "adjective",
+    "chinese": "痛苦的；受苦的。也可作名词，表示“痛苦、受难、苦难”，常用于较正式或抽象语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0ae5c7fd-26ce-4dc7-9cdd-feabf7e75d4b",
+    "swedish": "skydda",
+    "part_of_speech": "verb",
+    "chinese": "保护；防护。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "903de7cd-0028-4b54-bdb7-c51fe4c3ecf6",
+    "swedish": "smittad",
+    "part_of_speech": "adjective",
+    "chinese": "被感染的；受传染的。常用于疾病、病毒、细菌，也可指“被影响/波及”，但主要是医学语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "11b3e0fd-86f1-483e-9968-741c2c46e4d2",
+    "swedish": "dygna",
+    "part_of_speech": "verb",
+    "chinese": "通宵不睡；熬通宵。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "8640e7af-5e92-4365-bcf2-35a0fbad1a40",
+    "swedish": "r ädda",
+    "part_of_speech": "verb",
+    "chinese": "救；拯救。原词应为 rädda。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "37e259d1-c8b8-4e3b-aa7e-d5d1896699f1",
+    "swedish": "smitta",
+    "part_of_speech": "verb",
+    "chinese": "传染；感染；传染病原。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a6cdc517-66c7-47c6-af10-ed00cbb386d5",
+    "swedish": "berusad",
+    "part_of_speech": "adjective",
+    "chinese": "醉酒的；喝醉的。多用于正式或书面语，比“full”更正式，也可指受药物影响而失去清醒状态。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "919a2dfd-9c7a-409f-b6dc-24c759e59d71",
+    "swedish": "rabies-smittad",
+    "part_of_speech": "adjective",
+    "chinese": "感染狂犬病的；带有狂犬病病毒的。多用于动物，也可指被疑似感染的情况。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "38aebd6d-a637-431f-a1cf-9757d0e0fef9",
+    "swedish": "lättlagad",
+    "part_of_speech": "adjective",
+    "chinese": "容易做的；易煮的。多用于食物，表示准备简单、省时间。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "66f970b8-189c-43e5-843b-e324b4f2e9e3",
+    "swedish": "sammasatt",
+    "part_of_speech": "adjective",
+    "chinese": "复杂的；由多个部分组成的。常指情况、问题或结构不简单。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5f75ee89-26b6-496e-b66b-0adabdc37a3f",
+    "swedish": "jättesen",
+    "part_of_speech": "adjective",
+    "chinese": "非常晚的，特别迟的；口语里常用来强调时间上拖得很久。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a5ecc072-488f-4368-9d47-0fb395a9edf8",
+    "swedish": "bortplockad",
+    "part_of_speech": "verb",
+    "chinese": "被收走的；被整理拿走的，表示东西已经被移开或收起来。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "95876179-1fb2-4bd1-96d1-8b39db08a1f4",
+    "swedish": "förmögen",
+    "part_of_speech": "adjective",
+    "chinese": "富有的，有钱的；用于人或家庭，语气较正式。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "41db55f8-10c9-4bda-ae2f-37ce14eefd5b",
+    "swedish": "svullna",
+    "part_of_speech": "verb",
+    "chinese": "肿起来；膨胀。常指身体部位因过敏、受伤或炎症而变大。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e40e3c6f-7d09-4524-9085-de4d0e740295",
+    "swedish": "ersätta",
+    "part_of_speech": "verb",
+    "chinese": "替代；用别的东西代替某人或某物，也可指赔偿。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c9b7472b-508e-4953-858a-ea6ee5de440e",
+    "swedish": "ökad",
+    "part_of_speech": "verb",
+    "chinese": "增加的、增多的；常作形容词用，表示程度变大。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "da0202b7-fc53-4d76-b439-9380fac1fd78",
+    "swedish": "mördad",
+    "part_of_speech": "verb",
+    "chinese": "被谋杀的；被害的。是动词 mörda 的过去分词/被动形容用法，常用于新闻和叙述。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1692ac20-4466-417f-80f1-0198b04073c1",
+    "swedish": "ointresserad",
+    "part_of_speech": "adjective",
+    "chinese": "不感兴趣的；对某事没有兴趣，常带“漠不关心”的感觉。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "8c755a95-3667-445a-9e63-75e91b6bec6a",
+    "swedish": "uppdelad",
+    "part_of_speech": "verb",
+    "chinese": "被分开的；被划分的，表示某物已经分成几部分。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "51ee2cea-200d-427b-8653-17987e50ed9f",
+    "swedish": "nyfångad",
+    "part_of_speech": "verb",
+    "chinese": "新捕到的；刚刚捕获的，常用于鱼、海鲜或猎物。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "78247663-03aa-4da7-95cc-223f86d74905",
+    "swedish": "regelbunden",
+    "part_of_speech": "adjective",
+    "chinese": "有规律的；定期的；规则的。常用于时间、习惯、形状或节奏。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "751cbd7a-773e-4128-8587-ba4421b753f2",
+    "swedish": "välkomna",
+    "part_of_speech": "verb",
+    "chinese": "欢迎；迎接。常用于接待客人、开始活动或表示“热烈欢迎”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fe0ece99-c298-4acd-96d1-b90b156be3e8",
+    "swedish": "lokalproducerad",
+    "part_of_speech": "verb",
+    "chinese": "本地生产的；当地制造或种植的。常用于食品、商品和环保语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "17bdd2e7-5cb6-4bd6-9ac1-5fb71225935e",
+    "swedish": "riven",
+    "part_of_speech": "adjective",
+    "chinese": "磨碎的，刨碎的；通常指食物被擦成细丝或碎末，如 riven ost。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "116b65af-8acf-4e9b-810f-2424f8f248ca",
+    "swedish": "tärnad",
+    "part_of_speech": "adjective",
+    "chinese": "切成丁的，切块的。多用于食物，如 tärnad lök（洋葱丁）。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1af0b79c-13a5-476a-b50b-abca5b11d295",
+    "swedish": "ugnsgräddad",
+    "part_of_speech": "adjective",
+    "chinese": "烤箱烘烤的；指用烤箱烤熟或烤制，常用于面包、蛋糕、甜点等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "08e24870-ea14-4c62-8aee-4f6d687c9b0c",
+    "swedish": "vispad",
+    "part_of_speech": "adjective",
+    "chinese": "打发好的；常指奶油、蛋清等被搅打到蓬松起泡的状态。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a94ba09b-9ddd-4765-9564-595cd1ef638b",
+    "swedish": "partysugen",
+    "part_of_speech": "adjective",
+    "chinese": "想去参加派对的；有玩乐、想聚会的心情，口语中很常见。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a0c0ddae-f5e5-445b-9429-ea2ccc92ba65",
+    "swedish": "registrerad",
+    "part_of_speech": "verb",
+    "chinese": "已登记的；已注册的。用于说明信息、用户、信件或商品已被正式记录。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fa5c9a68-7a54-4929-bc66-cb8d5c25e788",
+    "swedish": "skjuten",
+    "part_of_speech": "adjective",
+    "chinese": "被射中的；被枪击的。也可在某些语境中表示“被推迟的”，但这里最常见是“中枪的、被射击的”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3a430ce0-248a-49ae-8958-da0d22f50051",
+    "swedish": "närodlad",
+    "part_of_speech": "verb",
+    "chinese": "本地种植的；在附近生产或种植的，常用于食物，强调运输少、更环保。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "d7f1c022-8ff9-4dc9-9812-3fd81f585ad1",
+    "swedish": "producerad",
+    "part_of_speech": "verb",
+    "chinese": "生产的；制作的，通常作形容词或过去分词，用于商品、节目、食物等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f7e91141-fb67-41cb-be2f-588fdb0ea04e",
+    "swedish": "samkönad",
+    "part_of_speech": "adjective",
+    "chinese": "同性的；指同一性别，常用于关系、婚姻、家庭等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c3269173-fcc9-4527-9405-b78f75e4e1c3",
+    "swedish": "knivmördad",
+    "part_of_speech": "verb",
+    "chinese": "被刺死的；形容词，指遭刀刺致死，语气非常强烈，多用于新闻报道。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "25550836-b71d-47af-b5b4-60703239afc8",
+    "swedish": "kröna",
+    "part_of_speech": "verb",
+    "chinese": "加冕；使成为；把某事推向最终结果。可指正式加冕，也可表示“以……结束/成就”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5c0c96d1-205d-4055-950f-9d0cc051d11f",
+    "swedish": "varna",
+    "part_of_speech": "verb",
+    "chinese": "警告，提醒注意危险；也可表示“预先劝告不要做某事”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b934fb22-61dc-41d3-900e-4d3af8257125",
+    "swedish": "idrotta",
+    "part_of_speech": "verb",
+    "chinese": "做运动；进行体育活动，常指固定地运动、锻炼。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3ce763b6-71ca-4d75-a4e2-16c10a1f8f26",
+    "swedish": "påminna",
+    "part_of_speech": "verb",
+    "chinese": "使想起；提醒。可表示“让人联想到”或“提醒某人做某事”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "11762704-5450-4f69-8527-faf3b2705feb",
+    "swedish": "nyinflyttad",
+    "part_of_speech": "verb",
+    "chinese": "新搬来的，新入住的。常用于指刚搬进某个住处的人。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fd3448d7-d74e-48ff-a541-d569ab2af875",
+    "swedish": "älskad",
+    "part_of_speech": "verb",
+    "chinese": "被爱的，受欢迎的，受人喜爱的。常用于人、宠物、地方或事物，表示受到很多喜爱。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "28951b44-665e-4873-8c40-c2e3b7e22b6b",
+    "swedish": "kortfattad",
+    "part_of_speech": "verb",
+    "chinese": "简短的，简明扼要的。常用于说明说话、回答、说明不啰嗦。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0aefd6f0-5dbf-4c08-8091-0ec7e80b6235",
+    "swedish": "sedd",
+    "part_of_speech": "adjective",
+    "chinese": "被看见的；被注意到的；是“se”的过去分词，多用于被动或形容词化。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "dc6031f4-7012-49fb-8e0c-97d9b085674d",
+    "swedish": "kontrollerad",
+    "part_of_speech": "adjective",
+    "chinese": "受控制的；镇定的，克制的。既可以描述被控制，也可以描述人的情绪和行为很稳。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e3105332-162e-48ac-98e7-537832a8ba17",
+    "swedish": "medveten",
+    "part_of_speech": "adjective",
+    "chinese": "意识到的，有自觉的；清醒的。也可指有意的、刻意的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "282ba4ed-b3ab-40fd-bb10-3695337f2494",
+    "swedish": "omhändertagen",
+    "part_of_speech": "adjective",
+    "chinese": "被照顾的，被安置处理的；常见于“vara omhändertagen”表示有人照料、得到妥善处理。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c5a0a1fc-5a39-41f9-bb36-3526447b5480",
+    "swedish": "lockad",
+    "part_of_speech": "adjective",
+    "chinese": "被吸引的；被诱惑的；有意愿去做某事的。常见于“lockad av/av något”，表示觉得有吸引力。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "cde4465d-2468-4b52-a697-51fbffd77405",
+    "swedish": "beräkna",
+    "part_of_speech": "verb",
+    "chinese": "计算；估算；预计。可用于数学、经济、计划或时间等方面。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1b719e44-26f5-48d4-a06b-dc1eb59580a5",
+    "swedish": "överbelastad",
+    "part_of_speech": "adjective",
+    "chinese": "超负荷的；负担过重的；过于繁忙的。可指人、系统、医院、网络等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fbe65f15-555d-4642-a280-ad06cf38cab8",
+    "swedish": "miljömedveten",
+    "part_of_speech": "adjective",
+    "chinese": "有环保意识的；关注环境影响的。常形容人、企业或消费选择。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a3a2241e-e836-4da2-899e-9d96a5b9ab92",
+    "swedish": "miljöcertifierad",
+    "part_of_speech": "adjective",
+    "chinese": "通过环保认证的；符合环境标准的，强调产品、建筑或企业更环保。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fde4537f-ab95-43da-9687-2e84973d3591",
+    "swedish": "kursiverad",
+    "part_of_speech": "adjective",
+    "chinese": "斜体的；印成斜体字的，常用于强调、书名或外来词。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0be61606-16de-479a-8500-1a60ff27ce2e",
+    "swedish": "uppkopplad",
+    "part_of_speech": "adjective",
+    "chinese": "联网的；在线的，指设备或人连接到互联网/网络。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f9d7c127-3fdf-4c92-9550-283489c75873",
+    "swedish": "tafatt",
+    "part_of_speech": "adjective",
+    "chinese": "笨拙的，没精打采的，显得没把握的；常形容动作、态度或反应。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "dad9047a-beaf-4c24-b713-6cdf79c1edaf",
+    "swedish": "smaksätta",
+    "part_of_speech": "verb",
+    "chinese": "调味；给食物增加味道，常指加入香料、盐、柠檬等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "774c190a-cc32-4095-9e94-71dc23dcc674",
+    "swedish": "skanna",
+    "part_of_speech": "verb",
+    "chinese": "扫描；用扫描仪、手机或系统读取图像、文件或代码。也可指“快速查看”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a91e8e1b-a03f-4c76-82ca-88fe77be6787",
+    "swedish": "drogpåverkad",
+    "part_of_speech": "verb",
+    "chinese": "受毒品影响的；吸毒后处于影响之下的。常用于警察、医疗和法律语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7c83921b-987f-4d48-98d2-1d34dca8126f",
+    "swedish": "livrädd",
+    "part_of_speech": "adjective",
+    "chinese": "吓得要命的；非常害怕的。常用于强烈恐惧。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "cbd64b72-0b22-421e-a4ac-f7d60bc79309",
+    "swedish": "förgiftad",
+    "part_of_speech": "verb",
+    "chinese": "中毒的；被毒物污染的。可指人、食物、环境等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fd50cfc3-70b5-4240-9f9b-1d50894f3949",
+    "swedish": "hembakad",
+    "part_of_speech": "verb",
+    "chinese": "家里烘烤的；自家做的烘焙食品。常用于面包、蛋糕、饼干等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "10f2f010-b8e9-4302-bea4-734715b8ce37",
+    "swedish": "fastna",
+    "part_of_speech": "verb",
+    "chinese": "卡住；粘住；陷住；也可指“陷入、留在脑中”，如想法/旋律一直挥之不去。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "95040c1c-224a-4ea6-a8d3-a426ce04e825",
+    "swedish": "imponerad",
+    "part_of_speech": "verb",
+    "chinese": "印象深刻的；被折服的。常用于 beskriva hur man reagerar på något positivt eller starkt.",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e65b2142-dd93-441e-87d6-5cbb13273bc5",
+    "swedish": "förfalskad",
+    "part_of_speech": "verb",
+    "chinese": "伪造的；假的；被做成假货或假文件的。常用于 dokument、pengar、signaturer。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0cfcc60a-cf50-4f1c-a50b-cc9343899acb",
+    "swedish": "bevakad",
+    "part_of_speech": "verb",
+    "chinese": "被看守的；被监视的；被密切关注的。可用于人、地点或情况。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1b2966d8-e2fb-4bd7-8383-84430f5b778d",
+    "swedish": "piskad",
+    "part_of_speech": "verb",
+    "chinese": "被鞭打的；也可比喻“被猛烈打击/被骂得很惨”。主要是过去分词。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0e0ac256-9f40-4bbe-97a2-c4e29ccf066f",
+    "swedish": "utklädd",
+    "part_of_speech": "adjective",
+    "chinese": "乔装打扮的；穿成别人的样子，常用于派对、节日或隐藏身份。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e19c1846-4767-4154-80ad-f6dad8502453",
+    "swedish": "nedskriven",
+    "part_of_speech": "adjective",
+    "chinese": "写下来的；记录在纸上或文本里的，不是凭记忆的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ab7a97b9-bbc7-4653-a9a7-4a1da9fb0d53",
+    "swedish": "stulen",
+    "part_of_speech": "adjective",
+    "chinese": "被偷的；表示某物是通过偷窃得到或失去的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "72747326-32c5-4b91-b4a9-008e2cdfa32c",
+    "swedish": "opererad",
+    "part_of_speech": "verb",
+    "chinese": "做过手术的；常指人已经接受外科手术，语体中性。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c02f6503-a99d-4149-beba-9af2b921d611",
+    "swedish": "stoppad",
+    "part_of_speech": "verb",
+    "chinese": "被阻止的；也可表示被塞入、装满或停住，依上下文而定。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "f0cd75a8-87c2-47f1-b665-929c4f3567c6",
+    "swedish": "sminkad",
+    "part_of_speech": "verb",
+    "chinese": "化了妆的；表示脸上涂了化妆品，常用于外貌描述。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "d48e4293-5959-42aa-b918-94fdc608b9ff",
+    "swedish": "åtalad",
+    "part_of_speech": "verb",
+    "chinese": "被起诉的；指检察机关正式指控某人犯罪，但还没最终判决。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "dfc7d359-e397-4df0-b7f9-61570dfa8312",
+    "swedish": "äventyrslysten",
+    "part_of_speech": "adjective",
+    "chinese": "爱冒险的；有冒险精神的。常用于形容人、性格或活动偏好。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "96a497fe-64ed-4f4a-9b70-d8982c95309d",
+    "swedish": "orädd",
+    "part_of_speech": "adjective",
+    "chinese": "无畏的；不害怕的；胆大的。常用于描述人的性格，也可用于行为勇敢果断。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "cabf0030-c810-4723-8597-c1c82356c1a9",
+    "swedish": "fascinerad",
+    "part_of_speech": "adjective",
+    "chinese": "着迷的；被吸引的。表示对某事有强烈兴趣，想继续了解。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c1f28d30-52ba-4b0b-96ef-595006f05487",
+    "swedish": "detaljerad",
+    "part_of_speech": "adjective",
+    "chinese": "详细的；细致的。表示包含很多信息或注重细节。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c501a157-d8be-464f-ae53-bfe6492c6652",
+    "swedish": "baserad",
+    "part_of_speech": "adjective",
+    "chinese": "基于……的；以……为基础的。常用于说明某事建立在某种信息、事实或方法之上。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "cc8e30c4-fea5-4578-b2e7-7fa6f8f72ddb",
+    "swedish": "spårad",
+    "part_of_speech": "adjective",
+    "chinese": "被追踪的，被查到的；也可指“被跟踪定位的”。常与技术、位置或调查有关。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "1d7e2281-cdd1-418c-8533-cc466e2b8084",
+    "swedish": "mobbad",
+    "part_of_speech": "adjective",
+    "chinese": "被欺负的；遭受霸凌的，通常指在学校、工作或网络上长期被针对和伤害。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3bb2bb85-e299-4205-82a8-88306b955245",
+    "swedish": "trakasserad",
+    "part_of_speech": "adjective",
+    "chinese": "遭受骚扰的；被反复打扰、威胁或刁难，常用于工作场合、网络或性骚扰语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "83a59286-0754-415f-af72-b65d8cae5d32",
+    "swedish": "civiliserad",
+    "part_of_speech": "adjective",
+    "chinese": "文明的；有礼貌的，指行为举止符合社会规范，也可指较成熟、理性的处理方式。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6a005bfe-9bd4-46a8-99dd-af3abc7007f3",
+    "swedish": "frustrerad",
+    "part_of_speech": "adjective",
+    "chinese": "沮丧的；受挫的，常因事情不顺、努力没结果或被阻碍而感到生气和无力。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "543e405e-978a-4e05-949b-aeeeda310927",
+    "swedish": "ledsen",
+    "part_of_speech": "adjective",
+    "chinese": "难过的；伤心的，也可表示对某事感到抱歉，口语中很常用。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "9dfdae11-b62e-40c0-a498-00798f0cc22f",
+    "swedish": "sårad",
+    "part_of_speech": "adjective",
+    "chinese": "受伤的；受冒犯的，既可指身体受伤，也常指感情被伤害。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b6a4e7cf-46c0-4bd1-bfe3-b5dd4f6d0d92",
+    "swedish": "omsätta",
+    "part_of_speech": "verb",
+    "chinese": "把……转换/实现；也可指营业额达到某数额。商业里常说“omsätta pengar”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "9f8e59aa-e598-4b8f-9f74-3f670ab21ea2",
+    "swedish": "färgglad",
+    "part_of_speech": "adjective",
+    "chinese": "色彩鲜艳的，颜色丰富的。常用于衣服、图片、装饰等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "d425ac3f-2698-49d3-b7bc-cfb554f0f5aa",
+    "swedish": "lövad",
+    "part_of_speech": "verb",
+    "chinese": "长满树叶的；用树叶装饰过的。常用于夏天、节日和自然描写。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a176cb57-f98b-4b4a-8083-c54598233c60",
+    "swedish": "pyntad",
+    "part_of_speech": "verb",
+    "chinese": "装饰好的；打扮好的。常用于节日、房间、树和人物外表。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "998a3a62-d4d6-4acd-b33f-ae4dfc9442e1",
+    "swedish": "ombildad",
+    "part_of_speech": "adjective",
+    "chinese": "重组的；改组的；重新组成的。常用于家庭、组织、公司等，表示结构变化后形成新的整体。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "eeeb5c4a-3b8a-4d41-8d65-f2b7abec69af",
+    "swedish": "traditionsbunden",
+    "part_of_speech": "adjective",
+    "chinese": "受传统约束的；很守旧的；循传统的。常用于人、组织或做法。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7135a35b-7983-409b-8595-b059e7d311ad",
+    "swedish": "färgad",
+    "part_of_speech": "adjective",
+    "chinese": "有颜色的；染色的；彩色的。也可指“带有某种倾向/色彩”，但基本义是“有颜色”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a5ccb04f-c9b9-4a4d-b382-a412b5d6ce31",
+    "swedish": "gråklädd",
+    "part_of_speech": "adjective",
+    "chinese": "穿灰色衣服的；灰衣的。常用于描述人的外表或群体。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3c73295d-3ea7-49ad-98ba-328962a4c3c6",
+    "swedish": "dragen",
+    "part_of_speech": "adjective",
+    "chinese": "被拉的；抽出的；拉长的；（作过去分词）已被拉/画出的。常见于复合表达，如 väl dragen.",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a2072317-2a4e-4df9-988f-ec62996f36cb",
+    "swedish": "rödklädd",
+    "part_of_speech": "adjective",
+    "chinese": "穿红衣服的；红色服装的，常用于描述外貌、角色或节日人物。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6008e536-5dd7-4cb3-b125-0bf88a028807",
+    "swedish": "tystlåten",
+    "part_of_speech": "adjective",
+    "chinese": "沉默寡言的；不爱多说话的，通常指性格安静、话少。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5ae89351-77b3-45fe-91f2-9bde91af48ad",
+    "swedish": "konflikträdd",
+    "part_of_speech": "adjective",
+    "chinese": "怕冲突的；回避争执的，指不喜欢对抗、矛盾或紧张场面。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0fce78f8-e1ab-4ee8-ad08-7faae8715bea",
+    "swedish": "räddad",
+    "part_of_speech": "adjective",
+    "chinese": "被救的；获救的；被挽救的。可指人，也可指局面、计划等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "c9a3a158-fe60-447c-a3c7-05ddd0094b5c",
+    "swedish": "vitklädd",
+    "part_of_speech": "adjective",
+    "chinese": "穿白衣的；一身白色衣服的。常用于描述服装、人物形象或仪式场合。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "115de21b-194d-4e05-aacb-3aa1f299e1fe",
+    "swedish": "årtidsbunden",
+    "part_of_speech": "adjective",
+    "chinese": "受季节影响的；季节性的。用于表示某事会随着季节变化而出现或发生。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ec98cf91-d01a-4d6d-bbb0-df26c46f999d",
+    "swedish": "återlämna",
+    "part_of_speech": "verb",
+    "chinese": "归还、退还；正式用语，常用于把借的或买的东西交回。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5a8d6053-e183-4bee-81d1-9b371050ecfa",
+    "swedish": "otvättad",
+    "part_of_speech": "verb",
+    "chinese": "没洗的、未清洗的；常用于衣物、头发、菜碗等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ae63352b-9885-45af-aaf2-3309ddc3cf9e",
+    "swedish": "löna",
+    "part_of_speech": "verb",
+    "chinese": "值得；划算。常见于固定表达“det lönar sig”或“det lönar sig att...”，表示有好处、有效果。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6e8e0030-aec1-4cd9-9329-7032d4192a9e",
+    "swedish": "blekna",
+    "part_of_speech": "verb",
+    "chinese": "褪色；变淡；脸色发白。既可指颜色变浅，也可指记忆、 känsla 或 betydelse 逐渐减弱。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ca99c63f-6196-4069-a24c-43582706963d",
+    "swedish": "anpassad",
+    "part_of_speech": "verb",
+    "chinese": "适应了的；定制的；经过调整的。可指内容、 arbete、 program 或 produkt 根据需要做了改变。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e5b14a99-28b8-4431-a497-d323c638fd5c",
+    "swedish": "oavlönad",
+    "part_of_speech": "verb",
+    "chinese": "无报酬的；无薪的。指不领取工资或报酬的工作、职位或活动，常见于志愿工作语境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "cd3e0e92-9cdc-49c1-9155-f4d792fb1cb7",
+    "swedish": "intervjuad",
+    "part_of_speech": "adjective",
+    "chinese": "被采访的；也可指被面试的，表示某人已经接受采访/面试。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "124caed8-966a-44a8-b9ae-fc6fdd2d6b75",
+    "swedish": "dokumenterade",
+    "part_of_speech": "verb",
+    "chinese": "有记录的；经过证明的；也可作动词“dokumentera”的过去式/过去分词形式。常用于事实、结果、病例等。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "42d54728-5ba3-4a8c-a8bd-c22df337a363",
+    "swedish": "betjäna",
+    "part_of_speech": "verb",
+    "chinese": "服务，接待；也可表示“供……使用，满足……需要”。在服务业中很常见，较正式。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a2ead14b-3cf7-4e11-aae0-6a0d367778c7",
+    "swedish": "uppklädd",
+    "part_of_speech": "adjective",
+    "chinese": "穿得正式、精心打扮的。常用于晚宴、派对、节日等场合。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "bfbadab2-196d-4439-8317-7937828037c8",
+    "swedish": "nedklädd",
+    "part_of_speech": "adjective",
+    "chinese": "穿得随便、没打扮的；与 uppklädd 相对。也可理解为“穿得比较休闲、朴素”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ee1b261a-157b-4858-bc66-f89a571913a8",
+    "swedish": "välstrukturerad",
+    "part_of_speech": "verb",
+    "chinese": "结构清晰的；安排得很有条理的，常用于文章、plan 或组织。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b378fc30-4891-4cbd-804c-8507851da7d7",
+    "swedish": "omkastad",
+    "part_of_speech": "verb",
+    "chinese": "被颠倒的，被调换的；也可指顺序、位置或内容被反转。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "dbc696c4-edb9-4f8b-b004-fd0fafb7f874",
+    "swedish": "sönderkramad",
+    "part_of_speech": "verb",
+    "chinese": "被抱得变形的，被搂得太用力的；也可作比喻，表示因过度拥抱而弄坏。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fb13ceeb-abc2-46dd-885d-dd3964ae1774",
+    "swedish": "samlad",
+    "part_of_speech": "adjective",
+    "chinese": "镇定的，沉着的；也可指“整齐归拢的、汇集的”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5c7925fc-056f-48e5-ba0c-b630fb2e7e41",
+    "swedish": "plikttrogen",
+    "part_of_speech": "adjective",
+    "chinese": "尽责的；守职责的；认真完成义务的，常带可靠、负责的积极评价。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a8724336-b4f5-46c3-842b-a6c60dce68bb",
+    "swedish": "prestationsinriktad",
+    "part_of_speech": "adjective",
+    "chinese": "以成绩/表现为导向的；很看重表现、结果和成功。可形容人或环境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "abee6344-f09c-430b-9f3e-620c6b58b0e2",
+    "swedish": "välutbildad",
+    "part_of_speech": "adjective",
+    "chinese": "受过良好教育的；教育水平高的。常指有较高学历或专业训练，也可泛指知识和训练都比较充分。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "3fdd45bb-1f1f-455d-9c82-c10a9ae0b083",
+    "swedish": "uppskattad",
+    "part_of_speech": "verb",
+    "chinese": "受欢迎的；被欣赏的；被重视的。也可指“估计的”，但这里通常是“受人喜爱、受重视”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "074f336c-c983-41f2-bdd0-1b811f14a00f",
+    "swedish": "brotta",
+    "part_of_speech": "verb",
+    "chinese": "摔跤；扭打；把某人按倒。常见于“brotta ner”表示制服、压倒。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "936de903-92b3-481e-b607-bda10189180b",
+    "swedish": "objuden",
+    "part_of_speech": "adjective",
+    "chinese": "未被邀请的；不请自来的。常用于人、客人或来访。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a1098c52-c307-4829-884c-c4665b16aa74",
+    "swedish": "gipsad",
+    "part_of_speech": "adjective",
+    "chinese": "打了石膏的；身体某部分因骨折或受伤被石膏固定。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b07daf81-5fc0-4e32-a23b-59d0ef1cf5d0",
+    "swedish": "oskriven",
+    "part_of_speech": "adjective",
+    "chinese": "未写下的；成文法之外的、默认的。常用于“oskriven regel”表示不成文规则。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7b426ac1-4a1a-44b1-a1ab-b49a72272b8b",
+    "swedish": "hitflyttad",
+    "part_of_speech": "adjective",
+    "chinese": "搬到这里来的；最近迁到此地的。常用于人，表示“从别处搬来/移居到这里”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6d1813b9-04d3-4624-98d5-d1f45ff02815",
+    "swedish": "rätta",
+    "part_of_speech": "verb",
+    "chinese": "改正；纠正错误，也可指批改作业。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ba5464c6-bc69-452d-ad32-92ba9ea8dcf4",
+    "swedish": "tvungen",
+    "part_of_speech": "adjective",
+    "chinese": "被迫的；不得不的。常表示因为情况或规定而没有选择。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "5bcab3cd-a472-468b-9939-9d338b13f46a",
+    "swedish": "uppretad",
+    "part_of_speech": "adjective",
+    "chinese": "激怒的；被惹火的，情绪强烈，常带有愤怒和不满。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "4c42c0ad-567a-4590-847f-8b6d087001d2",
+    "swedish": "avskaffad",
+    "part_of_speech": "verb",
+    "chinese": "被废除的，被取消的；表示某种制度、规定或做法已经不再存在。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b06c9000-9245-4b0f-9a62-fcd7e0cd4923",
+    "swedish": "förankrad",
+    "part_of_speech": "verb",
+    "chinese": "扎根的，稳固建立的；也可指“已征询、已落实”的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7a8afb53-dc54-469e-aa90-929d1b6ea877",
+    "swedish": "förvarna",
+    "part_of_speech": "verb",
+    "chinese": "预先通知；事先警告。常指在事情发生前提醒别人，让对方有准备。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b5d3b67c-9614-4a15-8a53-beb4086a321d",
+    "swedish": "uppvuxen",
+    "part_of_speech": "adjective",
+    "chinese": "长大于……的；在某地长大的。常和介词“i/hos”连用，表示成长背景。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "a51e3d58-44e6-4df3-84da-fdf234e33af6",
+    "swedish": "tävlingsinriktad",
+    "part_of_speech": "adjective",
+    "chinese": "有竞争意识的；以竞争为导向的。常形容人、工作环境或态度。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "e1205608-1c4e-4776-b32c-4a0794b436ec",
+    "swedish": "relationsorienterad",
+    "part_of_speech": "adjective",
+    "chinese": "关系导向的；重视人际关系和合作氛围的。常用于工作风格或领导风格。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ecf46188-2448-47a5-b9cc-773f8efbf30f",
+    "swedish": "samarbetsinriktad",
+    "part_of_speech": "adjective",
+    "chinese": "合作导向的；愿意配合别人、重视团队合作的。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "ebecb4b9-c271-449d-a337-710172d1a391",
+    "swedish": "kvinnodominerad",
+    "part_of_speech": "adjective",
+    "chinese": "女性占多数的；由女性主导或以女性为主的。常用于行业、工作场所或群体。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "0c97bc1e-da1f-400d-82c6-0da43b948b2d",
+    "swedish": "mansdominerad",
+    "part_of_speech": "adjective",
+    "chinese": "男性占多数的；由男性主导或以男性为主的。常用于行业、团体或环境。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "823ca239-7217-487f-8e5b-93e321776640",
+    "swedish": "sluten",
+    "part_of_speech": "adjective",
+    "chinese": "封闭的，关闭的；也可指保守、不开放的。常与 system, grupp, krets 一起用。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "6e63735d-092e-4340-b1d8-895da3a879c1",
+    "swedish": "gynna",
+    "part_of_speech": "verb",
+    "chinese": "有利于，促进，偏向；使某人或某事受益。可表示“对……有帮助，也常有偏向、照顾”的含义。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "db544a83-c494-44ea-bedc-49a1b419781d",
+    "swedish": "närvarande",
+    "part_of_speech": "adjective",
+    "chinese": "在场的，出席的",
+    "swedish_explanation": "som är på en plats och inte borta"
+  },
+  {
+    "id": "5f69d1cf-7a36-4ae4-8f21-821ec2d89df2",
+    "swedish": "motsätta",
+    "part_of_speech": "verb",
+    "chinese": "反对，抵制",
+    "swedish_explanation": "att säga nej till något eller visa att man inte accepterar det"
+  },
+  {
+    "id": "61b74677-9085-4743-a1e7-bf2cfd700bfd",
+    "swedish": "troende",
+    "part_of_speech": "adjective",
+    "chinese": "虔诚的；有宗教信仰的",
+    "swedish_explanation": "som tror på en religion och tar sin tro på allvar"
+  },
+  {
+    "id": "280fb711-63f8-4724-918d-6e4926d0bb2b",
+    "swedish": "lysande",
+    "part_of_speech": "adjective",
+    "chinese": "出色的；非常好的；光辉的",
+    "swedish_explanation": "något eller någon som är mycket bra, imponerande eller som lyser starkt"
+  },
+  {
+    "id": "1129c21d-75ba-4017-8c24-8a5e97049f68",
+    "swedish": "utmana",
+    "part_of_speech": "verb",
+    "chinese": "挑战",
+    "swedish_explanation": "att bjuda någon på en svår uppgift eller tävling, eller att testa om något går att göra"
+  },
+  {
+    "id": "69af62c1-cf3f-47eb-9b68-5edbab44d087",
+    "swedish": "avsätta",
+    "part_of_speech": "verb",
+    "chinese": "拨出；罢免",
+    "swedish_explanation": "att använda tid eller pengar för något, eller att ta bort någon från en viktig position"
+  },
+  {
+    "id": "f4081a87-8be4-47f7-8eaa-01ee3c7b57da",
+    "swedish": "allierad",
+    "part_of_speech": "adjective",
+    "chinese": "结盟的；同盟的",
+    "swedish_explanation": "som samarbetar med ett annat land, en grupp eller en person för ett gemensamt mål"
+  },
+  {
+    "id": "cb300d64-654d-477b-8ebc-3faf6eeecbb6",
+    "swedish": "bunden",
+    "part_of_speech": "adjective",
+    "chinese": "被束缚的；固定的；受约束的",
+    "swedish_explanation": "Bunden betyder att något inte är fritt, eller att man är knuten till något, till exempel en tid, en plats eller en regel."
+  },
+  {
+    "id": "e14a32db-e0b1-45cb-8239-5461fa772f48",
+    "swedish": "dominerande",
+    "part_of_speech": "adjective",
+    "chinese": "主导的，占优势的",
+    "swedish_explanation": "som är starkast, viktigast eller finns mest i en grupp eller situation"
+  },
+  {
+    "id": "991d68b5-1e9e-4a25-8973-4fe7c968b144",
+    "swedish": "imponerande",
+    "part_of_speech": "adjective",
+    "chinese": "令人印象深刻的，惊人的",
+    "swedish_explanation": "något som är mycket bra, stort eller starkt och som får andra att känna stor respekt eller förvåning"
+  },
+  {
+    "id": "0582378c-0c69-46f5-a09a-485c8a425427",
+    "swedish": "fristående",
+    "part_of_speech": "adjective",
+    "chinese": "独立的；单独的",
+    "swedish_explanation": "fristående betyder att något inte hör ihop med något annat, eller fungerar själv"
+  },
+  {
+    "id": "63a9c18e-998a-40a3-b308-513f840cccce",
+    "swedish": "trogen",
+    "part_of_speech": "adjective",
+    "chinese": "忠诚的；忠实的",
+    "swedish_explanation": "som fortsätter att tycka om, stödja eller stanna hos en person, grupp eller idé under lång tid"
+  },
+  {
+    "id": "bb35516f-4b60-46ad-91b8-9d5720989a37",
+    "swedish": "belägen",
+    "part_of_speech": "adjective",
+    "chinese": "位于……的；坐落于……的",
+    "swedish_explanation": "som ligger på en viss plats"
+  },
+  {
+    "id": "fb0129a7-bd29-4b71-b80a-2542bf8e1f7f",
+    "swedish": "kvalificerad",
+    "part_of_speech": "adjective",
+    "chinese": "合格的；有资历的",
+    "swedish_explanation": "som har rätt utbildning, kunskap eller erfarenhet för ett arbete eller en uppgift"
+  },
+  {
+    "id": "4c0d7779-a17e-4cd8-a5df-11ce9847bef3",
+    "swedish": "avslutad",
+    "part_of_speech": "adjective",
+    "chinese": "已结束的；已完成的",
+    "swedish_explanation": "något som har tagit slut eller blivit klart"
+  },
+  {
+    "id": "60f30ec5-c1a5-4b9f-a713-0adb84e0132a",
+    "swedish": "förfluten",
+    "part_of_speech": "adjective",
+    "chinese": "过去的，已过去的",
+    "swedish_explanation": "som hör till tiden innan nu; som redan har varit"
+  },
+  {
+    "id": "0e1552e8-42fd-4cd0-adb9-39e3402bd025",
+    "swedish": "komplett",
+    "part_of_speech": "adjective",
+    "chinese": "完整的；齐全的",
+    "swedish_explanation": "något som har alla delar och inget saknas"
+  },
+  {
+    "id": "7fa187d1-43fd-4825-9bb7-bd12d121e9d5",
+    "swedish": "oförändrad",
+    "part_of_speech": "adjective",
+    "chinese": "不变的，未改变的",
+    "swedish_explanation": "som är likadan som tidigare och inte har ändrats"
+  },
+  {
+    "id": "d2d72103-3f0b-48eb-b5c3-2d7d3c522a3e",
+    "swedish": "överlägsen",
+    "part_of_speech": "adjective",
+    "chinese": "优越的；占优势的；技高一筹的",
+    "swedish_explanation": "någon eller något som är bättre än andra i en jämförelse"
+  },
+  {
+    "id": "e0d59de3-1aa7-4660-8ee1-2af51777ab8b",
+    "swedish": "känneteckna",
+    "part_of_speech": "verb",
+    "chinese": "表明…的特征；使具有特点",
+    "swedish_explanation": "Att visa vad som är typiskt för någon eller något, eller att ge någon eller något en viss karaktär."
+  },
+  {
+    "id": "4cde126f-0c80-4465-b7e3-62d030684ddc",
+    "swedish": "tillfredsställande",
+    "part_of_speech": "adjective",
+    "chinese": "令人满意的，满意的",
+    "swedish_explanation": "som är bra nog och ger en känsla av att något fungerar eller räcker"
+  },
+  {
+    "id": "4b7ca186-793b-45e2-bfc7-d944162a2c2e",
+    "swedish": "bildande",
+    "part_of_speech": "adjective",
+    "chinese": "有教益的，启发性的",
+    "swedish_explanation": "som lär en något viktigt och hjälper en att förstå världen bättre"
+  },
+  {
+    "id": "cb49b773-ab7c-49a7-b684-93323c9adc8f",
+    "swedish": "förkunna",
+    "part_of_speech": "verb",
+    "chinese": "宣布；宣告",
+    "swedish_explanation": "att säga offentligt att något gäller eller att berätta ett viktigt budskap"
+  },
+  {
+    "id": "fb61e188-39c9-430f-9031-cbdef7419d4c",
+    "swedish": "efterföljande",
+    "part_of_speech": "adjective",
+    "chinese": "随后的，接下来的",
+    "swedish_explanation": "som kommer efter något annat; nästa i ordning eller tid"
+  },
+  {
+    "id": "3d608d94-8621-4b0b-8a65-105ae5de155c",
+    "swedish": "utplåna",
+    "part_of_speech": "verb",
+    "chinese": "消灭；毁灭；抹去",
+    "swedish_explanation": "att helt förstöra eller få något att försvinna, så att nästan inget finns kvar"
+  },
+  {
+    "id": "4293281f-b5cc-4250-b8c4-b4cd762cc6c2",
+    "swedish": "besitta",
+    "part_of_speech": "verb",
+    "chinese": "拥有，具备",
+    "swedish_explanation": "att ha eller äga något, ofta en egenskap, kunskap eller makt"
+  },
+  {
+    "id": "c1429569-dd8e-4ccd-8a51-ef563556e8a5",
+    "swedish": "erfaren",
+    "part_of_speech": "adjective",
+    "chinese": "有经验的，经验丰富的",
+    "swedish_explanation": "Någon som har gjort något länge och därför kan det bra."
+  },
+  {
+    "id": "450b93a9-5cb0-4dcc-929e-d3b465815f9b",
+    "swedish": "framträdande",
+    "part_of_speech": "adjective",
+    "chinese": "突出的，显著的；显眼的",
+    "swedish_explanation": "något eller någon som är viktig, syns mycket eller märks tydligt"
+  },
+  {
+    "id": "bf040869-9eae-498b-8a2c-c4989700c2c0",
+    "swedish": "utbredd",
+    "part_of_speech": "adjective",
+    "chinese": "广泛的；普遍的",
+    "swedish_explanation": "som finns på många platser eller hos många människor; vanlig i ett större område eller i en större grupp"
+  },
+  {
+    "id": "d5aea0ea-a14c-49fe-a489-0a0ff7edc0b4",
+    "swedish": "ende",
+    "part_of_speech": "adjective",
+    "chinese": "唯一的，单独的",
+    "swedish_explanation": "som är ensam av sitt slag eller som inte har något annat bredvid sig"
+  },
+  {
+    "id": "6470a212-07ea-43f8-a424-71b24e53d480",
+    "swedish": "spridd",
+    "part_of_speech": "adjective",
+    "chinese": "分散的；散布的",
+    "swedish_explanation": "som finns på många olika platser och inte är samlat på ett ställe"
+  },
+  {
+    "id": "de06f5f2-ead2-4c20-93dc-f859a22b21ba",
+    "swedish": "övervägande",
+    "part_of_speech": "adjective",
+    "chinese": "占主导的；压倒性的；大多数的",
+    "swedish_explanation": "som är störst, viktigast eller finns mest i en grupp eller situation"
+  },
+  {
+    "id": "c0a01186-f854-4c4d-b494-6b34f9cb0640",
+    "swedish": "framstående",
+    "part_of_speech": "adjective",
+    "chinese": "杰出的，卓越的",
+    "swedish_explanation": "som är mycket bra och känd för något viktigt"
+  },
+  {
+    "id": "570503b7-46da-461d-8cb2-d7e52c9a2093",
+    "swedish": "genomgående",
+    "part_of_speech": "adjective",
+    "chinese": "贯穿始终的；整体一致的",
+    "swedish_explanation": "som finns i alla delar eller under hela tiden; som är likadan på ett tydligt sätt"
+  },
+  {
+    "id": "b5a31160-181b-45b8-993a-caacc9ceddc0",
+    "swedish": "fascinerande",
+    "part_of_speech": "adjective",
+    "chinese": "迷人的；引人入胜的",
+    "swedish_explanation": "något som är mycket intressant och väcker stark nyfikenhet eller beundran"
+  },
+  {
+    "id": "5e4578de-b148-4ef0-8b75-d1c9f3f59351",
+    "swedish": "passande",
+    "part_of_speech": "adjective",
+    "chinese": "合适的，恰当的",
+    "swedish_explanation": "Passande betyder att något är rätt eller lämpligt i en viss situation."
+  },
+  {
+    "id": "138e2fbf-25a7-4a17-bf03-f7267c306eb3",
+    "swedish": "försätta",
+    "part_of_speech": "verb",
+    "chinese": "使陷入，使处于（某种状态）",
+    "swedish_explanation": "att göra så att någon eller något hamnar i en viss situation eller ett visst tillstånd, ofta något svårt eller allvarligt"
+  },
+  {
+    "id": "c0457836-fcc3-41d0-8e24-142656addd3e",
+    "swedish": "överväldigande",
+    "part_of_speech": "adjective",
+    "chinese": "压倒性的；令人难以承受的；极其强烈的",
+    "swedish_explanation": "något som är mycket starkt, stort eller intensivt, så att det är svårt att hantera eller ta in"
+  },
+  {
+    "id": "16ae39ab-b43b-4a67-86d9-fd9719ee2d64",
+    "swedish": "återupprätta",
+    "part_of_speech": "verb",
+    "chinese": "恢复，重建，重新确立",
+    "swedish_explanation": "att skapa igen något som har försvagats eller skadats, till exempel förtroende, ordning eller kontakt"
+  },
+  {
+    "id": "2f3a60db-05f8-4017-9ad2-f014f1994744",
+    "swedish": "följande",
+    "part_of_speech": "adjective",
+    "chinese": "以下的；接下来的",
+    "swedish_explanation": "som kommer efter något; nästa i en lista, text eller situation"
+  },
+  {
+    "id": "ffa63df3-384f-425a-befc-1e467fb5cbf4",
+    "swedish": "heltäckande",
+    "part_of_speech": "adjective",
+    "chinese": "全面的；覆盖所有方面的",
+    "swedish_explanation": "som täcker allt viktigt inom ett område och ger en fullständig bild"
+  },
+  {
+    "id": "4fed027d-e154-46e3-9de0-0da180029651",
+    "swedish": "välsignad",
+    "part_of_speech": "adjective",
+    "chinese": "有福的；受祝福的",
+    "swedish_explanation": "som har fått välsignelse eller som känns mycket god och lycklig"
+  },
+  {
+    "id": "4386f778-1a90-4ed7-8ab1-1c4d2ff78110",
+    "swedish": "drivande",
+    "part_of_speech": "adjective",
+    "chinese": "推动性的；起主导作用的",
+    "swedish_explanation": "som driver något framåt eller har en viktig och aktiv roll i en utveckling eller process"
+  },
+  {
+    "id": "d3fdc058-12cb-453c-bb43-5cbe19c6b009",
+    "swedish": "oönskad",
+    "part_of_speech": "adjective",
+    "chinese": "不受欢迎的；不想要的",
+    "swedish_explanation": "som man inte vill ha eller som inte är välkommen"
+  },
+  {
+    "id": "f490a61e-0d16-4c55-ab66-9b316b626bf3",
+    "swedish": "obegränsad",
+    "part_of_speech": "adjective",
+    "chinese": "无限的；不受限制的",
+    "swedish_explanation": "som inte har någon tydlig gräns eller som inte är begränsad"
+  },
+  {
+    "id": "ddc8679f-b1fe-4b5d-a9c5-3be91b2f384d",
+    "swedish": "häpnadsväckande",
+    "part_of_speech": "adjective",
+    "chinese": "令人惊讶的，惊人的",
+    "swedish_explanation": "något som väcker stark förvåning eller förundran"
+  },
+  {
+    "id": "8d40ce62-d8ab-402b-a8fa-1d2fc8958fcd",
+    "swedish": "underordnad",
+    "part_of_speech": "adjective",
+    "chinese": "下属的；次要的；从属的",
+    "swedish_explanation": "som har lägre ställning eller mindre betydelse än något annat"
+  },
+  {
+    "id": "f77e605f-dcd1-45b8-ae8d-5c90b8738bcb",
+    "swedish": "oförmögen",
+    "part_of_speech": "adjective",
+    "chinese": "无能力的；不能做某事的",
+    "swedish_explanation": "som inte kan göra något eller som saknar förmåga i en viss situation"
+  },
+  {
+    "id": "e45c70ee-4d86-49c2-8ccf-08ac785b135d",
+    "swedish": "bidragande",
+    "part_of_speech": "adjective",
+    "chinese": "促成的；起作用的",
+    "swedish_explanation": "som hjälper till att orsaka eller skapa något, ofta som en av flera orsaker"
+  },
+  {
+    "id": "2850b1b9-7878-40f8-8263-2a759bb8ecde",
+    "swedish": "laddad",
+    "part_of_speech": "adjective",
+    "chinese": "充满张力的；情绪紧绷的；已充电的",
+    "swedish_explanation": "Laddad betyder att något är fyllt med stark känsla, spänning eller konflikt. Det kan också betyda att ett batteri har fått el och är klart att användas."
+  },
+  {
+    "id": "f78cdd28-a004-4951-856a-7d29ceb7edf6",
+    "swedish": "välsigna",
+    "part_of_speech": "verb",
+    "chinese": "祝福；为…祈福",
+    "swedish_explanation": "att ge någon Guds välsignelse eller att uttrycka stark tacksamhet och glädje över något"
+  },
+  {
+    "id": "e3957054-9d89-4093-9dde-9a80f3a808f6",
+    "swedish": "välmående",
+    "part_of_speech": "adjective",
+    "chinese": "富足的；安康的；繁荣的",
+    "swedish_explanation": "som mår bra och har det gott, eller som visar god hälsa, trygghet och ekonomisk stabilitet"
+  },
+  {
+    "id": "cdc457b6-9446-4542-93b6-e02280ba0c04",
+    "swedish": "uträtta",
+    "part_of_speech": "verb",
+    "chinese": "完成，办成，取得（成果）",
+    "swedish_explanation": "att göra eller uppnå något viktigt eller nyttigt, ofta genom arbete eller ansträngning"
+  },
+  {
+    "id": "8b8b8a74-1a17-4931-826e-e8aa41cb6de3",
+    "swedish": "rådgivande",
+    "part_of_speech": "adjective",
+    "chinese": "咨询性的；顾问性质的；提供建议的",
+    "swedish_explanation": "som ger råd eller har som uppgift att ge rekommendationer men inte själv fatta det slutliga beslutet"
+  },
+  {
+    "id": "3f68d5cf-44ba-44e8-a32b-35268f14279b",
+    "swedish": "biträdande",
+    "part_of_speech": "adjective",
+    "chinese": "副的，助理的，代理的",
+    "swedish_explanation": "biträdande beskriver någon som hjälper en chef eller har en näst hög roll i en organisation."
+  },
+  {
+    "id": "b0805fd5-757a-4405-86cd-7f3cd62a23ab",
+    "swedish": "överordnad",
+    "part_of_speech": "adjective",
+    "chinese": "上级的；上位的；更高层级的",
+    "swedish_explanation": "som har högre rang, högre ställning eller större ansvar än någon eller något annat"
+  },
+  {
+    "id": "62b694eb-fa6b-4855-ab35-1a1a659cf8ed",
+    "swedish": "sofistikerad",
+    "part_of_speech": "adjective",
+    "chinese": "复杂精巧的；老练高明的",
+    "swedish_explanation": "sofistikerad betyder att något är avancerat, genomtänkt och ofta elegant. Det kan också beskriva en person med utvecklad smak eller stort kunnande."
+  },
+  {
+    "id": "d50d51a9-9e89-4d1c-97de-609f12af1f3f",
+    "swedish": "utvinna",
+    "part_of_speech": "verb",
+    "chinese": "提取；开采；萃取",
+    "swedish_explanation": "att ta fram något värdefullt eller användbart ur något, till exempel metall ur berg eller information ur data"
+  },
+  {
+    "id": "8da4c907-5146-464a-b70f-f9d6cb2acd4e",
+    "swedish": "avslappnad",
+    "part_of_speech": "adjective",
+    "chinese": "放松的，轻松自然的；从容的",
+    "swedish_explanation": "avslappnad betyder att någon är lugn, inte spänd och känns naturlig i en situation."
+  },
+  {
+    "id": "e909ec81-5bae-4b72-bb53-0c74fb63fa00",
+    "swedish": "omfamna",
+    "part_of_speech": "verb",
+    "chinese": "拥抱；接纳，欣然接受",
+    "swedish_explanation": "att hålla om någon med armarna; också att helt acceptera eller välkomna en idé, förändring eller ett sätt att leva"
+  },
+  {
+    "id": "2546a0c5-bf5d-471c-8e99-1f37cf1ccfae",
+    "swedish": "regelrätt",
+    "part_of_speech": "adjective",
+    "chinese": "完全合规的；正规的；地道的",
+    "swedish_explanation": "som följer regler eller normer helt och hållet; helt korrekt och riktig"
+  },
+  {
+    "id": "24a2521c-e01d-487f-8d43-f1ef94d5251a",
+    "swedish": "tillägna",
+    "part_of_speech": "verb",
+    "chinese": "致力于；把……用于；献给",
+    "swedish_explanation": "att ge tid, kraft eller uppmärksamhet åt något, eller att ge något till någon som en hyllning"
+  },
+  {
+    "id": "65392148-38eb-4bdc-b2e4-fd2ac1666ab2",
+    "swedish": "underordna",
+    "part_of_speech": "verb",
+    "chinese": "使从属；使处于次要地位",
+    "swedish_explanation": "att låta något eller någon få en lägre position eller mindre betydelse än något annat"
+  },
+  {
+    "id": "feae609a-6914-4e92-a31c-712042fd672d",
+    "swedish": "underkänna",
+    "part_of_speech": "verb",
+    "chinese": "判定不及格；否决，不批准",
+    "swedish_explanation": "att ge någon eller något omdömet att det inte räcker eller inte kan godkännas"
+  },
+  {
+    "id": "4e711043-7d5e-4fb6-abbf-4a641b5f75de",
+    "swedish": "angränsande",
+    "part_of_speech": "adjective",
+    "chinese": "邻接的；毗邻的",
+    "swedish_explanation": "som ligger direkt bredvid något annat eller har en gemensam gräns med det"
+  },
+  {
+    "id": "53fe82a5-8f98-4d75-b2fd-4f76147c2f8c",
+    "swedish": "oförutsedd",
+    "part_of_speech": "adjective",
+    "chinese": "意外的，未预见的",
+    "swedish_explanation": "som man inte har väntat sig eller planerat för"
+  },
+  {
+    "id": "5feadae3-eec1-4b4a-8c3a-dcac7001b75d",
+    "swedish": "påföljande",
+    "part_of_speech": "adjective",
+    "chinese": "随后的；接下来的",
+    "swedish_explanation": "som kommer direkt efter något annat i tid eller ordning"
+  },
+  {
+    "id": "bc4ba056-5f2d-478b-b26d-476ab89c5618",
+    "swedish": "resande",
+    "part_of_speech": "adjective",
+    "chinese": "旅行的；流动中的",
+    "swedish_explanation": "som reser eller förflyttar sig från en plats till en annan, ofta om personer, grupper eller verksamhet"
+  },
+  {
+    "id": "955eff54-313f-4730-93db-4fe4d21d734c",
+    "swedish": "utpräglad",
+    "part_of_speech": "adjective",
+    "chinese": "鲜明的，显著的；典型的",
+    "swedish_explanation": "som är mycket tydlig och lätt att känna igen; som finns i hög grad"
+  },
+  {
+    "id": "2fb49072-6237-4d10-bada-029d7c2c82d2",
+    "swedish": "brådskande",
+    "part_of_speech": "adjective",
+    "chinese": "紧急的；迫切的",
+    "swedish_explanation": "som måste göras eller behandlas snabbt eftersom situationen är viktig eller allvarlig"
+  },
+  {
+    "id": "a5127f88-73df-4536-ab4d-010d0e68b1e7",
+    "swedish": "sjösätta",
+    "part_of_speech": "verb",
+    "chinese": "使下水；启动，推出",
+    "swedish_explanation": "att sätta ett fartyg i vattnet för första gången, eller bildligt att starta och genomföra en plan, reform eller satsning"
+  },
+  {
+    "id": "ac91f1ca-b4cc-4224-b376-525ac8dbd043",
+    "swedish": "passionerad",
+    "part_of_speech": "adjective",
+    "chinese": "充满热情的；富有激情的",
+    "swedish_explanation": "som visar mycket stark entusiasm, hängivenhet eller känslomässigt engagemang för något eller någon"
+  },
+  {
+    "id": "0c861775-407f-4225-826d-98671946a49a",
+    "swedish": "säregen",
+    "part_of_speech": "adjective",
+    "chinese": "独特的，异于寻常的",
+    "swedish_explanation": "något som har en mycket egen karaktär och tydligt skiljer sig från det vanliga eller från annat"
+  },
+  {
+    "id": "a99875fd-643a-4ad0-bef4-18de97bbeeb1",
+    "swedish": "revolutionerande",
+    "part_of_speech": "adjective",
+    "chinese": "革命性的；具有划时代意义的",
+    "swedish_explanation": "som är helt ny och förändrar ett område på ett mycket stort och avgörande sätt"
+  },
+  {
+    "id": "61c19733-aa83-43ea-b626-1152dc1d18a4",
+    "swedish": "omstridd",
+    "part_of_speech": "adjective",
+    "chinese": "有争议的；备受争论的",
+    "swedish_explanation": "som många inte är överens om och som därför väcker stark debatt eller kritik"
+  },
+  {
+    "id": "ba41c063-fa91-480e-8036-92e57af34c89",
+    "swedish": "välgörande",
+    "part_of_speech": "adjective",
+    "chinese": "有益身心的；起舒缓作用的",
+    "swedish_explanation": "som gör gott för kropp eller sinne och ger en känsla av lättnad, ro eller återhämtning"
+  },
+  {
+    "id": "5fa3a5a8-8ffd-4c70-8b99-934eaff8e20d",
+    "swedish": "hetta",
+    "part_of_speech": "verb",
+    "chinese": "加热；使变热",
+    "swedish_explanation": "att göra något varmt eller varmare, ofta till hög temperatur"
+  },
+  {
+    "id": "a9c04c91-137f-4295-bee3-094816b8cbfa",
+    "swedish": "beväpna",
+    "part_of_speech": "verb",
+    "chinese": "武装；给……配备武器",
+    "swedish_explanation": "att utrusta någon eller något med vapen, ofta för strid eller försvar"
+  },
+  {
+    "id": "ebf4792d-11fb-4a61-a06f-6ffaa3e1adf9",
+    "swedish": "obildad",
+    "part_of_speech": "adjective",
+    "chinese": "缺乏教养的；没有受过良好教育的",
+    "swedish_explanation": "Obildad beskriver en person som saknar utbildning, bildning eller kulturell kunskap, och ordet kan också användas värderande om någon som uppträder grovt eller ointellektuellt."
+  },
+  {
+    "id": "8a7177d4-b985-4d1e-81fe-f8106e16c597",
+    "swedish": "oavbruten",
+    "part_of_speech": "adjective",
+    "chinese": "不间断的；连续不断的",
+    "swedish_explanation": "som fortsätter hela tiden utan paus eller avbrott"
+  },
+  {
+    "id": "71e4e7a7-de5d-4411-9964-88c81812a98e",
+    "swedish": "försona",
+    "part_of_speech": "verb",
+    "chinese": "调和；使和解；使和睦",
+    "swedish_explanation": "att få människor eller grupper att sluta vara ovänner och att åter skapa fred eller samförstånd; också att acceptera något svårt"
+  },
+  {
+    "id": "e1ae224a-c812-4d1f-b8e6-544761072887",
+    "swedish": "förutsätta",
+    "part_of_speech": "verb",
+    "chinese": "假定；预设；以……为前提。常用于正式表达，表示说话者认为某事成立，然后在此基础上继续。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "17349f47-24ee-481c-9470-07d14ca05a9c",
+    "swedish": "gedigen",
+    "part_of_speech": "adjective",
+    "chinese": "扎实的；结实的；可靠的。也可表示“高质量、内容充实、基础牢固”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b30711df-dbf9-46fc-ba5b-dbabe45294e0",
+    "swedish": "tillsätta",
+    "part_of_speech": "verb",
+    "chinese": "加入；添加；委任。可指往食物里加材料，也可指正式任命某人担任职务。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "efa3a844-34d0-4b4f-a3e6-d75cac78e958",
+    "swedish": "avlägsen",
+    "part_of_speech": "adjective",
+    "chinese": "遥远的；偏远的；也可表示关系不亲近、印象不明确。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "b9a40cab-fa4c-4711-b907-5aac06839866",
+    "swedish": "isolerad",
+    "part_of_speech": "adjective",
+    "chinese": "孤立的；隔离的；与外界联系少的。可指人、地点、情况，也可指被隔热/隔音等处理过的东西。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "fce0e674-02b8-4eca-9a6f-da81c73bbc63",
+    "swedish": "spinna",
+    "part_of_speech": "verb",
+    "chinese": "纺纱；也可指“转动、旋转”；口语里还可表示“迅速思考/编造”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "96a3b8f9-6af8-42da-8d8b-aa409e065a60",
+    "swedish": "övervinna",
+    "part_of_speech": "verb",
+    "chinese": "克服，战胜；通过努力打败困难、恐惧或障碍。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "7f377ae4-b516-4264-930a-9e7d6dd684ee",
+    "swedish": "delad",
+    "part_of_speech": "adjective",
+    "chinese": "共享的；分开的；也可表示“被分成两部分的”。常见于“delad lägenhet / delad mening”。",
+    "swedish_explanation": ""
+  },
+  {
+    "id": "93c87cc0-35b9-43f0-9c75-cc97e1c2879e",
+    "swedish": "högljudd",
+    "part_of_speech": "adjective",
+    "chinese": "大声的，吵闹的；可指声音大，也可指行为或场面喧闹。",
+    "swedish_explanation": ""
+  }
+]
