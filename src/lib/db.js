@@ -1707,6 +1707,24 @@ export async function generateReadingSummary(textResourceId) {
   return payload.summary;
 }
 
+// 规范§12 — photo/camera import. Extraction only, no analysis: the result
+// lands in the reading editor's textarea for the user to review/edit
+// before saving, exactly like pasted text.
+export async function extractTextFromImage(imageDataUrl) {
+  const token = await getAccessToken().catch(() => "");
+  const response = await fetch("/api/reading/ocr", {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ imageDataUrl }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Kunde inte läsa texten från bilden.");
+  return { text: payload.text || "", warning: payload.warning || "" };
+}
+
 export async function loadTextAnalysis(textResourceId) {
   const id = clean(textResourceId);
   if (!id) return null;

@@ -67,6 +67,52 @@ async function callOpenAI({ schemaName, schema, systemPrompt, userPrompt, maxOut
   return { result: JSON.parse(extractOutputText(data)), usage };
 }
 
+// 规范§12 — photo/camera import. Uses gpt-5.4-mini's vision input (the
+// "低成本 OCR" the spec asks for — cheap per-image, no separate OCR vendor
+// to integrate) rather than a dedicated OCR service. Cleans obvious
+// line-break/hyphenation OCR artifacts per §12's "断行、连字符和明显乱码做
+// 规则清理" — done here with plain string rules, not another AI call.
+export async function extractTextFromImage({ imageDataUrl }) {
+  if (!OPENAI_API_KEY) {
+    const error = new Error("OPENAI_API_KEY saknas på servern.");
+    error.status = 500;
+    throw error;
+  }
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { authorization: `Bearer ${OPENAI_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL,
+      reasoning: { effort: "low" },
+      max_output_tokens: 4000,
+      input: [
+        {
+          role: "system",
+          content:
+            "You extract text from a photo of a Swedish-language page (book, worksheet, screen). Transcribe exactly what's printed — don't translate, summarize, or correct grammar. Join lines that were only broken by the page's line wrapping into full sentences (undo hyphenation at line breaks — e.g. 'känne-\\nteck-\\nen' becomes 'kännetecken'), but keep real paragraph breaks. If part of the image is unreadable, skip it rather than guessing. If the image contains no readable Swedish text at all, return an empty string.",
+        },
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: "Extract the Swedish text from this image." },
+            { type: "input_image", image_url: imageDataUrl },
+          ],
+        },
+      ],
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.error?.message || "OpenAI API request failed.");
+    error.status = response.status;
+    throw error;
+  }
+  const text = extractOutputText(data)
+    .replace(/-\n\s*/g, "") // undo any leftover hyphenated line-break the model didn't already join
+    .replace(new RegExp(String.fromCharCode(0), "g"), "");
+  return { text: text.trim(), usage: data.usage || {} };
+}
+
 export function cleanText(raw) {
   return String(raw || "")
     .replace(new RegExp(String.fromCharCode(0), "g"), "")

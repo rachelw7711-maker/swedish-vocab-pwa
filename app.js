@@ -547,6 +547,9 @@ const els = {
   readingKeyWords: document.querySelector("#readingKeyWords"),
   readingKeyPhrases: document.querySelector("#readingKeyPhrases"),
   readingWordCountNote: document.querySelector("#readingWordCountNote"),
+  importReadingPhotoBtn: document.querySelector("#importReadingPhotoBtn"),
+  readingPhotoFileInput: document.querySelector("#readingPhotoFileInput"),
+  readingPhotoStatus: document.querySelector("#readingPhotoStatus"),
   readingWordPreview: document.querySelector("#readingWordPreview"),
   generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
   sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
@@ -2679,10 +2682,43 @@ function updateReadingWordCountNote() {
   }
   let note = `${count} ord.`;
   if (count > 2000) note += " För lång för att sparas i sin helhet just nu (max 2000 ord).";
-  else if (count > 1000) note += " Över 1000 ord — automatisk analys av hela texten stöds inte än, korta ner texten.";
+  else if (count > 1000) note += " Över 1000 ord — markera det stycke du vill analysera i textrutan innan du klickar på Analysera.";
   else if (count > 500) note += " Lite längre text — analysen kostar något mer.";
   els.readingWordCountNote.hidden = false;
   els.readingWordCountNote.textContent = note;
+}
+
+// 规范§12 — extraction only, no analysis. Appends to any existing text
+// (rather than replacing) so a multi-page article can be built up from
+// several photos; the result lands in the editable textarea exactly like
+// pasted text, per Rachel's original requirement that extracted text stay
+// fully editable before saving.
+async function handleReadingPhotoImport(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  els.readingPhotoStatus.hidden = false;
+  els.readingPhotoStatus.textContent = "Läser text från bilden…";
+  els.importReadingPhotoBtn.disabled = true;
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    const { text, warning } = await remoteDb.extractTextFromImage(dataUrl);
+    if (warning || !text) {
+      els.readingPhotoStatus.textContent = warning || "Ingen text hittades i bilden.";
+      return;
+    }
+    const existing = clean(els.readingTextInput.value);
+    const combined = existing ? `${existing}\n\n${text}` : text;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    setter.call(els.readingTextInput, combined);
+    els.readingTextInput.dispatchEvent(new Event("input", { bubbles: true }));
+    els.readingPhotoStatus.textContent = "Text importerad — granska och redigera innan du sparar.";
+  } catch (error) {
+    console.warn("[SpråkLab] Photo import failed.", error);
+    els.readingPhotoStatus.textContent = error.message || "Kunde inte läsa texten från bilden.";
+  } finally {
+    els.importReadingPhotoBtn.disabled = false;
+  }
 }
 
 function updateReadingSteps(stage) {
@@ -2765,13 +2801,44 @@ async function saveCurrentReadingItem() {
 // calls AI for genuinely missing words/expressions (server-reading.mjs).
 // This just saves the item, sends the text, and renders whatever three-layer
 // result comes back — the cost-control logic isn't the client's job.
+const MAX_AUTO_ANALYSIS_WORDS = 1000;
+
+// 规范§5: texts over the auto-analysis limit must not trigger a full-text
+// analysis — the user has to pick a paragraph/chapter/selection instead.
+// Simplest selection mechanism that needs no new UI component: use the
+// textarea's own native text selection. If the user has selected a portion
+// when they click Analysera on an over-limit text, analyze just that
+// selection (it becomes its own text_resource, own hash) instead of the
+// whole article; if nothing is selected, explain what to do rather than
+// silently failing or spending an API call.
 async function analyzeCurrentReadingItem() {
   const saved = await saveCurrentReadingItem();
   if (!saved) return;
+
+  const fullText = saved.source_text;
+  const fullWordCount = readingWordCount(fullText);
+  let textToAnalyze = fullText;
+  if (fullWordCount > MAX_AUTO_ANALYSIS_WORDS) {
+    const textarea = els.readingTextInput;
+    const selection = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd).trim();
+    if (!selection) {
+      alert(
+        `Texten är för lång (${fullWordCount} ord) för att analysera i sin helhet. Markera det stycke du vill analysera i textrutan ovan och klicka på Analysera igen.`,
+      );
+      return;
+    }
+    const selectionWordCount = readingWordCount(selection);
+    if (selectionWordCount > MAX_AUTO_ANALYSIS_WORDS) {
+      alert(`Det markerade stycket är fortfarande för långt (${selectionWordCount} ord). Markera ett kortare stycke.`);
+      return;
+    }
+    textToAnalyze = selection;
+  }
+
   els.analyzeReadingBtn.disabled = true;
   els.analyzeReadingBtn.textContent = "Analyserar…";
   try {
-    const { textResource, analysis } = await remoteDb.analyzeReadingText(saved.source_text, "paste");
+    const { textResource, analysis } = await remoteDb.analyzeReadingText(textToAnalyze, "paste");
     const updated = { ...saved, text_resource_id: textResource.id };
     const result = await remoteDb.upsertReadingItem(updated);
     const finalItem = result?.item || updated;
@@ -9365,6 +9432,8 @@ function bindEvents() {
   });
   els.generateReadingSummaryBtn?.addEventListener("click", generateSummaryForCurrentReadingItem);
   els.readingTextInput?.addEventListener("input", updateReadingWordCountNote);
+  els.importReadingPhotoBtn?.addEventListener("click", () => els.readingPhotoFileInput?.click());
+  els.readingPhotoFileInput?.addEventListener("change", handleReadingPhotoImport);
 
   els.favoriteCategoryFilter.addEventListener("change", (event) => {
     state.favoriteCategory = event.target.value;

@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import { analyzeReadingResource, generateReadingSummary } from "./server-reading.mjs";
+import { analyzeReadingResource, generateReadingSummary, extractTextFromImage } from "./server-reading.mjs";
 import { generateWord, promoteCollocationToPhrase, readPublicWords } from "./server-words.mjs";
 
 const PORT = Number(process.env.PORT || 4174);
@@ -526,6 +526,34 @@ createServer(async (req, res) => {
       }
       const summary = await generateReadingSummary({ supabaseAdmin, userId: user.id, textResourceId });
       sendJson(res, 200, { summary });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/reading/ocr") {
+      const user = await readAuthenticatedUser(req);
+      const { imageDataUrl } = await readBody(req);
+      if (!imageDataUrl || typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/")) {
+        sendJson(res, 400, { error: "Ingen giltig bild mottagen." });
+        return;
+      }
+      const { text, usage } = await extractTextFromImage({ imageDataUrl });
+      if (!text) {
+        sendJson(res, 200, { text: "", warning: "Ingen läsbar svensk text hittades i bilden." });
+        return;
+      }
+      const inputTokens = usage.input_tokens || 0;
+      const outputTokens = usage.output_tokens || 0;
+      await supabaseAdmin.from("ai_usage_logs").insert({
+        user_id: user.id,
+        feature: "ocr",
+        model: MODEL,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        credits_used: 0,
+        actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
+        cache_hit: false,
+      });
+      sendJson(res, 200, { text });
       return;
     }
 
