@@ -559,6 +559,8 @@ const els = {
   readingTranslationResult: document.querySelector("#readingTranslationResult"),
   readingTranslationText: document.querySelector("#readingTranslationText"),
   closeTranslationBtn: document.querySelector("#closeTranslationBtn"),
+  readingKeySentences: document.querySelector("#readingKeySentences"),
+  sendSelectedSentencesToShadowingBtn: document.querySelector("#sendSelectedSentencesToShadowingBtn"),
   readingWordPreview: document.querySelector("#readingWordPreview"),
   generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
   sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
@@ -2803,6 +2805,7 @@ function openReadingEditor(item = null) {
   els.readingAnalysisPanel.hidden = true;
   if (els.readingTranslationResult) els.readingTranslationResult.hidden = true;
   if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
+  if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = true;
   updateReadingSteps(item?.id ? "saved" : "paste");
   els.readingListPanel.hidden = true;
   els.readingList.hidden = true;
@@ -2830,10 +2833,24 @@ function closeReadingEditor() {
   els.readingEditorPanel.hidden = true;
 }
 
+// 阅读模块设计想法-专业review-2026-07-27.md §"标题问题" — a title should
+// never be required. Priority: user-entered > an obvious title-like first
+// line in the pasted text (short, no sentence-ending punctuation, more
+// content follows) > the text's own opening words. Purely a display label
+// for the reading history list — never alters the saved source_text.
+function deriveReadingTitle(sourceText) {
+  const lines = sourceText.split("\n").map((line) => clean(line)).filter(Boolean);
+  const firstLine = lines[0] || "";
+  const looksLikeTitle = firstLine.length > 0 && firstLine.length <= 60 && !/[.!?]$/.test(firstLine) && lines.length > 1;
+  if (looksLikeTitle) return firstLine;
+  const flatText = clean(sourceText).replace(/\s+/g, " ");
+  return flatText.length > 40 ? `${flatText.slice(0, 40)}…` : flatText;
+}
+
 async function saveCurrentReadingItem() {
-  const title = clean(els.readingTitleInput.value);
   const sourceText = clean(els.readingTextInput.value);
   if (!sourceText) return null;
+  const title = clean(els.readingTitleInput.value) || deriveReadingTitle(sourceText);
   const existing = state.readingItems.find((item) => item.id === els.readingItemId.value);
   const payload = { ...(existing || {}), id: els.readingItemId.value || undefined, title, source_text: sourceText };
   els.saveReadingBtn.disabled = true;
@@ -2959,8 +2976,14 @@ function renderReadingAnalysis(analysis) {
   expressions.forEach((entry) => {
     const row = document.createElement("div");
     row.className = "reading-phrase-row";
+    const heading = document.createElement("div");
+    heading.className = "reading-phrase-heading";
     const phrase = document.createElement("strong");
     phrase.textContent = entry.expression_text;
+    const badge = document.createElement("span");
+    badge.className = "pos-badge";
+    badge.textContent = entry.category === "idiom" ? "Uttryck" : "Fras";
+    heading.append(phrase, badge);
     const meaning = document.createElement("span");
     meaning.textContent = entry.meaning_zh;
     const example = document.createElement("p");
@@ -2969,13 +2992,13 @@ function renderReadingAnalysis(analysis) {
     const exampleZh = document.createElement("p");
     exampleZh.className = "reading-phrase-example example-translation";
     exampleZh.textContent = entry.source_sentence_zh;
-    row.append(phrase, meaning, example, exampleZh);
+    row.append(heading, meaning, example, exampleZh);
     if (entry.expression_id) {
       const link = document.createElement("button");
       link.type = "button";
       link.className = "reading-expression-link";
       link.dataset.readingExpressionOpenId = entry.expression_id;
-      link.textContent = "Visa i Fraser/Uttryck";
+      link.textContent = entry.category === "idiom" ? "Visa i Uttryck" : "Visa i Fraser";
       row.append(link);
     }
     els.readingKeyPhrases.append(row);
@@ -2983,9 +3006,43 @@ function renderReadingAnalysis(analysis) {
   if (!expressions.length) {
     const none = document.createElement("span");
     none.className = "empty-state";
-    none.textContent = "Inga fasta uttryck hittades i den här texten.";
+    none.textContent = "Inga fasta uttryck eller idiomatiska uttryck hittades i den här texten.";
     els.readingKeyPhrases.append(none);
   }
+
+  if (els.readingKeySentences) {
+    els.readingKeySentences.replaceChildren();
+    const sentences = analysis.keySentences || [];
+    sentences.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "reading-sentence-row";
+      const sentence = document.createElement("p");
+      sentence.textContent = entry.sentence;
+      const translation = document.createElement("p");
+      translation.className = "example-translation";
+      translation.textContent = entry.translation_zh;
+      const reason = document.createElement("p");
+      reason.className = "reading-sentence-reason";
+      reason.textContent = entry.reason;
+      row.append(sentence, translation, reason);
+      if (entry.shadowing_suitable) {
+        const badge = document.createElement("span");
+        badge.className = "pos-badge";
+        badge.textContent = "Shadowing";
+        row.append(badge);
+      }
+      els.readingKeySentences.append(row);
+    });
+    if (!sentences.length) {
+      const none = document.createElement("span");
+      none.className = "empty-state";
+      none.textContent = "Inga särskilda meningar att lyfta fram i den här texten.";
+      els.readingKeySentences.append(none);
+    }
+  }
+
+  const hasShadowingSentences = (analysis.keySentences || []).some((s) => s.shadowing_suitable);
+  if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = !hasShadowingSentences;
 }
 
 // 规范§9.4 — the light preview reads directly from the already-loaded Ordbok
@@ -3068,25 +3125,26 @@ function openWordFromReadingChip(swedish) {
 // Läsning doesn't run its own player — it hands the text to Shadowing
 // (already a mature TTS/recording engine), per the architecture doc's
 // "don't rebuild the player per module" principle.
-async function sendCurrentReadingItemToShadowing() {
-  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
-  if (!item) return;
-  els.sendReadingToShadowingBtn.disabled = true;
+async function sendTextToShadowing(button, { title, swedish, textResourceId, linkToReadingItem = false }) {
+  button.disabled = true;
   try {
     const result = await remoteDb.upsertShadowingItem({
-      title: item.title || "Läsning",
-      swedish: item.source_text,
+      title,
+      swedish,
       chinese: state.currentReadingAnalysis?.summaryZh || "",
       category: "Läsning",
       // 规范§4/§13 — same text_resource, so Shadowing never re-analyzes or
       // re-transcribes what Läsning already processed.
-      text_resource_id: item.text_resource_id || null,
+      text_resource_id: textResourceId || null,
     });
     if (!result?.enabled) {
       els.readingAuthNote.hidden = false;
       return;
     }
-    await remoteDb.upsertReadingItem({ ...item, shadowing_item_id: result.item.id });
+    if (linkToReadingItem) {
+      const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+      if (item) await remoteDb.upsertReadingItem({ ...item, shadowing_item_id: result.item.id });
+    }
     const normalized = shadowingStore.normalizeShadowingItem(result.item);
     remotePhase4Snapshot = {
       ...(remotePhase4Snapshot || {}),
@@ -3096,10 +3154,37 @@ async function sendCurrentReadingItemToShadowing() {
     state.selectedShadowingId = normalized.id;
     activateView("historyView");
   } catch (error) {
-    console.warn("[SpråkLab] Failed to send reading item to Shadowing.", error);
+    console.warn("[SpråkLab] Failed to send text to Shadowing.", error);
   } finally {
-    els.sendReadingToShadowingBtn.disabled = false;
+    button.disabled = false;
   }
+}
+
+async function sendCurrentReadingItemToShadowing() {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  if (!item) return;
+  await sendTextToShadowing(els.sendReadingToShadowingBtn, {
+    title: item.title || "Läsning",
+    swedish: item.source_text,
+    textResourceId: item.text_resource_id,
+    linkToReadingItem: true,
+  });
+}
+
+// 阅读模块设计想法-专业review-2026-07-27.md §6 — lets Shadowing practice
+// focus on the sentences actually picked as good standalone material,
+// instead of always sending the whole article (existing button above,
+// unchanged) — additive, not a replacement.
+async function sendSelectedSentencesToShadowing() {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  const sentences = (state.currentReadingAnalysis?.keySentences || []).filter((s) => s.shadowing_suitable).map((s) => s.sentence);
+  if (!sentences.length) return;
+  await sendTextToShadowing(els.sendSelectedSentencesToShadowingBtn, {
+    title: item?.title ? `${item.title} (utvalda meningar)` : "Utvalda meningar",
+    swedish: sentences.join("\n"),
+    textResourceId: item?.text_resource_id,
+    linkToReadingItem: false,
+  });
 }
 
 async function deleteCurrentReadingItem() {
@@ -9515,6 +9600,7 @@ function bindEvents() {
   els.analyzeReadingBtn?.addEventListener("click", analyzeCurrentReadingItem);
   els.deleteReadingBtn?.addEventListener("click", deleteCurrentReadingItem);
   els.sendReadingToShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
+  els.sendSelectedSentencesToShadowingBtn?.addEventListener("click", sendSelectedSentencesToShadowing);
   els.continueReadingBtn?.addEventListener("click", () => {
     activateView("readingView");
     const reading = state.readingItems[0];

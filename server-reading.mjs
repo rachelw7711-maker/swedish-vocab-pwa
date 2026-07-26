@@ -3,21 +3,28 @@
 // server.mjs's /api/reading/analyze. Order is load-bearing (规范§3):
 // cache -> user word state -> main dictionary -> AI, AI always last, and
 // only for words genuinely missing from the dictionary.
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 
 // 规范§5 — thresholds are config, not hardcoded in the frontend.
+// keyCollocations (Fraser candidates) / keyIdioms (Uttryck candidates) are
+// split per 阅读模块设计想法-专业review-2026-07-27.md §5 — they have
+// different selection criteria (Fraser: combinable, meaning derivable from
+// parts; Uttryck: idiomatic/holistic, register/cultural) and were
+// previously lumped into one "expressions" list.
 export const LENGTH_TIERS = {
-  standard: { maxWords: 500, keyVocabulary: [5, 8], keyExpressions: [2, 3], summarySentences: [2, 3] },
-  long: { maxWords: 1000, keyVocabulary: [8, 12], keyExpressions: [3, 5], summarySentences: [3, 5] },
-  overlong: { maxWords: 2000, keyVocabulary: [12, 15], keyExpressions: [4, 6], summarySentences: [3, 5] },
+  standard: { maxWords: 500, keyVocabulary: [5, 8], keyCollocations: [2, 3], keyIdioms: [0, 2], keySentences: [0, 2], summarySentences: [2, 3] },
+  long: { maxWords: 1000, keyVocabulary: [8, 12], keyCollocations: [3, 5], keyIdioms: [1, 3], keySentences: [1, 3], summarySentences: [3, 5] },
+  overlong: { maxWords: 2000, keyVocabulary: [12, 15], keyCollocations: [4, 6], keyIdioms: [2, 4], keySentences: [2, 5], summarySentences: [3, 5] },
 };
 export const MAX_AUTO_ANALYSIS_WORDS = LENGTH_TIERS.long.maxWords;
 export const MAX_SAVE_WORDS = LENGTH_TIERS.overlong.maxWords;
 const MAX_KEY_VOCABULARY = 15;
-const MAX_KEY_EXPRESSIONS = 6;
+const MAX_KEY_COLLOCATIONS = 6;
+const MAX_KEY_IDIOMS = 4;
+const MAX_KEY_SENTENCES = 5;
 const MAX_BATCH_GENERATE = 15;
 
 // 规范§14.3 point table. Credits are a user-facing abstraction over real
@@ -297,47 +304,126 @@ async function batchGenerateMissingWords(missingTokens) {
   return { words: (result.words || []).filter((w) => w.is_real_word), usage };
 }
 
-// 规范§9.2 — one lightweight call, not per-expression. Expressions are
-// matched against Fraser/Uttryck afterward by the caller, not here.
+// 规范§9.2 + 阅读模块设计想法-专业review-2026-07-27.md §5/§6 — one bundled
+// call (not one per concept) returns collocations, idioms, AND key
+// sentences together. Fraser (collocations) and Uttryck (idioms) get
+// separate criteria since they're genuinely different things — lumping
+// them into one "expressions" list (the old behavior) let the model pick
+// either without really distinguishing "combinable phrase" from "idiomatic,
+// possibly non-literal expression". Key sentences are a third, independent
+// output (not just the source_sentence attached to a word/phrase) — the
+// most Shadowing-worthy sentences in the article.
 async function extractKeyExpressions(cleanedText, tier) {
-  const [min, max] = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier].keyExpressions;
+  const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
+  const [collocMin, collocMax] = tierConfig.keyCollocations;
+  const [idiomMin, idiomMax] = tierConfig.keyIdioms;
+  const [sentMin, sentMax] = tierConfig.keySentences;
+  const expressionSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      expression_text: { type: "string" },
+      meaning_zh: { type: "string" },
+      source_sentence: { type: "string" },
+      source_sentence_zh: { type: "string" },
+    },
+    required: ["expression_text", "meaning_zh", "source_sentence", "source_sentence_zh"],
+  };
   const schema = {
     type: "object",
     additionalProperties: false,
     properties: {
-      expressions: {
+      collocations: { type: "array", items: expressionSchema },
+      idioms: { type: "array", items: expressionSchema },
+      key_sentences: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
-            expression_text: { type: "string" },
-            meaning_zh: { type: "string" },
-            source_sentence: { type: "string" },
-            source_sentence_zh: { type: "string" },
+            sentence: { type: "string" },
+            translation_zh: { type: "string" },
+            reason: { type: "string" },
+            shadowing_suitable: { type: "boolean" },
           },
-          required: ["expression_text", "meaning_zh", "source_sentence", "source_sentence_zh"],
+          required: ["sentence", "translation_zh", "reason", "shadowing_suitable"],
         },
       },
     },
-    required: ["expressions"],
+    required: ["collocations", "idioms", "key_sentences"],
   };
   const { result, usage } = await callOpenAI({
-    schemaName: "key_expressions",
+    schemaName: "key_expressions_and_sentences",
     schema,
-    maxOutputTokens: 2000,
-    systemPrompt: `You find fixed expressions, collocations, or idiomatic phrasing genuinely worth learning from a Swedish text — not single words. Pick ${min}-${max} expressions, maximum ${MAX_KEY_EXPRESSIONS}. Each must actually appear in the text (quote the exact source sentence it came from, plus that sentence's Chinese translation) — never invent an expression that isn't there. Prefer expressions that are reusable in everyday Swedish, not one-off context-specific phrasing. It's fine to return fewer than the target if the text doesn't have that many worth flagging.`,
+    maxOutputTokens: 3000,
+    systemPrompt: `You extract three things from a Swedish text for a Chinese-speaking learner, each with its own criteria — never invent content, everything must actually appear in the text.
+
+1. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious.
+
+2. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
+
+3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): the sentences most worth close reading — ones that state the main idea, carry a key fact, show cause/effect or a stance/turn, or are grammatically representative. Mark shadowing_suitable=true for ones that are also good standalone practice material for spoken repetition (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context).
+
+Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.`,
     userPrompt: cleanedText,
   });
-  return { expressions: (result.expressions || []).slice(0, MAX_KEY_EXPRESSIONS), usage };
+  return {
+    collocations: (result.collocations || []).slice(0, MAX_KEY_COLLOCATIONS),
+    idioms: (result.idioms || []).slice(0, MAX_KEY_IDIOMS),
+    keySentences: (result.key_sentences || []).slice(0, MAX_KEY_SENTENCES),
+    usage,
+  };
 }
 
-async function matchExpressionsAgainstFraser(supabaseAdmin, expressions) {
-  if (!expressions.length) return expressions;
-  const texts = expressions.map((e) => e.expression_text);
-  const { data } = await supabaseAdmin.from("learning_objects").select("id, swedish").in("object_type", ["phrase", "expression"]).in("swedish", texts);
-  const byText = new Map((data || []).map((row) => [row.swedish.toLowerCase(), row.id]));
-  return expressions.map((e) => ({ ...e, expression_id: byText.get(e.expression_text.toLowerCase()) || null }));
+// 阅读模块设计想法-专业review-2026-07-27.md §5/§10.2 — mirrors what
+// batchGenerateMissingWords already does for words: when a discovered
+// collocation/idiom doesn't exist in Fraser/Uttryck yet, create it rather
+// than just leaving the link empty. Unlike missing words, no second AI
+// call is needed — extractKeyExpressions already generated the phrase text/
+// meaning/example in the same call, this just persists it. New entries get
+// status "ai_generated" (same convention as auto-generated words — see
+// spraklab-ai-review-gate-reminder memory: this review gate isn't enforced
+// yet, so these are immediately visible like everything else).
+async function resolveExpressionEntries(supabaseAdmin, items, { objectType, category }) {
+  if (!items.length) return items;
+  const texts = items.map((item) => item.expression_text);
+  const { data: existing } = await supabaseAdmin.from("learning_objects").select("id, swedish").in("object_type", ["phrase", "expression"]).in("swedish", texts);
+  const byText = new Map((existing || []).map((row) => [row.swedish.toLowerCase(), row.id]));
+
+  const toCreate = items.filter((item) => !byText.has(item.expression_text.toLowerCase()));
+  if (toCreate.length) {
+    const now = new Date().toISOString();
+    const rows = toCreate.map((item) => ({
+      id: randomUUID(),
+      swedish: item.expression_text,
+      part_of_speech: "other",
+      pos_detail: "",
+      object_type: objectType,
+      category,
+      chinese: item.meaning_zh,
+      swedish_explanation: "",
+      example_sv: item.source_sentence,
+      forms: "",
+      collocations: "",
+      related_words: "",
+      tags: [],
+      notebook: "Fraser",
+      source: "discovered from reading",
+      status: "ai_generated",
+      updated_at: now,
+    }));
+    const { data: inserted, error: insertError } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish");
+    if (!insertError && inserted) {
+      const translationRows = inserted.map((row) => {
+        const source = toCreate.find((item) => item.expression_text.toLowerCase() === row.swedish.toLowerCase());
+        return { learning_object_id: row.id, native_language: "zh", meaning: source?.meaning_zh || "", updated_at: now };
+      });
+      if (translationRows.length) await supabaseAdmin.from("learning_object_translations").insert(translationRows);
+      inserted.forEach((row) => byText.set(row.swedish.toLowerCase(), row.id));
+    }
+  }
+
+  return items.map((item) => ({ ...item, expression_id: byText.get(item.expression_text.toLowerCase()) || null }));
 }
 
 // Cross-user by design (service-role bypasses RLS) — only ever reads
@@ -485,14 +571,19 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
 
   const selectedVocabulary = ranked.map((c, index) => ({ word_id: c.word.id, swedish: c.word.swedish, occurrences: c.occurrences, sort_order: index }));
 
-  const { expressions, usage: exprUsage } = await extractKeyExpressions(cleaned, tier);
+  const { collocations, idioms, keySentences, usage: exprUsage } = await extractKeyExpressions(cleaned, tier);
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "key_expressions", model: MODEL, usage: exprUsage, cacheHit: false });
-  const matchedExpressions = await matchExpressionsAgainstFraser(supabaseAdmin, expressions);
-  const selectedExpressions = matchedExpressions.map((e, index) => ({ ...e, sort_order: index }));
+  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, collocations, { objectType: "phrase", category: "common_collocation" });
+  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, idioms, { objectType: "expression", category: "everyday_expression" });
+  const selectedExpressions = [
+    ...resolvedCollocations.map((e) => ({ ...e, category: "collocation" })),
+    ...resolvedIdioms.map((e) => ({ ...e, category: "idiom" })),
+  ].map((e, index) => ({ ...e, sort_order: index }));
+  const selectedSentences = keySentences.map((s, index) => ({ ...s, sort_order: index }));
 
   const { data: analysisRow, error: analysisError } = await supabaseAdmin
     .from("text_analysis")
-    .insert({ text_resource_id: textResource.id, analysis_version: 1, selected_vocabulary: selectedVocabulary, selected_expressions: selectedExpressions })
+    .insert({ text_resource_id: textResource.id, analysis_version: 1, selected_vocabulary: selectedVocabulary, selected_expressions: selectedExpressions, key_sentences: selectedSentences })
     .select()
     .single();
   if (analysisError) throw analysisError;

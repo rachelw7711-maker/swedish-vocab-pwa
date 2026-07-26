@@ -1656,6 +1656,7 @@ function fromTextAnalysisRow(row) {
     textResourceId: row.text_resource_id,
     selectedVocabulary: row.selected_vocabulary || [],
     selectedExpressions: row.selected_expressions || [],
+    keySentences: row.key_sentences || [],
     summarySv: row.summary_sv || "",
     summaryZh: row.summary_zh || "",
     summaryGeneratedAt: dateToMillis(row.summary_generated_at),
