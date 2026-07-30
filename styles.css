@@ -4193,7 +4193,8 @@ h2 {
 }
 
 .reading-phrase-row .reading-item-ignore-btn,
-.reading-sentence-row .reading-item-ignore-btn {
+.reading-sentence-row .reading-item-ignore-btn,
+.reading-pattern-row .reading-item-ignore-btn {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -4240,6 +4241,27 @@ h2 {
   font-size: 0.8rem;
   color: var(--muted);
   font-style: italic;
+}
+
+.reading-pattern-list {
+  display: grid;
+  gap: 8px;
+}
+
+.reading-pattern-row {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--secondary-surface);
+  max-width: 100%;
+  overflow-wrap: break-word;
+  position: relative;
+}
+
+.reading-pattern-row span {
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .review-queue-row {

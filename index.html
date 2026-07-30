@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=162" />
+    <link rel="stylesheet" href="/styles.css?v=163" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -348,6 +348,7 @@
                   <span>💬 Fraser <strong data-report-colloc></strong></span>
                   <span>🌍 Uttryck <strong data-report-idiom></strong></span>
                   <span>📌 Meningar <strong data-report-sentences></strong></span>
+                  <span>🔤 Mönster <strong data-report-patterns></strong></span>
                 </div>
                 <p class="reading-report-compression">Kunskapskompression: <strong data-report-compression></strong></p>
                 <p class="reading-report-label">⏱ Uppskattad studietid</p>
@@ -376,6 +377,10 @@
               <div class="reading-sentences-block">
                 <h4>Viktiga meningar</h4>
                 <div id="readingKeySentences" class="reading-sentence-list"></div>
+              </div>
+              <div class="reading-patterns-block">
+                <h4>🔤 Språkmönster</h4>
+                <div id="readingLanguagePatterns" class="reading-pattern-list"></div>
               </div>
               <div class="practice-actions">
                 <button class="primary-button" id="sendReadingToShadowingBtn" type="button">Skicka till Shadowing</button>
@@ -1284,6 +1289,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=168" type="module"></script>
+    <script src="/app.js?v=169" type="module"></script>
   </body>
 </html>

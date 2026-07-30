@@ -1709,6 +1709,7 @@ function fromTextAnalysisRow(row) {
     selectedVocabulary: row.selected_vocabulary || [],
     selectedExpressions: row.selected_expressions || [],
     keySentences: row.key_sentences || [],
+    languagePatterns: row.language_patterns || [],
     summarySv: row.summary_sv || "",
     summaryZh: row.summary_zh || "",
     summaryGeneratedAt: dateToMillis(row.summary_generated_at),
@@ -1868,20 +1869,21 @@ export async function loadReadingListStats(textResourceIds) {
   if (!ids.length) return {};
   const [{ data: resources, error: resourceError }, { data: analyses, error: analysisError }] = await Promise.all([
     supabase.from("text_resources").select("id, word_count").in("id", ids),
-    supabase.from("text_analysis").select("text_resource_id, selected_vocabulary, selected_expressions, key_sentences").in("text_resource_id", ids),
+    supabase.from("text_analysis").select("text_resource_id, selected_vocabulary, selected_expressions, key_sentences, language_patterns").in("text_resource_id", ids),
   ]);
   if (resourceError) throw resourceError;
   if (analysisError) throw analysisError;
 
   const byResource = {};
   (resources || []).forEach((row) => {
-    byResource[row.id] = { wordCount: row.word_count || 0, vocabCount: 0, exprCount: 0, sentenceCount: 0, vocabulary: [] };
+    byResource[row.id] = { wordCount: row.word_count || 0, vocabCount: 0, exprCount: 0, sentenceCount: 0, patternCount: 0, vocabulary: [] };
   });
   (analyses || []).forEach((row) => {
-    const entry = byResource[row.text_resource_id] || (byResource[row.text_resource_id] = { wordCount: 0, vocabCount: 0, exprCount: 0, sentenceCount: 0, vocabulary: [] });
+    const entry = byResource[row.text_resource_id] || (byResource[row.text_resource_id] = { wordCount: 0, vocabCount: 0, exprCount: 0, sentenceCount: 0, patternCount: 0, vocabulary: [] });
     entry.vocabCount = (row.selected_vocabulary || []).length;
     entry.exprCount = (row.selected_expressions || []).length;
     entry.sentenceCount = (row.key_sentences || []).length;
+    entry.patternCount = (row.language_patterns || []).length;
     entry.vocabulary = row.selected_vocabulary || [];
   });
   return byResource;

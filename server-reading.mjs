@@ -25,6 +25,7 @@ const MAX_KEY_VOCABULARY = 15;
 const MAX_KEY_COLLOCATIONS = 6;
 const MAX_KEY_IDIOMS = 4;
 const MAX_KEY_SENTENCES = 5;
+const MAX_LANGUAGE_PATTERNS = 4;
 const MAX_BATCH_GENERATE = 15;
 
 // 规范§14.3 point table. Credits are a user-facing abstraction over real
@@ -296,6 +297,55 @@ function rankFoundWords(found, freq, firstSeenCapitalized, userWordState, limit)
   return candidates.slice(0, limit);
 }
 
+// AI Worth Learning scoring (2026-07-30, 桌面AI语义评分.pages, approved by
+// Rachel same day) — the DB-mechanical filter above already does the "90%"
+// (POS/proper-noun/frequency/dedup/already-mastered exclusion); this is the
+// final "10%" AI layer on top. AI never decides how many words survive
+// (targetCount stays DB/config-controlled) — it only ranks a candidate pool
+// larger than the target by how genuinely worth learning each word is IN
+// THIS ARTICLE specifically, not how "important" it is in the abstract.
+// Skipped entirely (no AI call) when there's no real surplus to rank.
+const WORTH_LEARNING_DIMENSIONS = `1. Does it genuinely help understand THIS article — a word central to this article's specific meaning/topic scores higher than one that's merely present?
+2. Transfer value — will this word likely reappear across many other articles (connective/discourse words like "däremot", "dessutom", "samtidigt" score very high here)?
+3. Is it a genuine native-speaker expression or collocation-forming word, not just a plain dictionary entry?
+4. Is it a common "reading obstacle" word — one learners typically recognize on sight but keep forgetting (often abstract nouns, adverbs) — these should be prioritized?
+5. Does it easily expand into a useful word family (e.g. a verb with common related noun/adjective/participle forms)?`;
+
+async function scoreVocabularyWorthLearning(candidates, cleanedText, targetCount) {
+  if (candidates.length <= targetCount) {
+    return { scored: candidates, usage: null };
+  }
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      scores: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: { word: { type: "string" }, score: { type: "integer" } },
+          required: ["word", "score"],
+        },
+      },
+    },
+    required: ["scores"],
+  };
+  const wordList = candidates.map((c) => c.word.swedish).join(", ");
+  const { result, usage } = await callOpenAI({
+    schemaName: "vocabulary_worth_learning",
+    schema,
+    maxOutputTokens: 1500,
+    systemPrompt: `You score how "worth learning" each candidate Swedish word is for a learner, specifically in the context of the article given — not how important the word is in general. Score every word 0-100 using these five dimensions together:\n${WORTH_LEARNING_DIMENSIONS}\nScore every candidate word given, even low-scoring ones — never omit one. Return integer scores only, matching each word exactly as given.`,
+    userPrompt: `Article:\n${cleanedText}\n\nCandidate words: ${wordList}`,
+  });
+  const scoreByWord = new Map((result.scores || []).map((s) => [String(s.word || "").toLowerCase(), s.score]));
+  const scored = candidates
+    .map((c) => ({ ...c, worthLearningScore: scoreByWord.get(c.word.swedish.toLowerCase()) ?? 0 }))
+    .sort((a, b) => b.worthLearningScore - a.worthLearningScore);
+  return { scored, usage };
+}
+
 // 规范§8 — batched generation for genuinely missing words, one AI call for
 // up to MAX_BATCH_GENERATE words at once, never one call per word.
 async function batchGenerateMissingWords(missingTokens) {
@@ -381,8 +431,21 @@ async function extractKeyExpressions(cleanedText, tier, glossary = []) {
           required: ["sentence", "translation_zh", "reason", "shadowing_suitable"],
         },
       },
+      language_patterns: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            pattern: { type: "string" },
+            meaning_zh: { type: "string" },
+            source_sentence: { type: "string" },
+          },
+          required: ["pattern", "meaning_zh", "source_sentence"],
+        },
+      },
     },
-    required: ["collocations", "idioms", "key_sentences"],
+    required: ["collocations", "idioms", "key_sentences", "language_patterns"],
   };
   const glossaryNote = glossary.length
     ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${glossary.map((g) => g.word).join(", ")}. Do not select any of these as a collocation or idiom — the book already did that job. Spend the collocation/idiom slots on other things the glossary didn't cover.`
@@ -391,13 +454,15 @@ async function extractKeyExpressions(cleanedText, tier, glossary = []) {
     schemaName: "key_expressions_and_sentences",
     schema,
     maxOutputTokens: 3000,
-    systemPrompt: `You extract three things from a Swedish text for a Chinese-speaking learner, each with its own criteria — never invent content, everything must actually appear in the text.
+    systemPrompt: `You extract four things from a Swedish text for a Chinese-speaking learner, each with its own criteria — never invent content, everything must actually appear in the text.
 
 1. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious.
 
 2. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
 
 3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences worth reading aloud and repeating — chosen because they showcase a grammatical structure worth noticing (a tense, a subordinate clause, a passive construction, a notable word order) or because they're excellent standalone material for spoken practice (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context). Do NOT pick a sentence just because it is an important plot point or states a key fact — a sentence that only restates something the reader already understood from following the story (e.g. "this is where the twist happens") has no language-learning value by itself and must not be included. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences.
+
+4. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). Give the pattern name, its meaning in Chinese, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
 
 Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}`,
     userPrompt: cleanedText,
@@ -406,6 +471,7 @@ Every source_sentence/sentence must be quoted exactly from the text. Return empt
     collocations: (result.collocations || []).slice(0, MAX_KEY_COLLOCATIONS),
     idioms: (result.idioms || []).slice(0, MAX_KEY_IDIOMS),
     keySentences: (result.key_sentences || []).slice(0, MAX_KEY_SENTENCES),
+    languagePatterns: (result.language_patterns || []).slice(0, MAX_LANGUAGE_PATTERNS),
     usage,
   };
 }
@@ -507,6 +573,7 @@ async function materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis
     ...(analysis.selected_vocabulary || []).map((item) => ({ item_type: "vocabulary", ref_id: item.word_id || null, item })),
     ...(analysis.selected_expressions || []).map((item) => ({ item_type: "expression", ref_id: item.expression_id || null, item })),
     ...(analysis.key_sentences || []).map((item) => ({ item_type: "sentence", ref_id: null, item })),
+    ...(analysis.language_patterns || []).map((item) => ({ item_type: "pattern", ref_id: null, item })),
   ].map(({ item_type, ref_id, item }) => ({
     text_analysis_id: analysis.id,
     user_id: userId,
@@ -634,14 +701,27 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
         inserted.forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
       }
     }
-    ranked = rankFoundWords(found, freq, firstSeenCapitalized, userWordState, vocabularyLimit);
-  } else {
-    ranked = ranked.slice(0, vocabularyLimit);
+    // Keep a real surplus pool (still 2x) here too — the AI Worth Learning
+    // step right below needs candidates beyond vocabularyLimit to actually
+    // rank; capping to vocabularyLimit here would leave it nothing to do.
+    ranked = rankFoundWords(found, freq, firstSeenCapitalized, userWordState, vocabularyLimit * 2);
   }
 
-  const selectedVocabulary = ranked.map((c, index) => ({ word_id: c.word.id, swedish: c.word.swedish, occurrences: c.occurrences, sort_order: index }));
+  const { scored: scoredVocabulary, usage: worthLearningUsage } = await scoreVocabularyWorthLearning(ranked, cleaned, vocabularyLimit);
+  if (worthLearningUsage) {
+    logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "vocab_worth_learning", model: MODEL, usage: worthLearningUsage, cacheHit: false });
+  }
+  ranked = scoredVocabulary.slice(0, vocabularyLimit);
 
-  const { collocations, idioms, keySentences, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary);
+  const selectedVocabulary = ranked.map((c, index) => ({
+    word_id: c.word.id,
+    swedish: c.word.swedish,
+    occurrences: c.occurrences,
+    worth_learning_score: c.worthLearningScore ?? null,
+    sort_order: index,
+  }));
+
+  const { collocations, idioms, keySentences, languagePatterns, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary);
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "key_expressions", model: MODEL, usage: exprUsage, cacheHit: false });
   const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, collocations, { objectType: "phrase", category: "common_collocation" });
   const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, idioms, { objectType: "expression", category: "everyday_expression" });
@@ -650,10 +730,18 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
     ...resolvedIdioms.map((e) => ({ ...e, category: "idiom" })),
   ].map((e, index) => ({ ...e, sort_order: index }));
   const selectedSentences = keySentences.map((s, index) => ({ ...s, sort_order: index }));
+  const selectedPatterns = languagePatterns.map((p, index) => ({ ...p, sort_order: index }));
 
   const { data: analysisRow, error: analysisError } = await supabaseAdmin
     .from("text_analysis")
-    .insert({ text_resource_id: textResource.id, analysis_version: 1, selected_vocabulary: selectedVocabulary, selected_expressions: selectedExpressions, key_sentences: selectedSentences })
+    .insert({
+      text_resource_id: textResource.id,
+      analysis_version: 1,
+      selected_vocabulary: selectedVocabulary,
+      selected_expressions: selectedExpressions,
+      key_sentences: selectedSentences,
+      language_patterns: selectedPatterns,
+    })
     .select()
     .single();
   if (analysisError) throw analysisError;

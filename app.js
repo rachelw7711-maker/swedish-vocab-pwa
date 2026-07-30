@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=135";
+import * as remoteDb from "./src/lib/db.js?v=136";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -568,6 +568,7 @@ const els = {
   readingTextbookGlossary: document.querySelector("#readingTextbookGlossary"),
   readingTextbookGlossaryList: document.querySelector("#readingTextbookGlossaryList"),
   readingKeySentences: document.querySelector("#readingKeySentences"),
+  readingLanguagePatterns: document.querySelector("#readingLanguagePatterns"),
   sendSelectedSentencesToShadowingBtn: document.querySelector("#sendSelectedSentencesToShadowingBtn"),
   readingWordPreview: document.querySelector("#readingWordPreview"),
   generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
@@ -3104,6 +3105,35 @@ function renderReadingAnalysis(analysis) {
   const hasShadowingSentences = (analysis.keySentences || []).some((s) => s.shadowing_suitable);
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = !hasShadowingSentences;
 
+  // Language Patterns (2026-07-31, 桌面AI语义评分.pages §5) — sentence-level
+  // constructions, deliberately never more than 4 (see MAX_LANGUAGE_PATTERNS
+  // server-side); most texts genuinely have 0-2, so an empty state is normal.
+  if (els.readingLanguagePatterns) {
+    els.readingLanguagePatterns.replaceChildren();
+    const patterns = analysis.languagePatterns || [];
+    patterns.forEach((entry, index) => {
+      const row = document.createElement("div");
+      row.className = "reading-pattern-row";
+      row.dataset.readingItemType = "pattern";
+      row.dataset.readingItemSortOrder = index;
+      const pattern = document.createElement("strong");
+      pattern.textContent = entry.pattern;
+      const meaning = document.createElement("span");
+      meaning.textContent = entry.meaning_zh;
+      const example = document.createElement("p");
+      example.className = "example-translation";
+      example.textContent = entry.source_sentence;
+      row.append(pattern, meaning, example);
+      els.readingLanguagePatterns.append(row);
+    });
+    if (!patterns.length) {
+      const none = document.createElement("span");
+      none.className = "empty-state";
+      none.textContent = "Inga särskilda språkmönster att lyfta fram i den här texten.";
+      els.readingLanguagePatterns.append(none);
+    }
+  }
+
   enhanceReadingAnalysisWithItemState(analysis);
   renderReadingReport();
 }
@@ -3136,7 +3166,8 @@ function computeReadingReport(analysis, wordCount) {
   const collocCount = (analysis.selectedExpressions || []).filter((e) => e.category !== "idiom").length;
   const idiomCount = (analysis.selectedExpressions || []).filter((e) => e.category === "idiom").length;
   const sentenceCount = (analysis.keySentences || []).length;
-  const itemCount = vocabCount + collocCount + idiomCount + sentenceCount;
+  const patternCount = (analysis.languagePatterns || []).length;
+  const itemCount = vocabCount + collocCount + idiomCount + sentenceCount + patternCount;
   const cefrRange = estimateCefrRange(analysis.selectedVocabulary);
 
   const readMinutes = Math.max(1, Math.round(wordCount / 150));
@@ -3150,6 +3181,7 @@ function computeReadingReport(analysis, wordCount) {
     collocCount,
     idiomCount,
     sentenceCount,
+    patternCount,
     compressionRatio: wordCount ? ((itemCount / wordCount) * 100).toFixed(1) : "0.0",
     readMinutes,
     learnMinutes,
@@ -3173,6 +3205,7 @@ function renderReadingReport() {
   els.readingReportCard.querySelector("[data-report-colloc]").textContent = report.collocCount;
   els.readingReportCard.querySelector("[data-report-idiom]").textContent = report.idiomCount;
   els.readingReportCard.querySelector("[data-report-sentences]").textContent = report.sentenceCount;
+  els.readingReportCard.querySelector("[data-report-patterns]").textContent = report.patternCount;
   els.readingReportCard.querySelector("[data-report-compression]").textContent = `${report.compressionRatio}%`;
   els.readingReportCard.querySelector("[data-report-read-min]").textContent = report.readMinutes;
   els.readingReportCard.querySelector("[data-report-learn-min]").textContent = report.learnMinutes;
@@ -3196,7 +3229,7 @@ async function enhanceReadingAnalysisWithItemState(analysis) {
   }
   if (state.currentReadingAnalysis?.id !== analysis.id) return; // user navigated away
   const byKey = new Map(items.map((item) => [`${item.itemType}:${item.sortOrder}`, item]));
-  [els.readingKeyWords, els.readingKeyPhrases, els.readingKeySentences].forEach((container) => {
+  [els.readingKeyWords, els.readingKeyPhrases, els.readingKeySentences, els.readingLanguagePatterns].forEach((container) => {
     container?.querySelectorAll("[data-reading-item-type]").forEach((el) => {
       const item = byKey.get(`${el.dataset.readingItemType}:${el.dataset.readingItemSortOrder}`);
       if (item) applyReadingItemState(el, item);
@@ -3487,6 +3520,7 @@ function openReadingExportPreview() {
     example: entry.source_sentence,
   }));
   const sentenceRows = (analysis?.keySentences || []).map((entry) => ({ sv: entry.sentence, zh: entry.translation_zh }));
+  const patternRows = (analysis?.languagePatterns || []).map((entry) => ({ pattern: entry.pattern, zh: entry.meaning_zh, example: entry.source_sentence }));
   const noteRows = (item.notes || []).filter((n) => clean(n.note));
 
   const title = item.title || "(Utan titel)";
@@ -3503,13 +3537,14 @@ function openReadingExportPreview() {
     vocabRows.length ? `\n== Ord värda att lära sig ==\n${vocabRows.map((r) => `${r.sv} - ${r.zh}`).join("\n")}` : "",
     phraseRows.length ? `\n== Fraser & Uttryck ==\n${phraseRows.map((r) => `${r.sv} - ${r.zh} (${r.example})`).join("\n")}` : "",
     sentenceRows.length ? `\n== Viktiga meningar ==\n${sentenceRows.map((r) => `${r.sv} - ${r.zh}`).join("\n")}` : "",
+    patternRows.length ? `\n== Språkmönster ==\n${patternRows.map((r) => `${r.pattern} - ${r.zh} (${r.example})`).join("\n")}` : "",
     noteRows.length ? `\n== Mina anteckningar ==\n${noteRows.map((n) => `${n.text}\n→ ${n.note}`).join("\n\n")}` : "",
   ]
     .filter(Boolean)
     .join("\n");
 
   const statsLine = report
-    ? `<p class="export-reading-stats">${report.wordCount} ord${report.cefrRange ? ` · ${report.cefrRange}` : ""} · ${report.vocabCount} nyckelord · ${report.collocCount} fraser · ${report.idiomCount} uttryck · ${report.sentenceCount} meningar</p>`
+    ? `<p class="export-reading-stats">${report.wordCount} ord${report.cefrRange ? ` · ${report.cefrRange}` : ""} · ${report.vocabCount} nyckelord · ${report.collocCount} fraser · ${report.idiomCount} uttryck · ${report.sentenceCount} meningar · ${report.patternCount} mönster</p>`
     : "";
   const summaryBlock = analysis?.summarySv
     ? `<section><h3>Sammanfattning</h3><p>${escapeHtml(analysis.summarySv)}</p><p class="example-translation">${escapeHtml(analysis.summaryZh || "")}</p></section>`
@@ -3523,6 +3558,9 @@ function openReadingExportPreview() {
   const sentenceBlock = sentenceRows.length
     ? `<section><h3>Viktiga meningar</h3><ul>${sentenceRows.map((r) => `<li>${escapeHtml(r.sv)}<br/><span class="example-translation">${escapeHtml(r.zh)}</span></li>`).join("")}</ul></section>`
     : "";
+  const patternBlock = patternRows.length
+    ? `<section><h3>Språkmönster</h3><ul>${patternRows.map((r) => `<li><strong>${escapeHtml(r.pattern)}</strong> — ${escapeHtml(r.zh)}<br/><span class="example-translation">${escapeHtml(r.example)}</span></li>`).join("")}</ul></section>`
+    : "";
   const noteBlock = noteRows.length
     ? `<section><h3>Mina anteckningar</h3><ul>${noteRows.map((n) => `<li>${escapeHtml(n.text)}<br/><span class="example-translation">${escapeHtml(n.note)}</span></li>`).join("")}</ul></section>`
     : "";
@@ -3533,7 +3571,7 @@ function openReadingExportPreview() {
       ${statsLine}
     </header>
     <section><h3>Text</h3><p class="export-reading-source-text">${escapeHtml(item.source_text || "")}</p></section>
-    ${summaryBlock}${vocabBlock}${phraseBlock}${sentenceBlock}${noteBlock}
+    ${summaryBlock}${vocabBlock}${phraseBlock}${sentenceBlock}${patternBlock}${noteBlock}
     ${!analysis ? '<div class="empty-state">Texten är inte analyserad än — endast originaltexten exporteras.</div>' : ""}
   `;
   if (!els.exportPreviewDialog.open) els.exportPreviewDialog.showModal();
