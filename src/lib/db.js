@@ -1852,6 +1852,35 @@ export async function markWordsReviewed(ids) {
 // its textbook_glossary back too (analyzeReadingText's own response only
 // covers the moment of first analysis); a plain RLS-gated read, same as
 // loadTextAnalysis below.
+// "Mina läsningar" richer list (2026-07-30) — one batched pair of queries
+// for ALL reading items' stats at once (not one query per item — same
+// anti-N+1 discipline as fetchAll/db.js elsewhere), so the list can show
+// word count / vocabulary / phrase / sentence counts without opening each
+// item individually.
+export async function loadReadingListStats(textResourceIds) {
+  const ids = [...new Set((textResourceIds || []).filter(Boolean))];
+  if (!ids.length) return {};
+  const [{ data: resources, error: resourceError }, { data: analyses, error: analysisError }] = await Promise.all([
+    supabase.from("text_resources").select("id, word_count").in("id", ids),
+    supabase.from("text_analysis").select("text_resource_id, selected_vocabulary, selected_expressions, key_sentences").in("text_resource_id", ids),
+  ]);
+  if (resourceError) throw resourceError;
+  if (analysisError) throw analysisError;
+
+  const byResource = {};
+  (resources || []).forEach((row) => {
+    byResource[row.id] = { wordCount: row.word_count || 0, vocabCount: 0, exprCount: 0, sentenceCount: 0, vocabulary: [] };
+  });
+  (analyses || []).forEach((row) => {
+    const entry = byResource[row.text_resource_id] || (byResource[row.text_resource_id] = { wordCount: 0, vocabCount: 0, exprCount: 0, sentenceCount: 0, vocabulary: [] });
+    entry.vocabCount = (row.selected_vocabulary || []).length;
+    entry.exprCount = (row.selected_expressions || []).length;
+    entry.sentenceCount = (row.key_sentences || []).length;
+    entry.vocabulary = row.selected_vocabulary || [];
+  });
+  return byResource;
+}
+
 export async function loadTextResource(textResourceId) {
   const id = clean(textResourceId);
   if (!id) return null;

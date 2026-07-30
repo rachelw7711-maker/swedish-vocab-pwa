@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=159" />
+    <link rel="stylesheet" href="/styles.css?v=160" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -503,6 +503,11 @@
 
                 <button class="profile-entry-card" type="button" data-profile-page="studies">
                   <span><strong>📚 Mina studier</strong><small>Se din statistik, aktivitet och utveckling</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
+
+                <button class="profile-entry-card" type="button" id="profileReadingHistoryBtn">
+                  <span><strong>📖 Mina läsningar</strong><small>Se alla dina lästa texter och anteckningar</small></span>
                   <span aria-hidden="true">›</span>
                 </button>
 
@@ -1273,6 +1278,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=165" type="module"></script>
+    <script src="/app.js?v=166" type="module"></script>
   </body>
 </html>

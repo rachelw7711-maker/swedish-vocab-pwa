@@ -521,6 +521,7 @@ const els = {
   profileAiFeatureBreakdown: document.querySelector("#profileAiFeatureBreakdown"),
   profileSettingsSummary: document.querySelector("#profileSettingsSummary"),
   profileStartCard: document.querySelector("#profileStartCard"),
+  profileReadingHistoryBtn: document.querySelector("#profileReadingHistoryBtn"),
   profileGuestButton: document.querySelector("#profileGuestButton"),
   topbarLibraryBack: document.querySelector(".topbar-library-back"),
   topbarAuthButton: document.querySelector("#topbarAuthButton"),
@@ -2654,6 +2655,11 @@ async function renderReadingView() {
   renderReadingList();
 }
 
+// "Mina läsningar" richer history (2026-07-30, tier-2 item 6 of Reviews/
+// 阅读模块设计想法-专业review-2026-07-27.md §十三) — renders instantly with
+// what's already in memory (title/snippet/date), then progressively adds
+// word count / CEFR / discovery counts once the batched stats query
+// returns (same pattern as enhanceReadingAnalysisWithItemState).
 function renderReadingList() {
   if (!els.readingList) return;
   els.readingList.replaceChildren();
@@ -2675,10 +2681,55 @@ function renderReadingList() {
     const snippet = document.createElement("span");
     snippet.className = "reading-item-snippet";
     snippet.textContent = clean(item.source_text).slice(0, 80);
-    card.append(title, snippet);
+    const meta = document.createElement("span");
+    meta.className = "reading-item-meta";
+    meta.dataset.readingItemMeta = item.id;
+    meta.textContent = item.text_resource_id ? formatReadingItemDate(item.updatedAt || item.createdAt) : `${formatReadingItemDate(item.updatedAt || item.createdAt)} · Ej analyserad än`;
+    card.append(title, snippet, meta);
     fragment.append(card);
   });
   els.readingList.append(fragment);
+  enhanceReadingListWithStats();
+}
+
+function formatReadingItemDate(timestamp) {
+  const value = Number(timestamp || 0) || 0;
+  if (!value) return "";
+  const dateKey = localDateKeyForTimestamp(value);
+  const today = localDateKeyForTimestamp(Date.now());
+  if (dateKey === today) return "Idag";
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dateKey === localDateKeyForTimestamp(yesterday.getTime())) return "Igår";
+  const daysAgo = Math.round((Date.now() - value) / 86400000);
+  if (daysAgo > 0 && daysAgo < 7) return `${daysAgo} dagar sedan`;
+  return new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+
+async function enhanceReadingListWithStats() {
+  const ids = state.readingItems.map((item) => item.text_resource_id).filter(Boolean);
+  if (!ids.length) return;
+  let statsByResource;
+  try {
+    statsByResource = await remoteDb.loadReadingListStats(ids);
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load reading list stats.", error);
+    return;
+  }
+  state.readingItems.forEach((item) => {
+    if (!item.text_resource_id) return;
+    const meta = els.readingList?.querySelector(`[data-reading-item-meta="${item.id}"]`);
+    const stats = meta && statsByResource[item.text_resource_id];
+    if (!meta || !stats) return;
+    const dateLabel = formatReadingItemDate(item.updatedAt || item.createdAt);
+    const cefr = estimateCefrRange(stats.vocabulary);
+    const parts = [dateLabel, `${stats.wordCount} ord`];
+    if (cefr) parts.push(cefr);
+    if (stats.vocabCount + stats.exprCount + stats.sentenceCount > 0) {
+      parts.push(`${stats.vocabCount} ord · ${stats.exprCount} fraser · ${stats.sentenceCount} meningar`);
+    }
+    meta.textContent = parts.filter(Boolean).join(" · ");
+  });
 }
 
 function readingWordCount(text) {
@@ -3061,6 +3112,19 @@ function renderReadingAnalysis(analysis) {
 // selected vocabulary (no new AI call) rather than invented. Compression
 // ratio and time estimates are explicitly labeled as estimates — they're a
 // simple heuristic over counts already on screen, not a measured fact.
+// Shared with renderReadingList's per-item stats (2026-07-30) — same
+// zero-extra-AI-call estimate, just derived from whichever vocabulary list
+// is on hand (the full analysis client-side, or a batch-loaded summary).
+function estimateCefrRange(vocabularyEntries) {
+  const cefrOrder = ["A1", "A2", "B1", "B2", "C1", "C2"];
+  const levels = (vocabularyEntries || [])
+    .map((entry) => state.words.find((w) => w.id === entry.word_id)?.cefr_level)
+    .filter((level) => cefrOrder.includes(level))
+    .sort((a, b) => cefrOrder.indexOf(a) - cefrOrder.indexOf(b));
+  if (!levels.length) return "";
+  return levels[0] === levels[levels.length - 1] ? levels[0] : `${levels[0]}-${levels[levels.length - 1]}`;
+}
+
 function computeReadingReport(analysis, wordCount) {
   if (!analysis || !wordCount) return null;
   const vocabCount = (analysis.selectedVocabulary || []).length;
@@ -3068,13 +3132,7 @@ function computeReadingReport(analysis, wordCount) {
   const idiomCount = (analysis.selectedExpressions || []).filter((e) => e.category === "idiom").length;
   const sentenceCount = (analysis.keySentences || []).length;
   const itemCount = vocabCount + collocCount + idiomCount + sentenceCount;
-
-  const cefrOrder = ["A1", "A2", "B1", "B2", "C1", "C2"];
-  const levels = (analysis.selectedVocabulary || [])
-    .map((entry) => state.words.find((w) => w.id === entry.word_id)?.cefr_level)
-    .filter((level) => cefrOrder.includes(level))
-    .sort((a, b) => cefrOrder.indexOf(a) - cefrOrder.indexOf(b));
-  const cefrRange = levels.length ? (levels[0] === levels[levels.length - 1] ? levels[0] : `${levels[0]}-${levels[levels.length - 1]}`) : "";
+  const cefrRange = estimateCefrRange(analysis.selectedVocabulary);
 
   const readMinutes = Math.max(1, Math.round(wordCount / 150));
   const learnMinutes = Math.max(1, Math.round(itemCount * 0.6));
@@ -10604,6 +10662,7 @@ function bindEvents() {
   els.profileStartCard?.addEventListener("click", () => {
     openAuthDialog("signup");
   });
+  els.profileReadingHistoryBtn?.addEventListener("click", () => activateView("readingView"));
   els.reviewQueueMarkPageBtn?.addEventListener("click", markCurrentReviewPageReviewed);
   els.reviewQueuePrevBtn?.addEventListener("click", () => {
     loadReviewQueuePage(Math.max(0, (state.reviewQueueOffset || 0) - REVIEW_QUEUE_PAGE_SIZE));

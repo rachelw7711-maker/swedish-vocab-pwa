@@ -4071,6 +4071,13 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.reading-item-meta {
+  color: var(--accent-strong);
+  font-size: 0.74rem;
+  font-weight: 620;
+  margin-top: 2px;
+}
+
 .reading-editor {
   display: grid;
   gap: 14px;
