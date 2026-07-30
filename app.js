@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=130";
+import * as remoteDb from "./src/lib/db.js?v=132";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -479,7 +479,14 @@ const els = {
   profileSignedInGrid: document.querySelector("#profileSignedInGrid"),
   profileMainPanel: document.querySelector("#profileMainPanel"),
   profileStudiesPanel: document.querySelector("#profileStudiesPanel"),
+  profileReviewPanel: document.querySelector("#profileReviewPanel"),
   profileSettingsPanel: document.querySelector("#profileSettingsPanel"),
+  reviewQueueTotal: document.querySelector("#reviewQueueTotal"),
+  reviewQueueMarkPageBtn: document.querySelector("#reviewQueueMarkPageBtn"),
+  reviewQueueList: document.querySelector("#reviewQueueList"),
+  reviewQueuePrevBtn: document.querySelector("#reviewQueuePrevBtn"),
+  reviewQueuePageLabel: document.querySelector("#reviewQueuePageLabel"),
+  reviewQueueNextBtn: document.querySelector("#reviewQueueNextBtn"),
   profileAvatar: document.querySelector("#profileAvatar"),
   profileAccountName: document.querySelector("#profileAccountName"),
   profilePlanBadge: document.querySelector("#profilePlanBadge"),
@@ -554,11 +561,6 @@ const els = {
   importReadingPhotoBtn: document.querySelector("#importReadingPhotoBtn"),
   readingPhotoFileInput: document.querySelector("#readingPhotoFileInput"),
   readingPhotoStatus: document.querySelector("#readingPhotoStatus"),
-  translateSelectionBtn: document.querySelector("#translateSelectionBtn"),
-  translateFullBtn: document.querySelector("#translateFullBtn"),
-  readingTranslationResult: document.querySelector("#readingTranslationResult"),
-  readingTranslationText: document.querySelector("#readingTranslationText"),
-  closeTranslationBtn: document.querySelector("#closeTranslationBtn"),
   readingKeySentences: document.querySelector("#readingKeySentences"),
   sendSelectedSentencesToShadowingBtn: document.querySelector("#sendSelectedSentencesToShadowingBtn"),
   readingWordPreview: document.querySelector("#readingWordPreview"),
@@ -2732,57 +2734,6 @@ async function handleReadingPhotoImport(event) {
   }
 }
 
-// 规范§11/§20 — sentence/selection translation is the cheap primary entry
-// point; full-text stays visually secondary and is gated by length exactly
-// like analysis is.
-const FULL_TEXT_TRANSLATE_WARN_WORDS = 500;
-const FULL_TEXT_TRANSLATE_MAX_WORDS = 2000;
-
-async function runReadingTranslation(text, scopeType, textResourceId) {
-  const btn = scopeType === "full" ? els.translateFullBtn : els.translateSelectionBtn;
-  const originalLabel = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Översätter…";
-  try {
-    const { translatedText } = await remoteDb.translateReadingText(text, { scopeType, textResourceId });
-    els.readingTranslationText.textContent = translatedText;
-    els.readingTranslationResult.hidden = false;
-  } catch (error) {
-    console.warn("[SpråkLab] Translation failed.", error);
-    alert(error.message || "Kunde inte översätta texten just nu.");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalLabel;
-  }
-}
-
-function translateReadingSelection() {
-  const textarea = els.readingTextInput;
-  const selection = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd).trim();
-  if (!selection) {
-    alert("Markera den text du vill översätta i textrutan ovan.");
-    return;
-  }
-  const saved = state.readingItems.find((item) => item.id === els.readingItemId.value);
-  runReadingTranslation(selection, "selection", saved?.text_resource_id || null);
-}
-
-function translateReadingFullText() {
-  const fullText = clean(els.readingTextInput.value);
-  if (!fullText) return;
-  const wordCount = readingWordCount(fullText);
-  if (wordCount > FULL_TEXT_TRANSLATE_MAX_WORDS) {
-    alert(`Texten är för lång (${wordCount} ord) för att översätta i sin helhet. Markera ett kortare stycke istället.`);
-    return;
-  }
-  if (wordCount > FULL_TEXT_TRANSLATE_WARN_WORDS) {
-    const proceed = confirm(`Hela texten är ${wordCount} ord — det kostar mer än att översätta ett markerat stycke. Fortsätta ändå?`);
-    if (!proceed) return;
-  }
-  const saved = state.readingItems.find((item) => item.id === els.readingItemId.value);
-  runReadingTranslation(fullText, "full", saved?.text_resource_id || null);
-}
-
 function updateReadingSteps(stage) {
   const steps = document.querySelectorAll(".reading-editor-steps li");
   const order = ["paste", "saved", "analyzed"];
@@ -2803,7 +2754,6 @@ function openReadingEditor(item = null) {
   els.analyzeReadingBtn.hidden = !item?.id;
   updateReadingWordCountNote();
   els.readingAnalysisPanel.hidden = true;
-  if (els.readingTranslationResult) els.readingTranslationResult.hidden = true;
   if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = true;
   updateReadingSteps(item?.id ? "saved" : "paste");
@@ -2955,14 +2905,19 @@ function renderReadingAnalysis(analysis) {
 
   els.readingKeyWords.replaceChildren();
   const vocabulary = analysis.selectedVocabulary || [];
-  vocabulary.forEach((entry) => {
+  vocabulary.forEach((entry, index) => {
     const word = state.words.find((item) => item.id === entry.word_id);
+    const wrap = document.createElement("span");
+    wrap.className = "reading-item-wrap";
+    wrap.dataset.readingItemType = "vocabulary";
+    wrap.dataset.readingItemSortOrder = index;
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "chip reading-keyword-chip";
     chip.dataset.readingWordId = entry.word_id;
     chip.textContent = word ? `${word.swedish} · ${word.chinese}` : entry.swedish;
-    els.readingKeyWords.append(chip);
+    wrap.append(chip);
+    els.readingKeyWords.append(wrap);
   });
   if (!vocabulary.length) {
     const none = document.createElement("span");
@@ -2973,9 +2928,11 @@ function renderReadingAnalysis(analysis) {
 
   els.readingKeyPhrases.replaceChildren();
   const expressions = analysis.selectedExpressions || [];
-  expressions.forEach((entry) => {
+  expressions.forEach((entry, index) => {
     const row = document.createElement("div");
     row.className = "reading-phrase-row";
+    row.dataset.readingItemType = "expression";
+    row.dataset.readingItemSortOrder = index;
     const heading = document.createElement("div");
     heading.className = "reading-phrase-heading";
     const phrase = document.createElement("strong");
@@ -3013,9 +2970,11 @@ function renderReadingAnalysis(analysis) {
   if (els.readingKeySentences) {
     els.readingKeySentences.replaceChildren();
     const sentences = analysis.keySentences || [];
-    sentences.forEach((entry) => {
+    sentences.forEach((entry, index) => {
       const row = document.createElement("div");
       row.className = "reading-sentence-row";
+      row.dataset.readingItemType = "sentence";
+      row.dataset.readingItemSortOrder = index;
       const sentence = document.createElement("p");
       sentence.textContent = entry.sentence;
       const translation = document.createElement("p");
@@ -3043,6 +3002,75 @@ function renderReadingAnalysis(analysis) {
 
   const hasShadowingSentences = (analysis.keySentences || []).some((s) => s.shadowing_suitable);
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = !hasShadowingSentences;
+
+  enhanceReadingAnalysisWithItemState(analysis);
+}
+
+// Per-item discovery-state tracking (2026-07-30 decision) — progressive
+// enhancement, same pattern as enhanceGrammarSectionWithStructuredForms:
+// the panel above is already fully usable synchronously, this just adds a
+// per-item "ignorera" toggle once the reading_analysis_items rows (server-
+// materialized alongside the analysis itself) have loaded.
+async function enhanceReadingAnalysisWithItemState(analysis) {
+  if (!analysis?.id) return;
+  let items;
+  try {
+    items = await remoteDb.loadReadingAnalysisItems(analysis.id);
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load reading item state.", error);
+    return;
+  }
+  if (state.currentReadingAnalysis?.id !== analysis.id) return; // user navigated away
+  const byKey = new Map(items.map((item) => [`${item.itemType}:${item.sortOrder}`, item]));
+  [els.readingKeyWords, els.readingKeyPhrases, els.readingKeySentences].forEach((container) => {
+    container?.querySelectorAll("[data-reading-item-type]").forEach((el) => {
+      const item = byKey.get(`${el.dataset.readingItemType}:${el.dataset.readingItemSortOrder}`);
+      if (item) applyReadingItemState(el, item);
+    });
+  });
+}
+
+function applyReadingItemState(el, item) {
+  el.dataset.readingItemId = item.id;
+  el.dataset.readingItemStatus = item.status;
+  el.classList.toggle("reading-item-ignored", item.status === "ignored");
+  if (el.querySelector(".reading-item-ignore-btn")) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "reading-item-ignore-btn";
+  const setLabel = () => {
+    const ignored = el.dataset.readingItemStatus === "ignored";
+    btn.title = ignored ? "Ångra" : "Ignorera";
+    btn.textContent = ignored ? "↺" : "✕";
+  };
+  setLabel();
+  btn.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextStatus = el.dataset.readingItemStatus === "ignored" ? "viewed" : "ignored";
+    btn.disabled = true;
+    try {
+      await remoteDb.setReadingAnalysisItemStatus(el.dataset.readingItemId, nextStatus);
+      el.dataset.readingItemStatus = nextStatus;
+      el.classList.toggle("reading-item-ignored", nextStatus === "ignored");
+      setLabel();
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to update reading item status.", error);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  el.append(btn);
+}
+
+// Marks a surfaced item "viewed" the first time the user actually opens it
+// (word preview / expression detail) — a no-op if it's already past "new".
+function markReadingItemViewedFromElement(el) {
+  if (!el || el.dataset.readingItemStatus !== "new" || !el.dataset.readingItemId) return;
+  el.dataset.readingItemStatus = "viewed";
+  remoteDb.setReadingAnalysisItemStatus(el.dataset.readingItemId, "viewed").catch((error) => {
+    console.warn("[SpråkLab] Failed to mark reading item viewed.", error);
+  });
 }
 
 // 规范§9.4 — the light preview reads directly from the already-loaded Ordbok
@@ -3327,13 +3355,115 @@ function renderProfileView() {
 }
 
 function showProfilePage(page = "main") {
-  const target = ["studies", "settings"].includes(page) ? page : "main";
+  const target = ["studies", "review", "settings"].includes(page) ? page : "main";
   if (els.profileMainPanel) els.profileMainPanel.hidden = target !== "main";
   if (els.profileStudiesPanel) els.profileStudiesPanel.hidden = target !== "studies";
+  if (els.profileReviewPanel) els.profileReviewPanel.hidden = target !== "review";
   if (els.profileSettingsPanel) els.profileSettingsPanel.hidden = target !== "settings";
   if (els.profileSignedInGrid) els.profileSignedInGrid.dataset.profilePage = target;
   if (target === "studies") renderProfileStudiesBreakdown();
+  if (target === "review") loadReviewQueuePage(0);
   if (state.activeView === "profileView") resetViewportScroll();
+}
+
+// SPK-DIC-001 §11 review gate, flag-only (2026-07-30 decision) — this is
+// purely a way for Rachel to work through the ai_generated backlog over
+// time; nothing here hides content, that already happens live via the
+// review-status-badge in createWordCard.
+const REVIEW_QUEUE_PAGE_SIZE = 50;
+
+async function loadReviewQueuePage(offset) {
+  if (!els.reviewQueueList) return;
+  state.reviewQueueOffset = offset;
+  els.reviewQueueList.replaceChildren();
+  const loading = document.createElement("span");
+  loading.className = "empty-state";
+  loading.textContent = "Laddar…";
+  els.reviewQueueList.append(loading);
+  try {
+    const { items, total } = await remoteDb.loadReviewQueuePage(offset, REVIEW_QUEUE_PAGE_SIZE);
+    state.reviewQueueItems = items;
+    state.reviewQueueTotalCount = total;
+    renderReviewQueue();
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load review queue.", error);
+    els.reviewQueueList.replaceChildren();
+    const errorState = document.createElement("span");
+    errorState.className = "empty-state";
+    errorState.textContent = "Kunde inte ladda granskningskön just nu.";
+    els.reviewQueueList.append(errorState);
+  }
+}
+
+function renderReviewQueue() {
+  const items = state.reviewQueueItems || [];
+  const total = state.reviewQueueTotalCount || 0;
+  const offset = state.reviewQueueOffset || 0;
+
+  if (els.reviewQueueTotal) els.reviewQueueTotal.textContent = total;
+  if (els.reviewQueuePageLabel) {
+    const from = total ? offset + 1 : 0;
+    const to = Math.min(offset + items.length, total);
+    els.reviewQueuePageLabel.textContent = `${from}–${to} av ${total}`;
+  }
+  if (els.reviewQueuePrevBtn) els.reviewQueuePrevBtn.disabled = offset <= 0;
+  if (els.reviewQueueNextBtn) els.reviewQueueNextBtn.disabled = offset + items.length >= total;
+  if (els.reviewQueueMarkPageBtn) els.reviewQueueMarkPageBtn.disabled = !items.length;
+
+  els.reviewQueueList.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement("span");
+    empty.className = "empty-state";
+    empty.textContent = "Inget AI-genererat innehåll väntar på granskning. 🎉";
+    els.reviewQueueList.append(empty);
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "reading-sentence-row review-queue-row";
+    const label = document.createElement("p");
+    label.textContent = `${item.swedish} — ${item.chinese || "(ingen översättning)"}`;
+    const markBtn = document.createElement("button");
+    markBtn.type = "button";
+    markBtn.className = "secondary-button";
+    markBtn.textContent = "Markera som granskat";
+    markBtn.addEventListener("click", async () => {
+      markBtn.disabled = true;
+      try {
+        await remoteDb.markWordsReviewed([item.id]);
+        await loadReviewQueuePage(state.reviewQueueOffset);
+        const word = (state.words || []).find((w) => w.id === item.id);
+        if (word) word.status = "human_reviewed";
+      } catch (error) {
+        console.warn("[SpråkLab] Failed to mark word reviewed.", error);
+        alert(error.message || "Kunde inte markera som granskat.");
+        markBtn.disabled = false;
+      }
+    });
+    row.append(label, markBtn);
+    els.reviewQueueList.append(row);
+  });
+}
+
+async function markCurrentReviewPageReviewed() {
+  const items = state.reviewQueueItems || [];
+  if (!items.length || !els.reviewQueueMarkPageBtn) return;
+  els.reviewQueueMarkPageBtn.disabled = true;
+  els.reviewQueueMarkPageBtn.textContent = "Markerar…";
+  try {
+    await remoteDb.markWordsReviewed(items.map((item) => item.id));
+    items.forEach((item) => {
+      const word = (state.words || []).find((w) => w.id === item.id);
+      if (word) word.status = "human_reviewed";
+    });
+    await loadReviewQueuePage(state.reviewQueueOffset);
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to mark page reviewed.", error);
+    alert(error.message || "Kunde inte markera sidan som granskad.");
+  } finally {
+    els.reviewQueueMarkPageBtn.textContent = "Markera alla på denna sida som granskade";
+    els.reviewQueueMarkPageBtn.disabled = false;
+  }
 }
 
 // Fills the "Mina studier" breakdown cards (CEFR distribution, review
@@ -4545,6 +4675,11 @@ function createWordCard(word, mode = "library") {
   // badge doesn't say "Fras" on something filed under Uttryck.
   card.querySelector(".pos-badge").textContent =
     word.object_type === "phrase" ? "Fras" : word.object_type === "expression" ? "Uttryck" : posBadgeLabel(word.pos);
+  // SPK-DIC-001 §11 review gate, flag-only per Rachel's 2026-07-30 decision:
+  // ai_generated content stays fully visible/searchable, just visibly marked
+  // so it's not silently indistinguishable from human_reviewed/published entries.
+  const reviewBadge = card.querySelector(".review-status-badge");
+  if (reviewBadge) reviewBadge.hidden = word.status !== "ai_generated";
   card.querySelector(".meaning").textContent = word.chinese;
   card.querySelector(".english").textContent = word.english || "Svensk förklaring saknas";
 
@@ -9620,22 +9755,19 @@ function bindEvents() {
   els.readingKeyWords?.addEventListener("click", (event) => {
     const chip = event.target.closest("[data-reading-word-id]");
     if (!chip) return;
+    markReadingItemViewedFromElement(chip.closest("[data-reading-item-type]"));
     showReadingWordPreview(chip.dataset.readingWordId);
   });
   els.readingKeyPhrases?.addEventListener("click", (event) => {
     const link = event.target.closest("[data-reading-expression-open-id]");
     if (!link) return;
+    markReadingItemViewedFromElement(link.closest("[data-reading-item-type]"));
     openExpressionFromReadingLink(link.dataset.readingExpressionOpenId);
   });
   els.generateReadingSummaryBtn?.addEventListener("click", generateSummaryForCurrentReadingItem);
   els.readingTextInput?.addEventListener("input", updateReadingWordCountNote);
   els.importReadingPhotoBtn?.addEventListener("click", () => els.readingPhotoFileInput?.click());
   els.readingPhotoFileInput?.addEventListener("change", handleReadingPhotoImport);
-  els.translateSelectionBtn?.addEventListener("click", translateReadingSelection);
-  els.translateFullBtn?.addEventListener("click", translateReadingFullText);
-  els.closeTranslationBtn?.addEventListener("click", () => {
-    els.readingTranslationResult.hidden = true;
-  });
 
   els.favoriteCategoryFilter.addEventListener("change", (event) => {
     state.favoriteCategory = event.target.value;
@@ -10364,6 +10496,13 @@ function bindEvents() {
   });
   els.profileStartCard?.addEventListener("click", () => {
     openAuthDialog("signup");
+  });
+  els.reviewQueueMarkPageBtn?.addEventListener("click", markCurrentReviewPageReviewed);
+  els.reviewQueuePrevBtn?.addEventListener("click", () => {
+    loadReviewQueuePage(Math.max(0, (state.reviewQueueOffset || 0) - REVIEW_QUEUE_PAGE_SIZE));
+  });
+  els.reviewQueueNextBtn?.addEventListener("click", () => {
+    loadReviewQueuePage((state.reviewQueueOffset || 0) + REVIEW_QUEUE_PAGE_SIZE);
   });
   els.profileLogoutButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {

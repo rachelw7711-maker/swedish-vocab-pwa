@@ -5,8 +5,8 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import { analyzeReadingResource, generateReadingSummary, extractTextFromImage, calculateCredits, translateReadingText } from "./server-reading.mjs";
-import { generateWord, promoteCollocationToPhrase, readPublicWords } from "./server-words.mjs";
+import { analyzeReadingResource, generateReadingSummary, extractTextFromImage, calculateCredits } from "./server-reading.mjs";
+import { generateWord, promoteCollocationToPhrase, readPublicWords, markWordsReviewed } from "./server-words.mjs";
 
 const PORT = Number(process.env.PORT || 4174);
 const ROOT = process.cwd();
@@ -557,20 +557,11 @@ createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && req.url === "/api/reading/translate") {
+    if (req.method === "POST" && req.url === "/api/review/mark-reviewed") {
       const user = await readAuthenticatedUser(req);
-      const { text, scopeType, textResourceId } = await readBody(req);
-      if (!text || typeof text !== "string" || !text.trim()) {
-        sendJson(res, 400, { error: "Ingen text att översätta." });
-        return;
-      }
-      const result = await translateReadingText({
-        supabaseAdmin,
-        userId: user.id,
-        textResourceId: textResourceId || null,
-        text,
-        scopeType: scopeType === "full" ? "full" : "selection",
-      });
+      const { ids } = await readBody(req);
+      const result = await markWordsReviewed({ supabaseAdmin, ids });
+      console.info("[Review gate] marked reviewed", { userId: user.id, ...result });
       sendJson(res, 200, result);
       return;
     }

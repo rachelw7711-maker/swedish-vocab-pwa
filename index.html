@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=154" />
+    <link rel="stylesheet" href="/styles.css?v=156" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -332,15 +332,6 @@
             <input class="visually-hidden" id="readingPhotoFileInput" type="file" accept="image/*" capture="environment" />
             <p class="reading-auth-note" id="readingAuthNote" hidden>Logga in för att spara dina texter.</p>
             <p class="reading-word-count-note" id="readingWordCountNote" hidden></p>
-            <div class="reading-translate-row">
-              <button class="secondary-button" id="translateSelectionBtn" type="button">Översätt markering</button>
-              <button class="reading-translate-full-link" id="translateFullBtn" type="button">Översätt hela texten</button>
-            </div>
-            <section class="reading-translation-result" id="readingTranslationResult" hidden>
-              <h4>Översättning</h4>
-              <p id="readingTranslationText"></p>
-              <button class="icon-button" id="closeTranslationBtn" type="button" aria-label="Stäng">×</button>
-            </section>
             <div class="practice-actions">
               <button class="primary-button" id="saveReadingBtn" type="button">Spara</button>
               <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
@@ -499,6 +490,11 @@
                   <span aria-hidden="true">›</span>
                 </button>
 
+                <button class="profile-entry-card" type="button" data-profile-page="review">
+                  <span><strong>🔍 Granska AI-innehåll</strong><small>Markera AI-genererade ordkort som granskade</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
+
                 <button class="profile-entry-card" type="button" data-profile-page="settings">
                   <span><strong>⚙️ Inställningar</strong><small>Appinställningar, språk, synkronisering och mer</small></span>
                   <span aria-hidden="true">›</span>
@@ -559,6 +555,30 @@
                   <small id="profileAiCostHint"></small>
                   <div id="profileAiFeatureBreakdown" class="profile-ai-feature-breakdown"></div>
                 </section>
+              </section>
+
+              <section id="profileReviewPanel" class="profile-subpage profile-secondary-page" hidden>
+                <button class="profile-back-button" type="button" data-profile-back>‹ Profil</button>
+                <header class="profile-secondary-head">
+                  <p class="section-kicker">SPK-DIC-001 §11</p>
+                  <h2>Granska AI-innehåll</h2>
+                  <p>AI-genererat innehåll visas normalt för alla, men är märkt "AI, ogranskat" tills du markerar det här. Ingenting döljs.</p>
+                </header>
+                <section class="profile-overview-card">
+                  <p class="section-kicker">Kvar att granska</p>
+                  <div class="profile-overview-grid">
+                    <article><strong id="reviewQueueTotal">0</strong><span>ord</span></article>
+                  </div>
+                </section>
+                <div class="reading-import-photo-row">
+                  <button class="secondary-button" id="reviewQueueMarkPageBtn" type="button">Markera alla på denna sida som granskade</button>
+                </div>
+                <div id="reviewQueueList" class="reading-chip-list"></div>
+                <div class="reading-import-photo-row">
+                  <button class="secondary-button" id="reviewQueuePrevBtn" type="button">‹ Föregående</button>
+                  <span id="reviewQueuePageLabel"></span>
+                  <button class="secondary-button" id="reviewQueueNextBtn" type="button">Nästa ›</button>
+                </div>
               </section>
 
               <section id="profileSettingsPanel" class="profile-subpage profile-secondary-page" hidden>
@@ -1218,6 +1238,7 @@
             <div class="title-row">
               <h3></h3>
               <span class="pos-badge"></span>
+              <span class="review-status-badge" title="AI-genererat innehåll, ännu inte granskat av en människa" hidden>AI, ogranskat</span>
             </div>
             <p class="meaning"></p>
             <p class="english"></p>
@@ -1236,6 +1257,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=160" type="module"></script>
+    <script src="/app.js?v=162" type="module"></script>
   </body>
 </html>

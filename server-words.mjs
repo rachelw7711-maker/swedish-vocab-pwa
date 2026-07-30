@@ -149,6 +149,34 @@ export async function promoteCollocationToPhrase({ supabaseAdmin, sourceWordId, 
   return row;
 }
 
+// SPK-DIC-001 §11 review gate, flag-only (2026-07-30 decision, see
+// spraklab-ai-review-gate-reminder memory): anon key has no write grant on
+// learning_objects (42501, same reason promoteCollocationToPhrase needs
+// service role), so bumping a word from ai_generated to human_reviewed has
+// to go through the backend too. Only moves ai_generated -> human_reviewed —
+// never touches anything already human_reviewed/published.
+export async function markWordsReviewed({ supabaseAdmin, ids }) {
+  if (!supabaseAdmin) {
+    const error = new Error("Supabase service role is not configured on the server.");
+    error.status = 500;
+    throw error;
+  }
+  const cleanIds = Array.isArray(ids) ? ids.filter((id) => typeof id === "string" && id.trim()) : [];
+  if (!cleanIds.length) {
+    const error = new Error("ids saknas.");
+    error.status = 400;
+    throw error;
+  }
+  const { data, error } = await supabaseAdmin
+    .from("learning_objects")
+    .update({ status: "human_reviewed" })
+    .in("id", cleanIds)
+    .eq("status", "ai_generated")
+    .select("id");
+  if (error) throw error;
+  return { updated: (data || []).length };
+}
+
 export async function readPublicWords({ supabaseAdmin }) {
   if (!supabaseAdmin) {
     const error = new Error("Supabase service role is not configured on the server.");

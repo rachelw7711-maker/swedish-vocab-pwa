@@ -23,6 +23,7 @@ const TABLES = {
   readingItems: "reading_items",
   userPreferences: "user_preferences",
   effectiveStudyTime: "effective_study_time",
+  readingAnalysisItems: "reading_analysis_items",
 };
 
 const PAGE_SIZE = 1000;
@@ -1649,6 +1650,51 @@ export async function deleteReadingItem(itemId) {
   return { enabled: true };
 }
 
+// Per-item discovery-state tracking (2026-07-30, Reviews/阅读模块理念升级与
+// ChatGPT实验-综合review与执行计划-2026-07-30.md 决策3) — row creation itself
+// is service-role only (materialized server-side by analyzeReadingResource
+// the first time this user's reading resolves to a given text_analysis),
+// but the status column is user-owned (RLS: auth.uid() = user_id), so
+// reading it and updating it can go straight through Supabase like any
+// other personal data — no backend detour needed for that part.
+function fromReadingAnalysisItemRow(row) {
+  return {
+    id: row.id,
+    textAnalysisId: row.text_analysis_id,
+    itemType: row.item_type,
+    refId: row.ref_id,
+    itemData: row.item_data || {},
+    sortOrder: row.sort_order,
+    status: row.status,
+  };
+}
+
+export async function loadReadingAnalysisItems(textAnalysisId) {
+  const id = clean(textAnalysisId);
+  if (!id) return [];
+  const { data, error } = await supabase
+    .from(TABLES.readingAnalysisItems)
+    .select("*")
+    .eq("text_analysis_id", id)
+    .order("item_type", { ascending: true })
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(fromReadingAnalysisItemRow);
+}
+
+export async function setReadingAnalysisItemStatus(itemId, status) {
+  const id = clean(itemId);
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from(TABLES.readingAnalysisItems)
+    .update({ status })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? fromReadingAnalysisItemRow(data) : null;
+}
+
 function fromTextAnalysisRow(row) {
   if (!row) return null;
   return {
@@ -1726,23 +1772,6 @@ export async function extractTextFromImage(imageDataUrl) {
   return { text: payload.text || "", warning: payload.warning || "" };
 }
 
-// 规范§11 — sentence/selection translation is the cheap primary entry
-// point; scopeType "full" is the higher-cost, gated option.
-export async function translateReadingText(text, { scopeType = "selection", textResourceId = null } = {}) {
-  const token = await getAccessToken().catch(() => "");
-  const response = await fetch("/api/reading/translate", {
-    method: "POST",
-    headers: {
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ text, scopeType, textResourceId }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || "Kunde inte översätta texten.");
-  return { translatedText: payload.translated_text || "", cached: Boolean(payload.cached) };
-}
-
 // 规范§21 — cost/usage transparency. Reads the user's own ai_usage_logs
 // rows directly (RLS: auth.uid() = user_id, granted at the same migration
 // that created the table) — no server endpoint needed for a read-only
@@ -1782,6 +1811,41 @@ export async function loadAiUsageSummary() {
     cacheHitRate: rows.length ? Math.round((cacheHits / rows.length) * 100) : 0,
     byFeature,
   };
+}
+
+// SPK-DIC-001 §11 review gate, flag-only (2026-07-30 decision) — reads
+// straight from Supabase like any other word list (anon key can already
+// read all of learning_objects), only the actual status write needs the
+// backend (see markWordsReviewed below).
+const REVIEW_QUEUE_PAGE_SIZE = 50;
+
+export async function loadReviewQueuePage(offset = 0, limit = REVIEW_QUEUE_PAGE_SIZE) {
+  const { data, error, count } = await supabase
+    .from(TABLES.words)
+    .select("id, swedish, chinese, part_of_speech, object_type", { count: "exact" })
+    .eq("status", "ai_generated")
+    .order("swedish", { ascending: true })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  return {
+    items: (data || []).map((row) => ({ id: row.id, swedish: row.swedish, chinese: row.chinese, pos: row.part_of_speech, object_type: row.object_type })),
+    total: count || 0,
+  };
+}
+
+export async function markWordsReviewed(ids) {
+  const token = await getAccessToken().catch(() => "");
+  const response = await fetch("/api/review/mark-reviewed", {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ ids }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Kunde inte markera som granskat.");
+  return { updated: payload.updated || 0 };
 }
 
 export async function loadTextAnalysis(textResourceId) {

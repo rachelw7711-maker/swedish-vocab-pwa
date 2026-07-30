@@ -42,12 +42,6 @@ export function calculateCredits(feature, wordCount = 0) {
       return 35;
     case "summary":
       return 5;
-    case "translate_sentence":
-      return 1;
-    case "translate_paragraph":
-      return Math.max(3, Math.min(5, Math.ceil(wordCount / 40)));
-    case "translate_full":
-      return wordCount <= 500 ? 15 : 30;
     default:
       return 0;
   }
@@ -362,7 +356,7 @@ async function extractKeyExpressions(cleanedText, tier) {
 
 2. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
 
-3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): the sentences most worth close reading — ones that state the main idea, carry a key fact, show cause/effect or a stance/turn, or are grammatically representative. Mark shadowing_suitable=true for ones that are also good standalone practice material for spoken repetition (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context).
+3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences worth reading aloud and repeating — chosen because they showcase a grammatical structure worth noticing (a tense, a subordinate clause, a passive construction, a notable word order) or because they're excellent standalone material for spoken practice (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context). Do NOT pick a sentence just because it is an important plot point or states a key fact — a sentence that only restates something the reader already understood from following the story (e.g. "this is where the twist happens") has no language-learning value by itself and must not be included. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences.
 
 Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.`,
     userPrompt: cleanedText,
@@ -458,6 +452,35 @@ function logUsage(entries, { userId, textResourceId, feature, model, usage, cach
   });
 }
 
+// Per-item discovery-state tracking (2026-07-30 decision, Reviews/阅读模块
+//理念升级与ChatGPT实验-综合review与执行计划-2026-07-30.md 决策3). Materializes
+// one reading_analysis_items row per surfaced vocabulary/expression/
+// sentence, scoped to THIS user — called on every path that resolves to a
+// text_analysis (fresh generation, the user's own cache hit, or reusing
+// someone else's public analysis), since a shared analysis still needs
+// independent per-user status. Upsert with ignoreDuplicates so re-opening
+// the same analysis never resets an already-set status back to "new".
+async function materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis }) {
+  if (!userId || !analysis?.id) return;
+  const rows = [
+    ...(analysis.selected_vocabulary || []).map((item) => ({ item_type: "vocabulary", ref_id: item.word_id || null, item })),
+    ...(analysis.selected_expressions || []).map((item) => ({ item_type: "expression", ref_id: item.expression_id || null, item })),
+    ...(analysis.key_sentences || []).map((item) => ({ item_type: "sentence", ref_id: null, item })),
+  ].map(({ item_type, ref_id, item }) => ({
+    text_analysis_id: analysis.id,
+    user_id: userId,
+    item_type,
+    ref_id,
+    item_data: item,
+    sort_order: item.sort_order ?? 0,
+  }));
+  if (!rows.length) return;
+  const { error } = await supabaseAdmin
+    .from("reading_analysis_items")
+    .upsert(rows, { onConflict: "text_analysis_id,user_id,item_type,sort_order", ignoreDuplicates: true });
+  if (error) console.warn("[Reading] Failed to materialize reading_analysis_items.", error);
+}
+
 // Main entry point. Returns { textResource, analysis, tier, cached }.
 export async function analyzeReadingResource({ supabaseAdmin, userId, text, sourceType = "paste" }) {
   const cleaned = cleanText(text);
@@ -500,6 +523,7 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
     .maybeSingle();
 
   if (existingAnalysis) {
+    await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: existingAnalysis });
     return { textResource, analysis: existingAnalysis, tier, cached: true };
   }
 
@@ -517,6 +541,7 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   // another user's submission is exposed here beyond the shared analysis.
   const publicAnalysis = await findPublicAnalysisByHash(supabaseAdmin, hash);
   if (publicAnalysis) {
+    await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: publicAnalysis });
     return { textResource, analysis: publicAnalysis, tier, cached: true, reusedFromPublic: true };
   }
 
@@ -606,6 +631,7 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   });
   if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
 
+  await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: analysisRow });
   return { textResource, analysis: analysisRow, tier, cached: false };
 }
 
@@ -647,58 +673,4 @@ export async function generateReadingSummary({ supabaseAdmin, userId, textResour
   }
 
   return { summary_sv: result.summary_sv, summary_zh: result.summary_zh, cached: false };
-}
-
-// 规范§11 — sentence/selection translation is the cheap primary entry
-// point; full-text is the high-consumption option, gated the same way full
-// analysis is (规范§5): allowed <=500 words, still allowed but flagged as
-// higher-cost at 501-1000, forbidden above that. Cached by the exact text's
-// hash, reusable across articles (规范§15) — not scoped to one
-// text_resource, same "Generate Once, Reuse Forever" principle as analysis.
-export async function translateReadingText({ supabaseAdmin, userId, textResourceId, text, scopeType }) {
-  const trimmed = cleanText(text);
-  if (!trimmed) {
-    const error = new Error("Ingen text att översätta.");
-    error.status = 400;
-    throw error;
-  }
-  const wordCount = countWords(trimmed);
-  if (scopeType === "full" && wordCount > LENGTH_TIERS.overlong.maxWords) {
-    const error = new Error(`Texten är för lång för att översätta i sin helhet (${wordCount} ord, max ${LENGTH_TIERS.overlong.maxWords}). Markera ett kortare stycke istället.`);
-    error.status = 400;
-    throw error;
-  }
-
-  const hash = textHash(trimmed);
-  const { data: cached } = await supabaseAdmin
-    .from("translations")
-    .select("translated_text")
-    .eq("source_text_hash", hash)
-    .eq("scope_type", scopeType)
-    .eq("target_language", "zh")
-    .order("translation_version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (cached) return { translated_text: cached.translated_text, cached: true };
-
-  const schema = { type: "object", additionalProperties: false, properties: { translated_text: { type: "string" } }, required: ["translated_text"] };
-  const { result, usage } = await callOpenAI({
-    schemaName: "reading_translation",
-    schema,
-    maxOutputTokens: Math.min(4000, Math.max(500, wordCount * 8)),
-    systemPrompt: "Translate the given Swedish text into natural, fluent Simplified Chinese. Preserve meaning and register; do not add commentary or explanation, only the translation.",
-    userPrompt: trimmed,
-  });
-
-  const { error: insertError } = await supabaseAdmin
-    .from("translations")
-    .insert({ text_resource_id: textResourceId || null, scope_type: scopeType, source_text_hash: hash, target_language: "zh", translated_text: result.translated_text, translation_version: 1 });
-  if (insertError) throw insertError;
-
-  const feature = scopeType === "full" ? "translate_full" : wordCount <= 15 ? "translate_sentence" : "translate_paragraph";
-  const usageLogEntries = [];
-  logUsage(usageLogEntries, { userId, textResourceId, feature, model: MODEL, usage, cacheHit: false, credits: calculateCredits(feature, wordCount) });
-  await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
-
-  return { translated_text: result.translated_text, cached: false };
 }
