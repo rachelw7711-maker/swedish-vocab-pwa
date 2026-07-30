@@ -4273,6 +4273,56 @@ h2 {
   flex-wrap: wrap;
 }
 
+.reading-report-card {
+  border-radius: 16px;
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reading-report-card h4 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.reading-report-stats,
+.reading-report-grid,
+.reading-report-time {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.reading-report-stats strong,
+.reading-report-grid strong,
+.reading-report-time strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.reading-report-label {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  font-weight: 660;
+  color: var(--accent-strong);
+}
+
+.reading-report-compression,
+.reading-report-total {
+  margin: 2px 0 0;
+  font-size: 0.84rem;
+}
+
+.reading-report-compression strong,
+.reading-report-total strong {
+  font-variant-numeric: tabular-nums;
+}
+
 .reading-textbook-glossary {
   border-radius: 14px;
   background: var(--accent-soft);

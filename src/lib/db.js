@@ -1855,9 +1855,9 @@ export async function markWordsReviewed(ids) {
 export async function loadTextResource(textResourceId) {
   const id = clean(textResourceId);
   if (!id) return null;
-  const { data, error } = await supabase.from("text_resources").select("id, textbook_glossary").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("text_resources").select("id, word_count, textbook_glossary").eq("id", id).maybeSingle();
   if (error) throw error;
-  return data ? { id: data.id, textbookGlossary: data.textbook_glossary || [] } : null;
+  return data ? { id: data.id, wordCount: data.word_count || 0, textbookGlossary: data.textbook_glossary || [] } : null;
 }
 
 export async function loadTextAnalysis(textResourceId) {

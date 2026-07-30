@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=157" />
+    <link rel="stylesheet" href="/styles.css?v=158" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -342,6 +342,28 @@
               <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
             </div>
             <section id="readingAnalysisPanel" hidden>
+              <section class="reading-report-card" id="readingReportCard" hidden>
+                <h4>📖 Läsrapport</h4>
+                <div class="reading-report-stats">
+                  <span>Textlängd: <strong data-report-word-count></strong></span>
+                  <span data-report-cefr-row hidden>Nivå: <strong data-report-cefr></strong></span>
+                </div>
+                <p class="reading-report-label">🎯 AI-urval</p>
+                <div class="reading-report-grid">
+                  <span>⭐ Nyckelord <strong data-report-vocab></strong></span>
+                  <span>💬 Fraser <strong data-report-colloc></strong></span>
+                  <span>🌍 Uttryck <strong data-report-idiom></strong></span>
+                  <span>📌 Meningar <strong data-report-sentences></strong></span>
+                </div>
+                <p class="reading-report-compression">Kunskapskompression: <strong data-report-compression></strong></p>
+                <p class="reading-report-label">⏱ Uppskattad studietid</p>
+                <div class="reading-report-time">
+                  <span>Läsning <strong data-report-read-min></strong> min</span>
+                  <span>Ordinlärning <strong data-report-learn-min></strong> min</span>
+                  <span>Repetition <strong data-report-review-min></strong> min</span>
+                </div>
+                <p class="reading-report-total">Totalt ca <strong data-report-total-min></strong> min</p>
+              </section>
               <div class="reading-summary-block">
                 <h4>Sammanfattning</h4>
                 <button class="secondary-button" id="generateReadingSummaryBtn" type="button">Generera sammanfattning</button>
@@ -1262,6 +1284,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=163" type="module"></script>
+    <script src="/app.js?v=164" type="module"></script>
   </body>
 </html>

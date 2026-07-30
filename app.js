@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=133";
+import * as remoteDb from "./src/lib/db.js?v=134";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -561,6 +561,7 @@ const els = {
   importReadingPhotoBtn: document.querySelector("#importReadingPhotoBtn"),
   readingPhotoFileInput: document.querySelector("#readingPhotoFileInput"),
   readingPhotoStatus: document.querySelector("#readingPhotoStatus"),
+  readingReportCard: document.querySelector("#readingReportCard"),
   readingTextbookGlossary: document.querySelector("#readingTextbookGlossary"),
   readingTextbookGlossaryList: document.querySelector("#readingTextbookGlossaryList"),
   readingKeySentences: document.querySelector("#readingKeySentences"),
@@ -2779,6 +2780,7 @@ function openReadingEditor(item = null) {
   state.selectedReadingId = item?.id || "";
   state.currentReadingAnalysis = null;
   state.readingPendingGlossary = [];
+  state.currentReadingWordCount = 0;
   renderTextbookGlossary([]);
   els.readingItemId.value = item?.id || "";
   els.readingTitleInput.value = item?.title || "";
@@ -2799,10 +2801,14 @@ function openReadingEditor(item = null) {
   // synchronously above.
   if (item?.text_resource_id) {
     remoteDb.loadTextResource(item.text_resource_id).then((resource) => {
-      if (els.readingItemId.value !== item.id || !resource?.textbookGlossary?.length) return;
-      state.readingPendingGlossary = resource.textbookGlossary;
-      renderTextbookGlossary(resource.textbookGlossary);
-    }).catch((error) => console.warn("[SpråkLab] Failed to load text resource glossary.", error));
+      if (els.readingItemId.value !== item.id || !resource) return;
+      state.currentReadingWordCount = resource.wordCount;
+      if (resource.textbookGlossary.length) {
+        state.readingPendingGlossary = resource.textbookGlossary;
+        renderTextbookGlossary(resource.textbookGlossary);
+      }
+      renderReadingReport();
+    }).catch((error) => console.warn("[SpråkLab] Failed to load text resource.", error));
     remoteDb.loadTextAnalysis(item.text_resource_id).then((analysis) => {
       if (els.readingItemId.value !== item.id) return; // user navigated away
       if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
@@ -2911,6 +2917,7 @@ async function analyzeCurrentReadingItem() {
     const finalItem = result?.item || updated;
     state.readingItems = state.readingItems.map((item) => (item.id === finalItem.id ? finalItem : item));
     state.currentReadingAnalysis = analysis;
+    state.currentReadingWordCount = textResource.word_count || readingWordCount(textToAnalyze);
     renderReadingAnalysis(analysis);
     updateReadingSteps("analyzed");
   } catch (error) {
@@ -3042,6 +3049,72 @@ function renderReadingAnalysis(analysis) {
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = !hasShadowingSentences;
 
   enhanceReadingAnalysisWithItemState(analysis);
+  renderReadingReport();
+}
+
+// "Learning Report" card (tier-2 item 5 of Reviews/阅读模块设计想法-专业
+// review-2026-07-27.md §十三, unblocked 2026-07-30 by reading_analysis_items
+// existing) — adapted from the mockup in 关于阅读模块的实验及思考.pages, but
+// reconciled against what SpråkLab actually surfaces today: no "Patterns"
+// row (that category was cut, see the same session's review doc), and CEFR
+// level is estimated for free from the already-loaded corpus data for the
+// selected vocabulary (no new AI call) rather than invented. Compression
+// ratio and time estimates are explicitly labeled as estimates — they're a
+// simple heuristic over counts already on screen, not a measured fact.
+function computeReadingReport(analysis, wordCount) {
+  if (!analysis || !wordCount) return null;
+  const vocabCount = (analysis.selectedVocabulary || []).length;
+  const collocCount = (analysis.selectedExpressions || []).filter((e) => e.category !== "idiom").length;
+  const idiomCount = (analysis.selectedExpressions || []).filter((e) => e.category === "idiom").length;
+  const sentenceCount = (analysis.keySentences || []).length;
+  const itemCount = vocabCount + collocCount + idiomCount + sentenceCount;
+
+  const cefrOrder = ["A1", "A2", "B1", "B2", "C1", "C2"];
+  const levels = (analysis.selectedVocabulary || [])
+    .map((entry) => state.words.find((w) => w.id === entry.word_id)?.cefr_level)
+    .filter((level) => cefrOrder.includes(level))
+    .sort((a, b) => cefrOrder.indexOf(a) - cefrOrder.indexOf(b));
+  const cefrRange = levels.length ? (levels[0] === levels[levels.length - 1] ? levels[0] : `${levels[0]}-${levels[levels.length - 1]}`) : "";
+
+  const readMinutes = Math.max(1, Math.round(wordCount / 150));
+  const learnMinutes = Math.max(1, Math.round(itemCount * 0.6));
+  const reviewMinutes = Math.max(1, Math.round(itemCount * 0.3));
+
+  return {
+    wordCount,
+    cefrRange,
+    vocabCount,
+    collocCount,
+    idiomCount,
+    sentenceCount,
+    compressionRatio: wordCount ? ((itemCount / wordCount) * 100).toFixed(1) : "0.0",
+    readMinutes,
+    learnMinutes,
+    reviewMinutes,
+    totalMinutes: readMinutes + learnMinutes + reviewMinutes,
+  };
+}
+
+function renderReadingReport() {
+  if (!els.readingReportCard) return;
+  const report = computeReadingReport(state.currentReadingAnalysis, state.currentReadingWordCount);
+  els.readingReportCard.hidden = !report;
+  if (!report) return;
+  els.readingReportCard.querySelector("[data-report-word-count]").textContent = `${report.wordCount} ord`;
+  const cefrRow = els.readingReportCard.querySelector("[data-report-cefr-row]");
+  if (cefrRow) {
+    cefrRow.hidden = !report.cefrRange;
+    if (report.cefrRange) cefrRow.querySelector("[data-report-cefr]").textContent = report.cefrRange;
+  }
+  els.readingReportCard.querySelector("[data-report-vocab]").textContent = report.vocabCount;
+  els.readingReportCard.querySelector("[data-report-colloc]").textContent = report.collocCount;
+  els.readingReportCard.querySelector("[data-report-idiom]").textContent = report.idiomCount;
+  els.readingReportCard.querySelector("[data-report-sentences]").textContent = report.sentenceCount;
+  els.readingReportCard.querySelector("[data-report-compression]").textContent = `${report.compressionRatio}%`;
+  els.readingReportCard.querySelector("[data-report-read-min]").textContent = report.readMinutes;
+  els.readingReportCard.querySelector("[data-report-learn-min]").textContent = report.learnMinutes;
+  els.readingReportCard.querySelector("[data-report-review-min]").textContent = report.reviewMinutes;
+  els.readingReportCard.querySelector("[data-report-total-min]").textContent = report.totalMinutes;
 }
 
 // Per-item discovery-state tracking (2026-07-30 decision) — progressive
