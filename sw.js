@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v93";
+const CACHE_NAME = "ordbok-v94";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",
@@ -73,7 +73,16 @@ self.addEventListener("fetch", (event) => {
     url.pathname.endsWith("/styles.css") ||
     url.pathname.endsWith("/app.js") ||
     url.pathname.endsWith("/manifest.webmanifest");
-  if (networkFirstAsset) {
+  // 2026-07-30 fix: Supabase REST/Auth calls (cross-origin) were falling
+  // through to cacheFirst like a static asset, so once a query URL (e.g.
+  // "all of this user's reading_items") was cached, later real changes to
+  // that same data (a new highlight/note, anything) stayed invisible on
+  // reload until the next deploy's cache-name bump wiped it — found while
+  // verifying sentence highlights/notes didn't survive a reload. API data
+  // should prefer live network and only fall back to cache when actually
+  // offline, same as networkFirst already does for the app shell.
+  const isSupabaseApi = url.pathname.startsWith("/rest/v1/") || url.pathname.startsWith("/auth/v1/");
+  if (networkFirstAsset || isSupabaseApi) {
     event.respondWith(networkFirst(event.request));
     return;
   }

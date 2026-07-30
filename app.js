@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=134";
+import * as remoteDb from "./src/lib/db.js?v=135";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -563,6 +563,8 @@ const els = {
   readingPhotoFileInput: document.querySelector("#readingPhotoFileInput"),
   readingPhotoStatus: document.querySelector("#readingPhotoStatus"),
   readingReportCard: document.querySelector("#readingReportCard"),
+  readingAnnotateSection: document.querySelector("#readingAnnotateSection"),
+  readingAnnotateText: document.querySelector("#readingAnnotateText"),
   readingTextbookGlossary: document.querySelector("#readingTextbookGlossary"),
   readingTextbookGlossaryList: document.querySelector("#readingTextbookGlossaryList"),
   readingKeySentences: document.querySelector("#readingKeySentences"),
@@ -2839,6 +2841,7 @@ function openReadingEditor(item = null) {
   els.analyzeReadingBtn.hidden = !item?.id;
   if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = !item?.id;
   updateReadingWordCountNote();
+  renderReadingAnnotateSection(item);
   els.readingAnalysisPanel.hidden = true;
   if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = true;
@@ -2913,6 +2916,7 @@ async function saveCurrentReadingItem() {
     els.analyzeReadingBtn.hidden = false;
     if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = false;
     updateReadingSteps("saved");
+    renderReadingAnnotateSection(saved);
     return saved;
   } catch (error) {
     console.warn("[SpråkLab] Failed to save reading item.", error);
@@ -3385,6 +3389,81 @@ async function sendSelectedSentencesToShadowing() {
   });
 }
 
+// Sentence highlight/notes (2026-07-30, tier-3 item 10 of Reviews/阅读模块
+// 设计想法-专业review-2026-07-27.md §十三) — a lightweight sentence split
+// (same simple .!? heuristic used elsewhere for sentence counting), each
+// sentence clickable to toggle a highlight; a highlighted sentence gets an
+// inline note box. Persisted straight onto reading_items.notes via the
+// existing upsertReadingItem, same as any other item edit — no new table.
+function splitReadingSentences(text) {
+  return (clean(text).match(/[^.!?]+[.!?]*/g) || []).map((s) => s.trim()).filter(Boolean);
+}
+
+function renderReadingAnnotateSection(item) {
+  if (!els.readingAnnotateSection || !els.readingAnnotateText) return;
+  if (!item?.id || !clean(item.source_text)) {
+    els.readingAnnotateSection.hidden = true;
+    return;
+  }
+  els.readingAnnotateSection.hidden = false;
+  const sentences = splitReadingSentences(item.source_text);
+  const notesByIndex = new Map((item.notes || []).map((n) => [n.sentenceIndex, n]));
+  els.readingAnnotateText.replaceChildren();
+  sentences.forEach((sentence, index) => {
+    const wrap = document.createElement("span");
+    wrap.className = "reading-annotate-sentence-wrap";
+    const span = document.createElement("span");
+    span.className = "reading-annotate-sentence";
+    span.textContent = `${sentence} `;
+    span.dataset.sentenceIndex = index;
+    const noteEntry = notesByIndex.get(index);
+    if (noteEntry) {
+      span.classList.add("highlighted");
+      const noteBox = document.createElement("textarea");
+      noteBox.className = "reading-annotate-note";
+      noteBox.placeholder = "Skriv en anteckning om den här meningen…";
+      noteBox.value = noteEntry.note || "";
+      noteBox.dataset.sentenceIndex = index;
+      wrap.append(span, noteBox);
+    } else {
+      wrap.append(span);
+    }
+    els.readingAnnotateText.append(wrap);
+  });
+}
+
+async function persistReadingNotes(updatedNotes) {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  if (!item) return;
+  try {
+    const result = await remoteDb.upsertReadingItem({ ...item, notes: updatedNotes });
+    const saved = result?.item || { ...item, notes: updatedNotes };
+    state.readingItems = state.readingItems.map((entry) => (entry.id === saved.id ? saved : entry));
+    renderReadingAnnotateSection(saved);
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to save reading note.", error);
+  }
+}
+
+function toggleReadingSentenceHighlight(sentenceIndex) {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  if (!item) return;
+  const sentences = splitReadingSentences(item.source_text);
+  const notes = item.notes || [];
+  const exists = notes.some((n) => n.sentenceIndex === sentenceIndex);
+  const updatedNotes = exists
+    ? notes.filter((n) => n.sentenceIndex !== sentenceIndex)
+    : [...notes, { sentenceIndex, text: sentences[sentenceIndex] || "", note: "" }];
+  persistReadingNotes(updatedNotes);
+}
+
+function updateReadingSentenceNote(sentenceIndex, noteText) {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  if (!item) return;
+  const updatedNotes = (item.notes || []).map((n) => (n.sentenceIndex === sentenceIndex ? { ...n, note: noteText } : n));
+  persistReadingNotes(updatedNotes);
+}
+
 // Read-only export of a reading item's full analysis (2026-07-30, tier-3
 // item 7 of Reviews/阅读模块设计想法-专业review-2026-07-27.md §十三) — reuses
 // the existing #exportPreviewDialog (share/print/close) already built for
@@ -3408,6 +3487,7 @@ function openReadingExportPreview() {
     example: entry.source_sentence,
   }));
   const sentenceRows = (analysis?.keySentences || []).map((entry) => ({ sv: entry.sentence, zh: entry.translation_zh }));
+  const noteRows = (item.notes || []).filter((n) => clean(n.note));
 
   const title = item.title || "(Utan titel)";
   els.exportPreviewTitle.textContent = title;
@@ -3423,6 +3503,7 @@ function openReadingExportPreview() {
     vocabRows.length ? `\n== Ord värda att lära sig ==\n${vocabRows.map((r) => `${r.sv} - ${r.zh}`).join("\n")}` : "",
     phraseRows.length ? `\n== Fraser & Uttryck ==\n${phraseRows.map((r) => `${r.sv} - ${r.zh} (${r.example})`).join("\n")}` : "",
     sentenceRows.length ? `\n== Viktiga meningar ==\n${sentenceRows.map((r) => `${r.sv} - ${r.zh}`).join("\n")}` : "",
+    noteRows.length ? `\n== Mina anteckningar ==\n${noteRows.map((n) => `${n.text}\n→ ${n.note}`).join("\n\n")}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -3442,6 +3523,9 @@ function openReadingExportPreview() {
   const sentenceBlock = sentenceRows.length
     ? `<section><h3>Viktiga meningar</h3><ul>${sentenceRows.map((r) => `<li>${escapeHtml(r.sv)}<br/><span class="example-translation">${escapeHtml(r.zh)}</span></li>`).join("")}</ul></section>`
     : "";
+  const noteBlock = noteRows.length
+    ? `<section><h3>Mina anteckningar</h3><ul>${noteRows.map((n) => `<li>${escapeHtml(n.text)}<br/><span class="example-translation">${escapeHtml(n.note)}</span></li>`).join("")}</ul></section>`
+    : "";
 
   els.exportPreviewContent.innerHTML = `
     <header class="export-preview-document-header">
@@ -3449,7 +3533,7 @@ function openReadingExportPreview() {
       ${statsLine}
     </header>
     <section><h3>Text</h3><p class="export-reading-source-text">${escapeHtml(item.source_text || "")}</p></section>
-    ${summaryBlock}${vocabBlock}${phraseBlock}${sentenceBlock}
+    ${summaryBlock}${vocabBlock}${phraseBlock}${sentenceBlock}${noteBlock}
     ${!analysis ? '<div class="empty-state">Texten är inte analyserad än — endast originaltexten exporteras.</div>' : ""}
   `;
   if (!els.exportPreviewDialog.open) els.exportPreviewDialog.showModal();
@@ -9982,6 +10066,20 @@ function bindEvents() {
   els.sendSelectedSentencesToShadowingBtn?.addEventListener("click", sendSelectedSentencesToShadowing);
   els.openInShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
   els.exportReadingBtn?.addEventListener("click", openReadingExportPreview);
+  els.readingAnnotateText?.addEventListener("click", (event) => {
+    const span = event.target.closest(".reading-annotate-sentence");
+    if (!span) return;
+    toggleReadingSentenceHighlight(Number(span.dataset.sentenceIndex));
+  });
+  els.readingAnnotateText?.addEventListener(
+    "blur",
+    (event) => {
+      const box = event.target.closest?.(".reading-annotate-note");
+      if (!box) return;
+      updateReadingSentenceNote(Number(box.dataset.sentenceIndex), box.value);
+    },
+    true,
+  );
   els.readingShadowingEntryCard?.addEventListener("click", openReadingShadowingEntry);
   els.readingList?.addEventListener("click", (event) => {
     const card = event.target.closest("[data-reading-id]");

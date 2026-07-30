@@ -1594,6 +1594,11 @@ function toReadingItemRow(userId, item = {}) {
     source_text: clean(item.source_text || item.sourceText),
     text_resource_id: item.text_resource_id || null,
     shadowing_item_id: item.shadowing_item_id || null,
+    // Sentence highlights/notes (2026-07-30) — [{sentenceIndex, text, note}],
+    // same "small JSON blob on the owning row" pattern as user_words'
+    // personal_note rather than a whole new table, since this is purely
+    // the user's own private annotation of their own saved text.
+    notes: Array.isArray(item.notes) ? item.notes : [],
     created_at: millisToIso(item.createdAt || item.created_at) || undefined,
     updated_at: new Date().toISOString(),
     deleted_at: item.deleted_at ? millisToIso(item.deleted_at) : null,
@@ -1607,6 +1612,7 @@ function fromReadingItemRow(row) {
     source_text: row.source_text,
     text_resource_id: row.text_resource_id,
     shadowing_item_id: row.shadowing_item_id,
+    notes: Array.isArray(row.notes) ? row.notes : [],
     createdAt: dateToMillis(row.created_at),
     updatedAt: dateToMillis(row.updated_at),
   };
