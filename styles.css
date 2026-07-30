@@ -3865,6 +3865,30 @@ h2 {
   font-weight: 700;
 }
 
+.export-reading-stats {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.export-reading-source-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.export-preview-content h3 {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+}
+
+.export-preview-content ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
 .export-preview-table-wrap {
   overflow-x: auto;
 }

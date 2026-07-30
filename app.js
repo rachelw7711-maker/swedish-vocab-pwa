@@ -570,6 +570,7 @@ const els = {
   readingWordPreview: document.querySelector("#readingWordPreview"),
   generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
   sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
+  exportReadingBtn: document.querySelector("#exportReadingBtn"),
   backToBooksBtn: document.querySelector("#backToBooksBtn"),
   bookActionMenu: document.querySelector("#bookActionMenu"),
   historyList: document.querySelector("#historyList"),
@@ -3382,6 +3383,76 @@ async function sendSelectedSentencesToShadowing() {
     textResourceId: item?.text_resource_id,
     linkToReadingItem: false,
   });
+}
+
+// Read-only export of a reading item's full analysis (2026-07-30, tier-3
+// item 7 of Reviews/阅读模块设计想法-专业review-2026-07-27.md §十三) — reuses
+// the existing #exportPreviewDialog (share/print/close) already built for
+// Ordbok exports, per that same doc's principle "导出是内部记录的外部副本
+// ...导出不重新调用AI": everything here comes from data already loaded in
+// this session, nothing is generated fresh.
+function openReadingExportPreview() {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  const analysis = state.currentReadingAnalysis;
+  if (!item) return;
+  const report = analysis ? computeReadingReport(analysis, state.currentReadingWordCount) : null;
+
+  const vocabRows = (analysis?.selectedVocabulary || []).map((entry) => {
+    const word = state.words.find((w) => w.id === entry.word_id);
+    return { sv: word?.swedish || entry.swedish || "", zh: word?.chinese || "" };
+  });
+  const phraseRows = (analysis?.selectedExpressions || []).map((entry) => ({
+    label: entry.category === "idiom" ? "Uttryck" : "Fras",
+    sv: entry.expression_text,
+    zh: entry.meaning_zh,
+    example: entry.source_sentence,
+  }));
+  const sentenceRows = (analysis?.keySentences || []).map((entry) => ({ sv: entry.sentence, zh: entry.translation_zh }));
+
+  const title = item.title || "(Utan titel)";
+  els.exportPreviewTitle.textContent = title;
+  els.exportPreviewDialog.dataset.exportTitle = title;
+  els.exportPreviewDialog.dataset.exportType = "reading";
+  els.exportPreviewDialog.dataset.exportText = [
+    title,
+    report ? `${report.wordCount} ord${report.cefrRange ? " · " + report.cefrRange : ""}` : "",
+    "",
+    "== Text ==",
+    item.source_text || "",
+    analysis?.summarySv ? `\n== Sammanfattning ==\n${analysis.summarySv}\n${analysis.summaryZh || ""}` : "",
+    vocabRows.length ? `\n== Ord värda att lära sig ==\n${vocabRows.map((r) => `${r.sv} - ${r.zh}`).join("\n")}` : "",
+    phraseRows.length ? `\n== Fraser & Uttryck ==\n${phraseRows.map((r) => `${r.sv} - ${r.zh} (${r.example})`).join("\n")}` : "",
+    sentenceRows.length ? `\n== Viktiga meningar ==\n${sentenceRows.map((r) => `${r.sv} - ${r.zh}`).join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const statsLine = report
+    ? `<p class="export-reading-stats">${report.wordCount} ord${report.cefrRange ? ` · ${report.cefrRange}` : ""} · ${report.vocabCount} nyckelord · ${report.collocCount} fraser · ${report.idiomCount} uttryck · ${report.sentenceCount} meningar</p>`
+    : "";
+  const summaryBlock = analysis?.summarySv
+    ? `<section><h3>Sammanfattning</h3><p>${escapeHtml(analysis.summarySv)}</p><p class="example-translation">${escapeHtml(analysis.summaryZh || "")}</p></section>`
+    : "";
+  const vocabBlock = vocabRows.length
+    ? `<section><h3>Ord värda att lära sig</h3><ul>${vocabRows.map((r) => `<li><strong>${escapeHtml(r.sv)}</strong> — ${escapeHtml(r.zh)}</li>`).join("")}</ul></section>`
+    : "";
+  const phraseBlock = phraseRows.length
+    ? `<section><h3>Fraser &amp; Uttryck</h3><ul>${phraseRows.map((r) => `<li><strong>${escapeHtml(r.sv)}</strong> (${escapeHtml(r.label)}) — ${escapeHtml(r.zh)}<br/><span class="example-translation">${escapeHtml(r.example)}</span></li>`).join("")}</ul></section>`
+    : "";
+  const sentenceBlock = sentenceRows.length
+    ? `<section><h3>Viktiga meningar</h3><ul>${sentenceRows.map((r) => `<li>${escapeHtml(r.sv)}<br/><span class="example-translation">${escapeHtml(r.zh)}</span></li>`).join("")}</ul></section>`
+    : "";
+
+  els.exportPreviewContent.innerHTML = `
+    <header class="export-preview-document-header">
+      <h1>${escapeHtml(title)}</h1>
+      ${statsLine}
+    </header>
+    <section><h3>Text</h3><p class="export-reading-source-text">${escapeHtml(item.source_text || "")}</p></section>
+    ${summaryBlock}${vocabBlock}${phraseBlock}${sentenceBlock}
+    ${!analysis ? '<div class="empty-state">Texten är inte analyserad än — endast originaltexten exporteras.</div>' : ""}
+  `;
+  if (!els.exportPreviewDialog.open) els.exportPreviewDialog.showModal();
 }
 
 async function deleteCurrentReadingItem() {
@@ -9910,6 +9981,7 @@ function bindEvents() {
   els.sendReadingToShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
   els.sendSelectedSentencesToShadowingBtn?.addEventListener("click", sendSelectedSentencesToShadowing);
   els.openInShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
+  els.exportReadingBtn?.addEventListener("click", openReadingExportPreview);
   els.readingShadowingEntryCard?.addEventListener("click", openReadingShadowingEntry);
   els.readingList?.addEventListener("click", (event) => {
     const card = event.target.closest("[data-reading-id]");

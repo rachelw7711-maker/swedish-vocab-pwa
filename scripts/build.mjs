@@ -39,7 +39,7 @@ const checks = [
       'href="/icons/favicon.ico?v=22"',
       'href="/icons/apple-touch-icon.png?v=22"',
       'src="/icons/app-icon.png?v=22"',
-      'src="/app.js?v=166"',
+      'src="/app.js?v=167"',
       'rel="shortcut icon"',
       'rel="apple-touch-icon"',
       'type="image/png"',
@@ -54,7 +54,7 @@ const checks = [
   {
     file: "sw.js",
     mustInclude: [
-      'const CACHE_NAME = "ordbok-v92";',
+      'const CACHE_NAME = "ordbok-v93";',
       '"./node_modules/@supabase/supabase-js/dist/umd/supabase.js"',
       '"./icons/app-icon.png"',
       '"./icons/apple-touch-icon.png"',
