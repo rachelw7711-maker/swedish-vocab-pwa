@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     }
 
     const userId = await readUserId(req);
-    const { text, sourceType } = req.body || {};
+    const { text, sourceType, glossary } = req.body || {};
     const trimmed = clean(text);
     if (!trimmed) {
       sendJson(res, 400, { error: "Klistra in en text att analysera." });
@@ -75,6 +75,7 @@ export default async function handler(req, res) {
       userId,
       text: trimmed,
       sourceType: sourceType || "paste",
+      glossary: Array.isArray(glossary) ? glossary : [],
     });
     sendJson(res, 200, { textResource, analysis, tier, cached });
   } catch (error) {

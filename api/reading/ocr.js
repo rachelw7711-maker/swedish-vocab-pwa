@@ -63,9 +63,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { text, usage } = await extractTextFromImage({ imageDataUrl });
+    const { text, glossary, usage } = await extractTextFromImage({ imageDataUrl });
     if (!text) {
-      sendJson(res, 200, { text: "", warning: "Ingen läsbar svensk text hittades i bilden." });
+      sendJson(res, 200, { text: "", glossary: [], warning: "Ingen läsbar svensk text hittades i bilden." });
       return;
     }
 
@@ -85,7 +85,7 @@ export default async function handler(req, res) {
       cache_hit: false,
     });
 
-    sendJson(res, 200, { text });
+    sendJson(res, 200, { text, glossary });
   } catch (error) {
     console.error("[api/reading/ocr]", error);
     sendJson(res, error.status || 500, { error: error.message || "Kunde inte läsa texten från bilden." });

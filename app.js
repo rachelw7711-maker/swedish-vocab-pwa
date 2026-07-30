@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=132";
+import * as remoteDb from "./src/lib/db.js?v=133";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -561,6 +561,8 @@ const els = {
   importReadingPhotoBtn: document.querySelector("#importReadingPhotoBtn"),
   readingPhotoFileInput: document.querySelector("#readingPhotoFileInput"),
   readingPhotoStatus: document.querySelector("#readingPhotoStatus"),
+  readingTextbookGlossary: document.querySelector("#readingTextbookGlossary"),
+  readingTextbookGlossaryList: document.querySelector("#readingTextbookGlossaryList"),
   readingKeySentences: document.querySelector("#readingKeySentences"),
   sendSelectedSentencesToShadowingBtn: document.querySelector("#sendSelectedSentencesToShadowingBtn"),
   readingWordPreview: document.querySelector("#readingWordPreview"),
@@ -2706,6 +2708,25 @@ function updateReadingWordCountNote() {
 // several photos; the result lands in the editable textarea exactly like
 // pasted text, per Rachel's original requirement that extracted text stay
 // fully editable before saving.
+// 缺口2 (2026-07-30) — plain read-only display of whatever glossary the
+// photo import (or a previously-saved reading item) carries. Not part of
+// the reading_analysis_items state-tracking system (that's for AI-surfaced
+// items); this is just showing back what the textbook itself already
+// printed, so no ignore/status affordance here.
+function renderTextbookGlossary(glossary) {
+  if (!els.readingTextbookGlossary || !els.readingTextbookGlossaryList) return;
+  const entries = glossary || [];
+  els.readingTextbookGlossary.hidden = !entries.length;
+  els.readingTextbookGlossaryList.replaceChildren();
+  entries.forEach((entry) => {
+    const dt = document.createElement("dt");
+    dt.textContent = entry.word;
+    const dd = document.createElement("dd");
+    dd.textContent = entry.definition;
+    els.readingTextbookGlossaryList.append(dt, dd);
+  });
+}
+
 async function handleReadingPhotoImport(event) {
   const file = event.target.files?.[0];
   event.target.value = "";
@@ -2715,7 +2736,7 @@ async function handleReadingPhotoImport(event) {
   els.importReadingPhotoBtn.disabled = true;
   try {
     const dataUrl = await readFileAsDataUrl(file);
-    const { text, warning } = await remoteDb.extractTextFromImage(dataUrl);
+    const { text, glossary, warning } = await remoteDb.extractTextFromImage(dataUrl);
     if (warning || !text) {
       els.readingPhotoStatus.textContent = warning || "Ingen text hittades i bilden.";
       return;
@@ -2725,7 +2746,17 @@ async function handleReadingPhotoImport(event) {
     const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
     setter.call(els.readingTextInput, combined);
     els.readingTextInput.dispatchEvent(new Event("input", { bubbles: true }));
-    els.readingPhotoStatus.textContent = "Text importerad — granska och redigera innan du sparar.";
+    // 缺口2 (2026-07-30): a multi-page import (several photos of the same
+    // article) accumulates glossary entries across all of them, same as the
+    // text itself accumulates in the textarea above.
+    if (glossary?.length) {
+      const existingWords = new Set((state.readingPendingGlossary || []).map((g) => g.word.toLowerCase()));
+      state.readingPendingGlossary = [...(state.readingPendingGlossary || []), ...glossary.filter((g) => !existingWords.has(g.word.toLowerCase()))];
+      renderTextbookGlossary(state.readingPendingGlossary);
+    }
+    els.readingPhotoStatus.textContent = glossary?.length
+      ? `Text importerad, inklusive ${glossary.length} ord från en ordlista i bilden — granska och redigera innan du sparar.`
+      : "Text importerad — granska och redigera innan du sparar.";
   } catch (error) {
     console.warn("[SpråkLab] Photo import failed.", error);
     els.readingPhotoStatus.textContent = error.message || "Kunde inte läsa texten från bilden.";
@@ -2747,6 +2778,8 @@ function updateReadingSteps(stage) {
 function openReadingEditor(item = null) {
   state.selectedReadingId = item?.id || "";
   state.currentReadingAnalysis = null;
+  state.readingPendingGlossary = [];
+  renderTextbookGlossary([]);
   els.readingItemId.value = item?.id || "";
   els.readingTitleInput.value = item?.title || "";
   els.readingTextInput.value = item?.source_text || "";
@@ -2765,6 +2798,11 @@ function openReadingEditor(item = null) {
   // enhanceGrammarSectionWithStructuredForms — the panel is already usable
   // synchronously above.
   if (item?.text_resource_id) {
+    remoteDb.loadTextResource(item.text_resource_id).then((resource) => {
+      if (els.readingItemId.value !== item.id || !resource?.textbookGlossary?.length) return;
+      state.readingPendingGlossary = resource.textbookGlossary;
+      renderTextbookGlossary(resource.textbookGlossary);
+    }).catch((error) => console.warn("[SpråkLab] Failed to load text resource glossary.", error));
     remoteDb.loadTextAnalysis(item.text_resource_id).then((analysis) => {
       if (els.readingItemId.value !== item.id) return; // user navigated away
       if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
@@ -2867,7 +2905,7 @@ async function analyzeCurrentReadingItem() {
   els.analyzeReadingBtn.disabled = true;
   els.analyzeReadingBtn.textContent = "Analyserar…";
   try {
-    const { textResource, analysis } = await remoteDb.analyzeReadingText(textToAnalyze, "paste");
+    const { textResource, analysis } = await remoteDb.analyzeReadingText(textToAnalyze, "paste", state.readingPendingGlossary || []);
     const updated = { ...saved, text_resource_id: textResource.id };
     const result = await remoteDb.upsertReadingItem(updated);
     const finalItem = result?.item || updated;

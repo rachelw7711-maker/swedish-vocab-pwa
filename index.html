@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=156" />
+    <link rel="stylesheet" href="/styles.css?v=157" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -330,6 +330,11 @@
               <span class="reading-import-photo-status" id="readingPhotoStatus" hidden></span>
             </div>
             <input class="visually-hidden" id="readingPhotoFileInput" type="file" accept="image/*" capture="environment" />
+            <section class="reading-textbook-glossary" id="readingTextbookGlossary" hidden>
+              <h4>📖 Ordlista i texten</h4>
+              <p class="reading-textbook-glossary-note">Redan förklarade av läromedlet — AI väljer inte om dessa igen.</p>
+              <dl id="readingTextbookGlossaryList"></dl>
+            </section>
             <p class="reading-auth-note" id="readingAuthNote" hidden>Logga in för att spara dina texter.</p>
             <p class="reading-word-count-note" id="readingWordCountNote" hidden></p>
             <div class="practice-actions">
@@ -1257,6 +1262,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=162" type="module"></script>
+    <script src="/app.js?v=163" type="module"></script>
   </body>
 </html>

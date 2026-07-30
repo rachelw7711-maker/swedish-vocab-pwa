@@ -1717,7 +1717,7 @@ function fromTextAnalysisRow(row) {
 // Reviews/AI成本控制与阅读模块-实施计划-2026-07-26.md — the server checks its
 // own text_hash cache first, so re-analyzing the same text (or switching
 // between Läsning/Shadowing) never re-calls the AI.
-export async function analyzeReadingText(text, sourceType = "paste") {
+export async function analyzeReadingText(text, sourceType = "paste", glossary = []) {
   const token = await getAccessToken().catch(() => "");
   const response = await fetch("/api/reading/analyze", {
     method: "POST",
@@ -1725,7 +1725,7 @@ export async function analyzeReadingText(text, sourceType = "paste") {
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       "content-type": "application/json",
     },
-    body: JSON.stringify({ text, sourceType }),
+    body: JSON.stringify({ text, sourceType, glossary }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte analysera texten.");
@@ -1769,7 +1769,7 @@ export async function extractTextFromImage(imageDataUrl) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte läsa texten från bilden.");
-  return { text: payload.text || "", warning: payload.warning || "" };
+  return { text: payload.text || "", glossary: Array.isArray(payload.glossary) ? payload.glossary : [], warning: payload.warning || "" };
 }
 
 // 规范§21 — cost/usage transparency. Reads the user's own ai_usage_logs
@@ -1846,6 +1846,18 @@ export async function markWordsReviewed(ids) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte markera som granskat.");
   return { updated: payload.updated || 0 };
+}
+
+// 缺口2 (2026-07-30) — reopening a previously-analyzed reading item needs
+// its textbook_glossary back too (analyzeReadingText's own response only
+// covers the moment of first analysis); a plain RLS-gated read, same as
+// loadTextAnalysis below.
+export async function loadTextResource(textResourceId) {
+  const id = clean(textResourceId);
+  if (!id) return null;
+  const { data, error } = await supabase.from("text_resources").select("id, textbook_glossary").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? { id: data.id, textbookGlossary: data.textbook_glossary || [] } : null;
 }
 
 export async function loadTextAnalysis(textResourceId) {

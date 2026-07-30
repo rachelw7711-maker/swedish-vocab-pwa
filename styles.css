@@ -4273,6 +4273,40 @@ h2 {
   flex-wrap: wrap;
 }
 
+.reading-textbook-glossary {
+  border-radius: 14px;
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+}
+
+.reading-textbook-glossary h4 {
+  margin: 0 0 2px;
+  font-size: 0.9rem;
+}
+
+.reading-textbook-glossary-note {
+  margin: 0 0 8px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.reading-textbook-glossary dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+}
+
+.reading-textbook-glossary dt {
+  font-weight: 660;
+}
+
+.reading-textbook-glossary dd {
+  margin: 0;
+  color: var(--muted);
+}
+
 .reading-import-photo-status {
   font-size: 0.82rem;
   color: var(--muted);

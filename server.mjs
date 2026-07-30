@@ -498,7 +498,7 @@ createServer(async (req, res) => {
       // /api/generate-word (pre-existing, ungated), don't repeat that gap
       // here now that it's been noticed — see spraklab_future_readiness memory.
       const user = await readAuthenticatedUser(req);
-      const { text, sourceType } = await readBody(req);
+      const { text, sourceType, glossary } = await readBody(req);
       if (!text || typeof text !== "string" || !text.trim()) {
         sendJson(res, 400, { error: "Klistra in en text att analysera." });
         return;
@@ -512,6 +512,7 @@ createServer(async (req, res) => {
         userId: user.id,
         text: text.trim(),
         sourceType: sourceType || "paste",
+        glossary: Array.isArray(glossary) ? glossary : [],
       });
       sendJson(res, 200, { textResource, analysis, tier, cached });
       return;
@@ -536,9 +537,9 @@ createServer(async (req, res) => {
         sendJson(res, 400, { error: "Ingen giltig bild mottagen." });
         return;
       }
-      const { text, usage } = await extractTextFromImage({ imageDataUrl });
+      const { text, glossary, usage } = await extractTextFromImage({ imageDataUrl });
       if (!text) {
-        sendJson(res, 200, { text: "", warning: "Ingen läsbar svensk text hittades i bilden." });
+        sendJson(res, 200, { text: "", glossary: [], warning: "Ingen läsbar svensk text hittades i bilden." });
         return;
       }
       const inputTokens = usage.input_tokens || 0;
@@ -553,7 +554,7 @@ createServer(async (req, res) => {
         actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
         cache_hit: false,
       });
-      sendJson(res, 200, { text });
+      sendJson(res, 200, { text, glossary });
       return;
     }
 

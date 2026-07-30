@@ -99,12 +99,45 @@ async function callOpenAI({ schemaName, schema, systemPrompt, userPrompt, maxOut
 // to integrate) rather than a dedicated OCR service. Cleans obvious
 // line-break/hyphenation OCR artifacts per §12's "断行、连字符和明显乱码做
 // 规则清理" — done here with plain string rules, not another AI call.
+//
+// 2026-07-30 addition (Reviews/阅读模块理念升级与ChatGPT实验-综合review与执行
+// 计划-2026-07-30.md, 缺口2, approved by Rachel same day): many textbook
+// pages (e.g. Rösten i natten) already print a margin glossary — word +
+// the book's own Swedish definition — next to the main text. Photo/camera
+// import is the only path where that structure is still visible (once OCR
+// flattens everything to plain text the left/right layout is lost, so this
+// can never be recovered from pasted text). Same single vision call now
+// also returns that glossary as structured JSON, so the AI vocabulary
+// selection step can skip words the book already explained instead of
+// spending one of its 5-15 key-vocabulary slots re-selecting them —
+// Rachel explicitly declined widening that 5-15 cap itself (缺口1), so the
+// only lever here is not wasting slots on words that don't need one.
 export async function extractTextFromImage({ imageDataUrl }) {
   if (!OPENAI_API_KEY) {
     const error = new Error("OPENAI_API_KEY saknas på servern.");
     error.status = 500;
     throw error;
   }
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      body_text: { type: "string" },
+      glossary: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            word: { type: "string" },
+            definition: { type: "string" },
+          },
+          required: ["word", "definition"],
+        },
+      },
+    },
+    required: ["body_text", "glossary"],
+  };
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { authorization: `Bearer ${OPENAI_API_KEY}`, "content-type": "application/json" },
@@ -112,11 +145,12 @@ export async function extractTextFromImage({ imageDataUrl }) {
       model: MODEL,
       reasoning: { effort: "low" },
       max_output_tokens: 4000,
+      text: { format: { type: "json_schema", name: "photo_text_extraction", strict: true, schema } },
       input: [
         {
           role: "system",
           content:
-            "You extract text from a photo of a Swedish-language page (book, worksheet, screen). Transcribe exactly what's printed — don't translate, summarize, or correct grammar. Join lines that were only broken by the page's line wrapping into full sentences (undo hyphenation at line breaks — e.g. 'känne-\\nteck-\\nen' becomes 'kännetecken'), but keep real paragraph breaks. If part of the image is unreadable, skip it rather than guessing. If the image contains no readable Swedish text at all, return an empty string.",
+            "You extract text from a photo of a Swedish-language page (book, worksheet, screen). Transcribe exactly what's printed — don't translate, summarize, or correct grammar. Join lines that were only broken by the page's line wrapping into full sentences (undo hyphenation at line breaks — e.g. 'känne-\\nteck-\\nen' becomes 'kännetecken'), but keep real paragraph breaks. If part of the image is unreadable, skip it rather than guessing. If the image contains no readable Swedish text at all, return an empty body_text.\n\nSeparately: many textbook pages print a margin/sidebar glossary next to the main text — a list of individual words each with the book's own short definition (in Swedish or another language), clearly distinct from the flowing body paragraphs. If (and only if) the image genuinely contains such a glossary list, extract each entry as {word, definition} into the glossary array, and do NOT include that glossary column's text inside body_text (body_text should be just the main article/story text). If there is no such glossary — most photos won't have one — return an empty glossary array. Never invent glossary entries that aren't actually printed as a word+definition list.",
         },
         {
           role: "user",
@@ -134,10 +168,14 @@ export async function extractTextFromImage({ imageDataUrl }) {
     error.status = response.status;
     throw error;
   }
-  const text = extractOutputText(data)
+  const parsed = JSON.parse(extractOutputText(data));
+  const text = String(parsed.body_text || "")
     .replace(/-\n\s*/g, "") // undo any leftover hyphenated line-break the model didn't already join
     .replace(new RegExp(String.fromCharCode(0), "g"), "");
-  return { text: text.trim(), usage: data.usage || {} };
+  const glossary = (Array.isArray(parsed.glossary) ? parsed.glossary : [])
+    .map((entry) => ({ word: String(entry.word || "").trim(), definition: String(entry.definition || "").trim() }))
+    .filter((entry) => entry.word && entry.definition);
+  return { text: text.trim(), glossary, usage: data.usage || {} };
 }
 
 export function cleanText(raw) {
@@ -307,7 +345,7 @@ async function batchGenerateMissingWords(missingTokens) {
 // possibly non-literal expression". Key sentences are a third, independent
 // output (not just the source_sentence attached to a word/phrase) — the
 // most Shadowing-worthy sentences in the article.
-async function extractKeyExpressions(cleanedText, tier) {
+async function extractKeyExpressions(cleanedText, tier, glossary = []) {
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const [collocMin, collocMax] = tierConfig.keyCollocations;
   const [idiomMin, idiomMax] = tierConfig.keyIdioms;
@@ -346,6 +384,9 @@ async function extractKeyExpressions(cleanedText, tier) {
     },
     required: ["collocations", "idioms", "key_sentences"],
   };
+  const glossaryNote = glossary.length
+    ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${glossary.map((g) => g.word).join(", ")}. Do not select any of these as a collocation or idiom — the book already did that job. Spend the collocation/idiom slots on other things the glossary didn't cover.`
+    : "";
   const { result, usage } = await callOpenAI({
     schemaName: "key_expressions_and_sentences",
     schema,
@@ -358,7 +399,7 @@ async function extractKeyExpressions(cleanedText, tier) {
 
 3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences worth reading aloud and repeating — chosen because they showcase a grammatical structure worth noticing (a tense, a subordinate clause, a passive construction, a notable word order) or because they're excellent standalone material for spoken practice (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context). Do NOT pick a sentence just because it is an important plot point or states a key fact — a sentence that only restates something the reader already understood from following the story (e.g. "this is where the twist happens") has no language-learning value by itself and must not be included. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences.
 
-Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.`,
+Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}`,
     userPrompt: cleanedText,
   });
   return {
@@ -482,7 +523,7 @@ async function materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis
 }
 
 // Main entry point. Returns { textResource, analysis, tier, cached }.
-export async function analyzeReadingResource({ supabaseAdmin, userId, text, sourceType = "paste" }) {
+export async function analyzeReadingResource({ supabaseAdmin, userId, text, sourceType = "paste", glossary = [] }) {
   const cleaned = cleanText(text);
   const wordCount = countWords(cleaned);
   const hash = textHash(cleaned);
@@ -498,7 +539,7 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   // 规范§3/§15 — cache check first, before anything else.
   const { data: existingResource } = await supabaseAdmin
     .from("text_resources")
-    .select("id, word_count, analysis_status")
+    .select("id, word_count, analysis_status, textbook_glossary")
     .eq("user_id", userId)
     .eq("text_hash", hash)
     .maybeSingle();
@@ -507,7 +548,7 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   if (!textResource) {
     const { data: inserted, error: insertError } = await supabaseAdmin
       .from("text_resources")
-      .insert({ user_id: userId, source_type: sourceType, original_text: text, cleaned_text: cleaned, text_hash: hash, language: "sv", word_count: wordCount, analysis_status: "pending" })
+      .insert({ user_id: userId, source_type: sourceType, original_text: text, cleaned_text: cleaned, text_hash: hash, language: "sv", word_count: wordCount, analysis_status: "pending", textbook_glossary: glossary })
       .select()
       .single();
     if (insertError) throw insertError;
@@ -555,7 +596,11 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   const vocabularyLimit = Math.min(tierConfig.keyVocabulary[1], MAX_KEY_VOCABULARY);
 
   const { freq, firstSeenCapitalized } = extractCandidateTokens(cleaned);
-  const tokens = [...freq.keys()];
+  // 缺口2 (2026-07-30): words the textbook's own margin glossary already
+  // explains never compete for the 5-15 key-vocabulary slots or trigger a
+  // missing-word generation call — the book already did that job for free.
+  const glossaryWords = new Set((glossary || []).map((g) => String(g.word || "").toLowerCase()).filter(Boolean));
+  const tokens = [...freq.keys()].filter((t) => !glossaryWords.has(t));
   const found = await matchAgainstCorpus(supabaseAdmin, tokens);
   const userWordState = await fetchUserWordState(supabaseAdmin, userId, [...found.values()].map((w) => w.id));
 
@@ -596,7 +641,7 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
 
   const selectedVocabulary = ranked.map((c, index) => ({ word_id: c.word.id, swedish: c.word.swedish, occurrences: c.occurrences, sort_order: index }));
 
-  const { collocations, idioms, keySentences, usage: exprUsage } = await extractKeyExpressions(cleaned, tier);
+  const { collocations, idioms, keySentences, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary);
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "key_expressions", model: MODEL, usage: exprUsage, cacheHit: false });
   const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, collocations, { objectType: "phrase", category: "common_collocation" });
   const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, idioms, { objectType: "expression", category: "everyday_expression" });
