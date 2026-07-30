@@ -3119,12 +3119,19 @@ h2 {
   font-weight: 690;
 }
 
+/* 2026-07-30 homepage redesign: Repetition / Nya ord / Läsning & Shadowing
+   ride in one swipeable row instead of a fixed 2-column grid, since a third
+   card no longer fits two-per-row on a phone-width screen. */
 .study-entry-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
   gap: 12px;
   width: 100%;
   margin-inline: auto;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 4px;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .study-entry-card {
@@ -3132,11 +3139,20 @@ h2 {
   align-content: space-between;
   gap: 10px;
   min-height: 164px;
+  flex: 0 0 82%;
+  max-width: 320px;
+  scroll-snap-align: start;
   padding: 14px;
   border: 1px solid rgba(55, 65, 72, 0.08);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.66);
   box-shadow: 0 12px 30px rgba(31, 42, 48, 0.055);
+}
+
+@media (min-width: 520px) {
+  .study-entry-card {
+    flex: 0 0 calc(33.333% - 8px);
+  }
 }
 
 .study-entry-copy {
@@ -3225,46 +3241,6 @@ h2 {
   width: 100%;
 }
 
-.home-continue-panel {
-  display: grid;
-  gap: 10px;
-  margin-top: 22px;
-}
-
-.continue-learning-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.continue-learning-card {
-  display: grid;
-  align-content: space-between;
-  gap: 8px;
-  min-height: 140px;
-  padding: 14px;
-  border: 1px solid rgba(55, 65, 72, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.66);
-  box-shadow: 0 12px 30px rgba(31, 42, 48, 0.055);
-}
-
-.continue-learning-card h3 {
-  color: #303735;
-  font-size: 1rem;
-  font-weight: 720;
-  overflow-wrap: anywhere;
-}
-
-.continue-learning-card button {
-  width: 100%;
-}
-
-@media (max-width: 430px) {
-  .continue-learning-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 
 .study-session-dialog {
   width: min(100% - 18px, 720px);

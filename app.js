@@ -717,13 +717,11 @@ const els = {
   entryReviewCount: document.querySelector("#entryReviewCount"),
   entryReviewDetail: document.querySelector("#entryReviewDetail"),
   studyWorkloadMessage: document.querySelector("#studyWorkloadMessage"),
-  continueLearningPanel: document.querySelector("#continueLearningPanel"),
-  continueReadingTitle: document.querySelector("#continueReadingTitle"),
-  continueReadingSubtitle: document.querySelector("#continueReadingSubtitle"),
-  continueReadingBtn: document.querySelector("#continueReadingBtn"),
-  continueShadowingTitle: document.querySelector("#continueShadowingTitle"),
-  continueShadowingSubtitle: document.querySelector("#continueShadowingSubtitle"),
-  continueShadowingBtn: document.querySelector("#continueShadowingBtn"),
+  readingShadowingEntryCard: document.querySelector("#readingShadowingEntryCard"),
+  readingShadowingEntryTitle: document.querySelector("#readingShadowingEntryTitle"),
+  readingShadowingEntryDetail: document.querySelector("#readingShadowingEntryDetail"),
+  readingShadowingEntryBtn: document.querySelector("#readingShadowingEntryBtn"),
+  openInShadowingBtn: document.querySelector("#openInShadowingBtn"),
   dailyNewWordTargetSelect: document.querySelector("#dailyNewWordTargetSelect"),
   studyCompletePanel: document.querySelector("#studyCompletePanel"),
   completeTodayCount: document.querySelector("#completeTodayCount"),
@@ -2787,6 +2785,7 @@ function openReadingEditor(item = null) {
   els.readingTextInput.value = item?.source_text || "";
   els.deleteReadingBtn.hidden = !item?.id;
   els.analyzeReadingBtn.hidden = !item?.id;
+  if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = !item?.id;
   updateReadingWordCountNote();
   els.readingAnalysisPanel.hidden = true;
   if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
@@ -2860,6 +2859,7 @@ async function saveCurrentReadingItem() {
     els.readingItemId.value = saved.id;
     els.deleteReadingBtn.hidden = false;
     els.analyzeReadingBtn.hidden = false;
+    if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = false;
     updateReadingSteps("saved");
     return saved;
   } catch (error) {
@@ -3346,50 +3346,54 @@ function renderStats() {
   els.dueCount.textContent = words.filter(isDue).length;
 }
 
-// SPK-HOM-001 §6-8: "Fortsätt lära dig" surfaces the user's own reading
-// and Shadowing so they don't have to hunt through Bibliotek — but per
-// §18.2 (no official recommended content exists), this only ever
-// suggests the user's own items, never a fabricated "today's pick".
-let continueLearningLoaded = false;
-async function renderContinueLearningPanel() {
-  if (!continueLearningLoaded) {
-    continueLearningLoaded = true;
+// 2026-07-30 homepage redesign (Rachel's decision): the separate "Fortsätt
+// lära dig" panel is gone — Läsning/Shadowing entry now lives in one card
+// in the swipeable study-entry-grid row, alongside Repetition/Nya ord.
+// Empty state prompts to get started; once the user has actually done a
+// reading and/or Shadowing today, show today's counts instead (her explicit
+// choice over showing "continue where you left off" text). "Done today" is
+// intentionally simple for this first pass: a reading counts once it's been
+// analyzed (has text_resource_id) today; a Shadowing item counts once
+// created today — refine later if this doesn't match what "completed"
+// should mean.
+let readingShadowingEntryLoaded = false;
+async function renderReadingShadowingEntryCard() {
+  if (!readingShadowingEntryLoaded) {
+    readingShadowingEntryLoaded = true;
     if (!state.readingItemsLoaded) {
       state.readingItemsLoaded = true;
       state.readingItems = await remoteDb.loadReadingItems().catch(() => []);
     }
-    renderContinueLearningPanel();
+    renderReadingShadowingEntryCard();
     return;
   }
-  if (!els.continueLearningPanel) return;
-  els.continueLearningPanel.hidden = false;
+  if (!els.readingShadowingEntryDetail) return;
 
-  const reading = state.readingItems[0];
-  if (reading) {
-    els.continueReadingTitle.textContent = reading.title || "(Utan titel)";
-    els.continueReadingSubtitle.textContent = reading.text_resource_id ? "Fortsätt där du slutade" : "Ej analyserad än";
-    els.continueReadingBtn.textContent = "Fortsätt läsa";
-  } else {
-    els.continueReadingTitle.textContent = "Ingen läsning ännu";
-    els.continueReadingSubtitle.textContent = "Klistra in en text för att komma igång";
-    els.continueReadingBtn.textContent = "Kom igång";
-  }
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayMs = startOfToday.getTime();
 
-  const shadowingItems = getShadowingItems();
-  const shadowing = shadowingItems[0];
-  if (shadowing) {
-    els.continueShadowingTitle.textContent = shadowing.title || shadowing.swedish?.slice(0, 40) || "(Utan titel)";
-    els.continueShadowingSubtitle.textContent = "Fortsätt öva uttal";
-    els.continueShadowingBtn.textContent = "Fortsätt öva";
+  const readingsToday = (state.readingItems || []).filter((item) => item.text_resource_id && Number(item.updatedAt || item.createdAt || 0) >= todayMs).length;
+  const shadowingToday = getShadowingItems().filter((item) => Number(item.createdAt || 0) >= todayMs).length;
+
+  if (!readingsToday && !shadowingToday) {
+    els.readingShadowingEntryTitle.textContent = "Läsning och Shadowing börjar här";
+    els.readingShadowingEntryDetail.textContent = "Ta ett foto eller klistra in en text";
+    els.readingShadowingEntryBtn.textContent = "Kom igång";
   } else {
-    els.continueShadowingTitle.textContent = "Ingen Shadowing ännu";
-    els.continueShadowingSubtitle.textContent = "Läs en text och skicka den till Shadowing";
-    els.continueShadowingBtn.textContent = "Kom igång";
+    els.readingShadowingEntryTitle.textContent = "Bra jobbat idag";
+    els.readingShadowingEntryDetail.textContent = `${readingsToday} läsning${readingsToday === 1 ? "" : "ar"} idag · ${shadowingToday} Shadowing-pass idag`;
+    els.readingShadowingEntryBtn.textContent = "Fortsätt";
   }
 }
 
+function openReadingShadowingEntry() {
+  activateView("readingView");
+  openReadingEditor(null);
+}
+
 function renderStudyStats() {
-  renderContinueLearningPanel();
+  renderReadingShadowingEntryCard();
   state.dailyStudy = ensureDailyStudyPlan();
   if (!state.dailyStudy) return;
   const newSession = readDailySession("new", state.dailyStudy);
@@ -9847,16 +9851,8 @@ function bindEvents() {
   els.deleteReadingBtn?.addEventListener("click", deleteCurrentReadingItem);
   els.sendReadingToShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
   els.sendSelectedSentencesToShadowingBtn?.addEventListener("click", sendSelectedSentencesToShadowing);
-  els.continueReadingBtn?.addEventListener("click", () => {
-    activateView("readingView");
-    const reading = state.readingItems[0];
-    openReadingEditor(reading || null);
-  });
-  els.continueShadowingBtn?.addEventListener("click", () => {
-    const shadowing = getShadowingItems()[0];
-    if (shadowing) state.selectedShadowingId = shadowing.id;
-    activateView("historyView");
-  });
+  els.openInShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
+  els.readingShadowingEntryCard?.addEventListener("click", openReadingShadowingEntry);
   els.readingList?.addEventListener("click", (event) => {
     const card = event.target.closest("[data-reading-id]");
     if (!card) return;
