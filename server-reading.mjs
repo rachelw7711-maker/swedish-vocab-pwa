@@ -276,25 +276,70 @@ async function fetchUserWordState(supabaseAdmin, userId, wordIds) {
 // useful word could have had.
 const VERY_COMMON_FREQUENCY_RANK = 250;
 
+// 2026-08-01 (Rachel's live-testing feedback + 关于阅读模块的调整.pages "Layer
+// 2" — "words that are simple but determine the article's meaning", e.g.
+// instead/although/despite/while/until/unless): these discourse connectives
+// were getting silently excluded before the AI Worth Learning layer ever
+// saw them, purely because they're POS-tagged preposition/conjunction (the
+// generic excludedPos filter below) — exactly backwards, since a
+// connective's comprehension-importance has nothing to do with its part of
+// speech or how common it is. Confirmed live against the real corpus:
+// "trots" is tagged preposition, "fastän"/"medan" are tagged conjunction,
+// all three were being discarded before ranking ever started. This curated
+// set bypasses both the POS and frequency exclusion below — it does NOT
+// bypass AI judgment, the Worth Learning scorer still decides whether each
+// one actually earns a slot in this specific article.
+const HIGH_VALUE_CONNECTIVES = new Set([
+  "däremot", "dessutom", "samtidigt", "trots", "fastän", "eftersom", "medan",
+  "tvärtom", "ändå", "likväl", "följaktligen", "alltså", "nämligen", "dock",
+  "emellertid", "istället", "snarare", "oavsett", "visserligen", "ändock",
+  "sålunda", "härav", "ehuru", "huruvida", "beträffande", "således",
+]);
+
 function rankFoundWords(found, freq, firstSeenCapitalized, userWordState, limit) {
   const excludedPos = new Set(["preposition", "conjunction", "pronoun", "numeral", "interjection"]);
   const candidates = [...found.entries()]
-    .filter(([token, word]) => !excludedPos.has(word.pos))
-    .filter(([token]) => !firstSeenCapitalized.get(token) || freq.get(token) > 1) // likely proper noun if capitalized+singleton
-    .filter(([, word]) => !word.frequency_rank || word.frequency_rank > VERY_COMMON_FREQUENCY_RANK)
+    .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !excludedPos.has(word.pos))
+    // Sentence-initial connectives ("Trots att...", "Däremot är...") are
+    // capitalized+singleton just as often as real proper nouns are — this
+    // heuristic can't tell them apart, so the curated set bypasses it too.
+    .filter(([token]) => HIGH_VALUE_CONNECTIVES.has(token) || !firstSeenCapitalized.get(token) || freq.get(token) > 1)
+    .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !word.frequency_rank || word.frequency_rank > VERY_COMMON_FREQUENCY_RANK)
     .map(([token, word]) => {
       const state = userWordState.get(word.id);
       const alreadyMastered = state?.mastered || (state?.review_stage ?? 0) >= 5;
       return { token, word, occurrences: freq.get(token) || 1, alreadyMastered };
     })
     .filter((c) => !c.alreadyMastered);
-  candidates.sort((a, b) => {
+
+  // Dedupe by underlying word id: two surface forms of the same base word
+  // (e.g. "ledighet" and "ledigheten" both resolving via word_forms to the
+  // same learning_object) would otherwise both survive as separate
+  // candidates and waste two of the final slots on one word.
+  const byWordId = new Map();
+  for (const c of candidates) {
+    const existing = byWordId.get(c.word.id);
+    if (!existing || c.occurrences > existing.occurrences) byWordId.set(c.word.id, c);
+  }
+  const deduped = [...byWordId.values()];
+
+  deduped.sort((a, b) => {
+    // Connectives are common by definition (that's why calibration scores
+    // them 80-100 despite low rarity) — if they had to compete with rare
+    // content words on occurrence/rarity here, they'd always lose and get
+    // truncated away before the AI Worth Learning step ever saw them. So
+    // they're bucketed first, guaranteeing they reach the AI; genuine
+    // worth-learning judgment still happens there, this only protects their
+    // spot in the candidate pool.
+    const aConn = HIGH_VALUE_CONNECTIVES.has(a.token);
+    const bConn = HIGH_VALUE_CONNECTIVES.has(b.token);
+    if (aConn !== bConn) return aConn ? -1 : 1;
     if (a.occurrences !== b.occurrences) return b.occurrences - a.occurrences;
     // Rarer words (higher frequency_rank) sort first among ties — more
     // specifically worth learning than a merely-somewhat-common word.
     return (b.word.frequency_rank || 0) - (a.word.frequency_rank || 0);
   });
-  return candidates.slice(0, limit);
+  return deduped.slice(0, limit);
 }
 
 // AI Worth Learning scoring (2026-07-30, 桌面AI语义评分.pages, approved by
@@ -309,7 +354,14 @@ const WORTH_LEARNING_DIMENSIONS = `1. Does it genuinely help understand THIS art
 2. Transfer value — will this word likely reappear across many other articles (connective/discourse words like "däremot", "dessutom", "samtidigt" score very high here)?
 3. Is it a genuine native-speaker expression or collocation-forming word, not just a plain dictionary entry?
 4. Is it a common "reading obstacle" word — one learners typically recognize on sight but keep forgetting (often abstract nouns, adverbs) — these should be prioritized?
-5. Does it easily expand into a useful word family (e.g. a verb with common related noun/adjective/participle forms)?`;
+5. Does it easily expand into a useful word family (e.g. a verb with common related noun/adjective/participle forms)?
+
+Calibration — score by how much a word actually determines whether the reader understands the article, NOT by how common, short, or grammatically "simple" it looks:
+- "och", "väldigt" → very low (1-20). Generic, replaceable, contributes almost nothing specific.
+- "regering" → moderate (40-60) if the article is genuinely about government/policy; otherwise low.
+- "däremot", "trots", "dessutom" → very high (80-100), even though they're short, frequent, and CEFR A2-B1. A connective word that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands the article correctly — never downgrade a word just because it "looks too simple" or "too common" to be worth learning.
+- A phrasal/idiomatic verb sense (e.g. "lägga ner", "komma fram till") → very high (80-100) — these carry far more meaning than any single component word.
+Do not let surface simplicity or high frequency pull a score down — score purely on how much understanding of THIS article depends on this specific word.`;
 
 async function scoreVocabularyWorthLearning(candidates, cleanedText, targetCount) {
   if (candidates.length <= targetCount) {
@@ -460,7 +512,7 @@ async function extractKeyExpressions(cleanedText, tier, glossary = []) {
 
 2. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
 
-3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences worth reading aloud and repeating — chosen because they showcase a grammatical structure worth noticing (a tense, a subordinate clause, a passive construction, a notable word order) or because they're excellent standalone material for spoken practice (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context). Do NOT pick a sentence just because it is an important plot point or states a key fact — a sentence that only restates something the reader already understood from following the story (e.g. "this is where the twist happens") has no language-learning value by itself and must not be included. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences.
+3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences worth reading aloud and repeating — chosen because they showcase a grammatical structure worth noticing (a tense, a subordinate clause, a passive construction, a notable word order) or because they're excellent standalone material for spoken practice (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context). Do NOT pick a sentence just because it is an important plot point or states a key fact — a sentence that only restates something the reader already understood from following the story (e.g. "this is where the twist happens") has no language-learning value by itself and must not be included. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, so it must be written in Chinese (like meaning_zh/translation_zh elsewhere), one short clause naming what's worth noticing — never an English rationale.
 
 4. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). Give the pattern name, its meaning in Chinese, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
 

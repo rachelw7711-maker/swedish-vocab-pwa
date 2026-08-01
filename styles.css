@@ -1969,6 +1969,28 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   font-weight: 740;
 }
 
+/* 2026-08-01, 关于阅读模块的调整.pages: the original text shouldn't dominate
+   the results page — collapsed to ~3 lines once there's an analysis to
+   look at, with a "Visa allt" toggle. Only applied post-analysis; while
+   actively pasting/editing the full textarea stays as-is. */
+#readingTextInput.reading-text-collapsed {
+  min-height: 0;
+  max-height: 4.6em;
+}
+
+.reading-text-toggle-btn {
+  align-self: flex-start;
+  margin-top: -8px;
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 660;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
 .shadowing-prepare-textarea {
   display: block;
   width: 100%;

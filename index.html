@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=164" />
+    <link rel="stylesheet" href="/styles.css?v=165" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -295,8 +295,8 @@
             <div class="reading-editor-intro">
               <span class="reading-editor-icon" aria-hidden="true">📖</span>
               <div>
-                <h3>Ny text</h3>
-                <p>Klistra in en svensk text eller importera ett foto, spara den, och låt AI hjälpa dig med sammanfattning och nya ord.</p>
+                <h3 id="readingEditorHeading">Ny text</h3>
+                <p id="readingEditorIntro">Klistra in en svensk text eller importera ett foto, spara den, och låt AI hjälpa dig med sammanfattning och nya ord.</p>
               </div>
             </div>
             <input type="hidden" id="readingItemId" />
@@ -308,6 +308,7 @@
               Text
               <textarea id="readingTextInput" class="shadowing-prepare-textarea" rows="10" placeholder="Klistra in svensk text här."></textarea>
             </label>
+            <button class="reading-text-toggle-btn" id="readingTextToggleBtn" type="button" hidden>Visa allt</button>
             <div class="reading-import-photo-row">
               <button class="secondary-button" id="importReadingPhotoBtn" type="button">📷 Importera foto</button>
               <span class="reading-import-photo-status" id="readingPhotoStatus" hidden></span>
@@ -325,12 +326,35 @@
               <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
               <button class="secondary-button" id="openInShadowingBtn" type="button" hidden>Öppna i Shadowing</button>
             </div>
-            <section class="reading-annotate-section" id="readingAnnotateSection" hidden>
-              <h4>📝 Läs och markera</h4>
-              <p class="reading-annotate-hint">Klicka på en mening för att markera den. Markerade meningar kan få en egen anteckning.</p>
-              <div id="readingAnnotateText" class="reading-annotate-text"></div>
-            </section>
             <section id="readingAnalysisPanel" hidden>
+              <div class="reading-summary-block">
+                <h4>Sammanfattning</h4>
+                <button class="secondary-button" id="generateReadingSummaryBtn" type="button">Generera sammanfattning</button>
+                <p id="readingSummarySv"></p>
+                <p id="readingSummaryZh" class="example-translation"></p>
+              </div>
+              <div class="reading-keywords-block" id="readingKeywordsBlock">
+                <h4>Ord värda att lära sig</h4>
+                <div id="readingKeyWords" class="reading-chip-list"></div>
+                <div id="readingWordPreview" class="reading-word-preview" hidden></div>
+              </div>
+              <div class="reading-phrases-block" id="readingPhrasesBlock">
+                <h4>Fraser &amp; Uttryck i texten</h4>
+                <div id="readingKeyPhrases" class="reading-phrase-list"></div>
+              </div>
+              <div class="reading-sentences-block" id="readingSentencesBlock">
+                <h4>Viktiga meningar</h4>
+                <div id="readingKeySentences" class="reading-sentence-list"></div>
+              </div>
+              <div class="reading-patterns-block" id="readingPatternsBlock">
+                <h4>🔤 Språkmönster</h4>
+                <div id="readingLanguagePatterns" class="reading-pattern-list"></div>
+              </div>
+              <section class="reading-annotate-section" id="readingAnnotateSection" hidden>
+                <h4>📝 Läs och markera</h4>
+                <p class="reading-annotate-hint">Klicka på en mening för att markera den. Markerade meningar kan få en egen anteckning.</p>
+                <div id="readingAnnotateText" class="reading-annotate-text"></div>
+              </section>
               <section class="reading-report-card" id="readingReportCard" hidden>
                 <h4>📖 Läsrapport</h4>
                 <div class="reading-report-stats">
@@ -354,29 +378,6 @@
                 </div>
                 <p class="reading-report-total">Totalt ca <strong data-report-total-min></strong> min</p>
               </section>
-              <div class="reading-summary-block">
-                <h4>Sammanfattning</h4>
-                <button class="secondary-button" id="generateReadingSummaryBtn" type="button">Generera sammanfattning</button>
-                <p id="readingSummarySv"></p>
-                <p id="readingSummaryZh" class="example-translation"></p>
-              </div>
-              <div class="reading-keywords-block">
-                <h4>Ord värda att lära sig</h4>
-                <div id="readingKeyWords" class="reading-chip-list"></div>
-                <div id="readingWordPreview" class="reading-word-preview" hidden></div>
-              </div>
-              <div class="reading-phrases-block">
-                <h4>Fraser &amp; Uttryck i texten</h4>
-                <div id="readingKeyPhrases" class="reading-phrase-list"></div>
-              </div>
-              <div class="reading-sentences-block">
-                <h4>Viktiga meningar</h4>
-                <div id="readingKeySentences" class="reading-sentence-list"></div>
-              </div>
-              <div class="reading-patterns-block">
-                <h4>🔤 Språkmönster</h4>
-                <div id="readingLanguagePatterns" class="reading-pattern-list"></div>
-              </div>
               <div class="practice-actions">
                 <button class="primary-button" id="sendReadingToShadowingBtn" type="button">Skicka till Shadowing</button>
                 <button class="secondary-button" id="sendSelectedSentencesToShadowingBtn" type="button" hidden>Skicka utvalda meningar</button>
@@ -1284,6 +1285,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=170" type="module"></script>
+    <script src="/app.js?v=171" type="module"></script>
   </body>
 </html>

@@ -547,7 +547,10 @@ const els = {
   readingEditorPanel: document.querySelector("#readingEditorPanel"),
   readingItemId: document.querySelector("#readingItemId"),
   readingTitleInput: document.querySelector("#readingTitleInput"),
+  readingEditorHeading: document.querySelector("#readingEditorHeading"),
+  readingEditorIntro: document.querySelector("#readingEditorIntro"),
   readingTextInput: document.querySelector("#readingTextInput"),
+  readingTextToggleBtn: document.querySelector("#readingTextToggleBtn"),
   readingAuthNote: document.querySelector("#readingAuthNote"),
   closeReadingEditorBtn: document.querySelector("#closeReadingEditorBtn"),
   deleteReadingBtn: document.querySelector("#deleteReadingBtn"),
@@ -556,7 +559,9 @@ const els = {
   readingAnalysisPanel: document.querySelector("#readingAnalysisPanel"),
   readingSummarySv: document.querySelector("#readingSummarySv"),
   readingSummaryZh: document.querySelector("#readingSummaryZh"),
+  readingKeywordsBlock: document.querySelector("#readingKeywordsBlock"),
   readingKeyWords: document.querySelector("#readingKeyWords"),
+  readingPhrasesBlock: document.querySelector("#readingPhrasesBlock"),
   readingKeyPhrases: document.querySelector("#readingKeyPhrases"),
   readingWordCountNote: document.querySelector("#readingWordCountNote"),
   importReadingPhotoBtn: document.querySelector("#importReadingPhotoBtn"),
@@ -567,7 +572,9 @@ const els = {
   readingAnnotateText: document.querySelector("#readingAnnotateText"),
   readingTextbookGlossary: document.querySelector("#readingTextbookGlossary"),
   readingTextbookGlossaryList: document.querySelector("#readingTextbookGlossaryList"),
+  readingSentencesBlock: document.querySelector("#readingSentencesBlock"),
   readingKeySentences: document.querySelector("#readingKeySentences"),
+  readingPatternsBlock: document.querySelector("#readingPatternsBlock"),
   readingLanguagePatterns: document.querySelector("#readingLanguagePatterns"),
   sendSelectedSentencesToShadowingBtn: document.querySelector("#sendSelectedSentencesToShadowingBtn"),
   readingWordPreview: document.querySelector("#readingWordPreview"),
@@ -2825,6 +2832,14 @@ function openReadingEditor(item = null) {
   state.readingPendingGlossary = [];
   state.currentReadingWordCount = 0;
   renderTextbookGlossary([]);
+  // 2026-08-01, Rachel's feedback #6: reopening an already-saved item was
+  // always showing "Ny text" (the create-flow heading), confusing since
+  // you're reviewing/continuing something existing, not creating anything.
+  if (els.readingEditorHeading) els.readingEditorHeading.textContent = item?.id ? item.title || "Läsning" : "Ny text";
+  if (els.readingEditorIntro) {
+    els.readingEditorIntro.hidden = Boolean(item?.id);
+    els.readingEditorIntro.textContent = "Klistra in en svensk text eller importera ett foto, spara den, och låt AI hjälpa dig med sammanfattning och nya ord.";
+  }
   els.readingItemId.value = item?.id || "";
   els.readingTitleInput.value = item?.title || "";
   els.readingTextInput.value = item?.source_text || "";
@@ -2833,6 +2848,8 @@ function openReadingEditor(item = null) {
   if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = !item?.id;
   updateReadingWordCountNote();
   renderReadingAnnotateSection(item);
+  if (els.readingTextInput) els.readingTextInput.classList.remove("reading-text-collapsed");
+  if (els.readingTextToggleBtn) els.readingTextToggleBtn.hidden = true;
   els.readingAnalysisPanel.hidden = true;
   if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = true;
@@ -2901,6 +2918,8 @@ async function saveCurrentReadingItem() {
     const saved = result.item;
     state.readingItems = [saved, ...state.readingItems.filter((item) => item.id !== saved.id)];
     els.readingItemId.value = saved.id;
+    if (els.readingEditorHeading) els.readingEditorHeading.textContent = saved.title || "Läsning";
+    if (els.readingEditorIntro) els.readingEditorIntro.hidden = true;
     els.deleteReadingBtn.hidden = false;
     els.analyzeReadingBtn.hidden = false;
     if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = false;
@@ -2977,8 +2996,16 @@ async function analyzeCurrentReadingItem() {
 // show a lightweight Ordbok-sourced preview inline; key expressions already
 // carry their full display content (expression + meaning + source sentence)
 // per 规范§9.2, so no separate reveal step is needed for those.
+function setReadingTextCollapsed(collapsed) {
+  if (!els.readingTextInput || !els.readingTextToggleBtn) return;
+  els.readingTextInput.classList.toggle("reading-text-collapsed", collapsed);
+  els.readingTextToggleBtn.hidden = false;
+  els.readingTextToggleBtn.textContent = collapsed ? "Visa allt" : "Visa mindre";
+}
+
 function renderReadingAnalysis(analysis) {
   els.readingAnalysisPanel.hidden = false;
+  setReadingTextCollapsed(true);
   if (els.readingWordPreview) {
     els.readingWordPreview.hidden = true;
     els.readingWordPreview.replaceChildren();
@@ -3007,12 +3034,10 @@ function renderReadingAnalysis(analysis) {
     wrap.append(chip);
     els.readingKeyWords.append(wrap);
   });
-  if (!vocabulary.length) {
-    const none = document.createElement("span");
-    none.className = "empty-state";
-    none.textContent = "Inga särskilda ord att lyfta fram i den här texten.";
-    els.readingKeyWords.append(none);
-  }
+  // 2026-08-01, 关于阅读模块的调整.pages: hide a section entirely when it's
+  // empty rather than showing "inga ... hittades" placeholder text — reads
+  // as the AI being selective, not as something missing.
+  if (els.readingKeywordsBlock) els.readingKeywordsBlock.hidden = !vocabulary.length;
 
   els.readingKeyPhrases.replaceChildren();
   const expressions = analysis.selectedExpressions || [];
@@ -3048,12 +3073,7 @@ function renderReadingAnalysis(analysis) {
     }
     els.readingKeyPhrases.append(row);
   });
-  if (!expressions.length) {
-    const none = document.createElement("span");
-    none.className = "empty-state";
-    none.textContent = "Inga fasta uttryck eller idiomatiska uttryck hittades i den här texten.";
-    els.readingKeyPhrases.append(none);
-  }
+  if (els.readingPhrasesBlock) els.readingPhrasesBlock.hidden = !expressions.length;
 
   if (els.readingKeySentences) {
     els.readingKeySentences.replaceChildren();
@@ -3080,12 +3100,7 @@ function renderReadingAnalysis(analysis) {
       }
       els.readingKeySentences.append(row);
     });
-    if (!sentences.length) {
-      const none = document.createElement("span");
-      none.className = "empty-state";
-      none.textContent = "Inga särskilda meningar att lyfta fram i den här texten.";
-      els.readingKeySentences.append(none);
-    }
+    if (els.readingSentencesBlock) els.readingSentencesBlock.hidden = !sentences.length;
   }
 
   const hasShadowingSentences = (analysis.keySentences || []).some((s) => s.shadowing_suitable);
@@ -3112,12 +3127,7 @@ function renderReadingAnalysis(analysis) {
       row.append(pattern, meaning, example);
       els.readingLanguagePatterns.append(row);
     });
-    if (!patterns.length) {
-      const none = document.createElement("span");
-      none.className = "empty-state";
-      none.textContent = "Inga särskilda språkmönster att lyfta fram i den här texten.";
-      els.readingLanguagePatterns.append(none);
-    }
+    if (els.readingPatternsBlock) els.readingPatternsBlock.hidden = !patterns.length;
   }
 
   enhanceReadingAnalysisWithItemState(analysis);
@@ -10090,6 +10100,9 @@ function bindEvents() {
   els.sendSelectedSentencesToShadowingBtn?.addEventListener("click", sendSelectedSentencesToShadowing);
   els.openInShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
   els.exportReadingBtn?.addEventListener("click", openReadingExportPreview);
+  els.readingTextToggleBtn?.addEventListener("click", () => {
+    setReadingTextCollapsed(!els.readingTextInput.classList.contains("reading-text-collapsed"));
+  });
   els.readingAnnotateText?.addEventListener("click", (event) => {
     const span = event.target.closest(".reading-annotate-sentence");
     if (!span) return;
