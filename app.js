@@ -2819,16 +2819,6 @@ async function handleReadingPhotoImport(event) {
   }
 }
 
-function updateReadingSteps(stage) {
-  const steps = document.querySelectorAll(".reading-editor-steps li");
-  const order = ["paste", "saved", "analyzed"];
-  const index = order.indexOf(stage);
-  steps.forEach((li, i) => {
-    li.classList.toggle("done", i < index);
-    li.classList.toggle("active", i === index);
-  });
-}
-
 function openReadingEditor(item = null) {
   state.selectedReadingId = item?.id || "";
   state.currentReadingAnalysis = null;
@@ -2846,7 +2836,6 @@ function openReadingEditor(item = null) {
   els.readingAnalysisPanel.hidden = true;
   if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = true;
-  updateReadingSteps(item?.id ? "saved" : "paste");
   els.readingListPanel.hidden = true;
   els.readingList.hidden = true;
   els.readingEditorPanel.hidden = false;
@@ -2869,7 +2858,6 @@ function openReadingEditor(item = null) {
       if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
       state.currentReadingAnalysis = analysis;
       renderReadingAnalysis(analysis);
-      updateReadingSteps("analyzed");
     }).catch((error) => console.warn("[SpråkLab] Failed to load existing text analysis.", error));
   }
 }
@@ -2916,7 +2904,6 @@ async function saveCurrentReadingItem() {
     els.deleteReadingBtn.hidden = false;
     els.analyzeReadingBtn.hidden = false;
     if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = false;
-    updateReadingSteps("saved");
     renderReadingAnnotateSection(saved);
     return saved;
   } catch (error) {
@@ -2976,7 +2963,6 @@ async function analyzeCurrentReadingItem() {
     state.currentReadingAnalysis = analysis;
     state.currentReadingWordCount = textResource.word_count || readingWordCount(textToAnalyze);
     renderReadingAnalysis(analysis);
-    updateReadingSteps("analyzed");
   } catch (error) {
     console.warn("[SpråkLab] Reading analysis failed.", error);
     els.readingAnalysisPanel.hidden = true;

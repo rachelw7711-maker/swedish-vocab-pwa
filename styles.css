@@ -3079,11 +3079,6 @@ h2 {
   line-height: 1.4;
 }
 
-.reading-editor-steps {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: 6px;
-}
-
 .study-complete {
   display: grid;
   gap: 8px;
