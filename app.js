@@ -315,6 +315,14 @@ const state = {
   readingItems: [],
   readingItemsLoaded: false,
   readingListStats: {},
+  // 2026-08-03: which page Tillbaka on the results/practice page should
+  // return to — set right before navigating there. "editor" when reached
+  // by analyzing/generating from that module's own edit form (so Tillbaka
+  // lets you tweak and redo); "list"/"handoff" when reached by opening an
+  // already-finished item directly from Bibliotek or via a cross-module
+  // handoff, where the edit form was never actually visited.
+  readingResultsEntry: "editor",
+  shadowingPracticeEntry: "editor",
   selectedReadingId: "",
   currentReadingAnalysis: null,
   selectedNotebook: "",
@@ -559,6 +567,7 @@ const els = {
   analyzeReadingBtn: document.querySelector("#analyzeReadingBtn"),
   readingAnalysisPanel: document.querySelector("#readingAnalysisPanel"),
   closeReadingAnalysisBtn: document.querySelector("#closeReadingAnalysisBtn"),
+  editReadingResultsTextBtn: document.querySelector("#editReadingResultsTextBtn"),
   readingAnalysisHeading: document.querySelector("#readingAnalysisHeading"),
   readingAnalysisLoading: document.querySelector("#readingAnalysisLoading"),
   readingSummarySv: document.querySelector("#readingSummarySv"),
@@ -2866,7 +2875,23 @@ function openReadingResults(item) {
   els.readingAnalysisPanel.hidden = false;
 }
 
+// 2026-08-03, Rachel's feedback: Tillbaka on the results page used to
+// always land on the editor, even for an item opened directly from the
+// Läsning list — where the editor was never actually visited, so bouncing
+// through it felt wrong. Now it returns to wherever the user actually came
+// from (see readingResultsEntry, set right before each openReadingResults
+// call). A separate always-available "✎ Redigera text" link on the results
+// page (editReadingResultsText) covers the case that would otherwise
+// disappear — fixing a typo in an already-analyzed article's source text.
 function closeReadingResults() {
+  if (state.readingResultsEntry === "list") {
+    closeReadingEditor();
+  } else {
+    showReadingEditorPanel();
+  }
+}
+
+function editReadingResultsText() {
   showReadingEditorPanel();
 }
 
@@ -2913,6 +2938,7 @@ function openReadingEditor(item = null) {
   const cachedStats = item?.text_resource_id ? state.readingListStats?.[item.text_resource_id] : null;
   const likelyAnalyzed = Boolean(cachedStats && (cachedStats.vocabCount || cachedStats.exprCount || cachedStats.sentenceCount || cachedStats.patternCount));
   if (likelyAnalyzed) {
+    state.readingResultsEntry = "list";
     openReadingResults(item);
   } else {
     showReadingEditorPanel();
@@ -2935,6 +2961,7 @@ function openReadingEditor(item = null) {
         if (els.readingItemId.value !== item.id) return; // user navigated away
         if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
         state.currentReadingAnalysis = analysis;
+        state.readingResultsEntry = "list";
         openReadingResults(item);
         renderReadingAnalysis(analysis, { deepReady: resource.deepReady });
         // A previous session's deep layer may have been interrupted (e.g.
@@ -3046,6 +3073,7 @@ async function analyzeCurrentReadingItem() {
   // decision — Analysera opens a full separate page, not more content
   // further down the editor) rather than waiting for the fast-layer AI
   // call to resolve first; the loading placeholder fills the gap.
+  state.readingResultsEntry = "editor";
   openReadingResults(saved);
   showReadingAnalysisLoading();
   try {
@@ -3608,6 +3636,7 @@ async function sendTextToShadowing(button, { title, swedish, textResourceId, lin
     // Läsning lands directly on the Shadowing practice page with real AI
     // audio already generating — not the editor, and not left on the free
     // browser-speech fallback waiting for a manual click.
+    state.shadowingPracticeEntry = "handoff";
     openShadowingPractice(normalized, { generating: true });
     const token = await getShadowingAccessTokenOrGuide();
     await runShadowingTtsGeneration(normalized, swedish, token);
@@ -6303,10 +6332,21 @@ function openShadowingPractice(item, { generating = false } = {}) {
   renderShadowingPlayer();
 }
 
+// 2026-08-03, Rachel's feedback: Tillbaka used to always land on
+// Shadowing's own editor, even when practice was reached via a handoff
+// from Läsning — where that editor was never actually visited. Now it
+// returns to wherever the user actually came from (shadowingPracticeEntry,
+// set right before each openShadowingPractice call): the editor for the
+// "generate from here" flow, straight up to Bibliotek for the
+// cross-module handoff flow (no in-module list to return to instead).
 function closeShadowingPractice() {
   shadowingAudio.pause();
   state.shadowingPlaybackState = "paused";
-  openShadowingEditor();
+  if (state.shadowingPracticeEntry === "handoff") {
+    returnToLibraryView();
+  } else {
+    openShadowingEditor();
+  }
 }
 
 function resetShadowingForm() {
@@ -7019,6 +7059,7 @@ async function generateStandardShadowingAudio() {
     // continues in the background (Rachel's confirmed decision, mirrors
     // Läsning's fast/deep pattern shipped earlier this session) — the
     // "Genererar ljud …" placeholder covers the gap.
+    state.shadowingPracticeEntry = "editor";
     openShadowingPractice(item, { generating: true });
     await runShadowingTtsGeneration(item, text, token);
   } catch (error) {
@@ -10309,6 +10350,26 @@ function forceStartsideOnPwaLaunch() {
   forceHomeView({ resetScroll: true });
 }
 
+// 2026-08-03: extracted from the [data-return-view="libraryView"] handler
+// so closeShadowingPractice can reuse the exact same "go up to Bibliotek"
+// behavior for the cross-module-handoff case (see readingResultsEntry's
+// comment above for the same principle applied to Läsning).
+function returnToLibraryView() {
+  closeTransientOverlays();
+  closeShadowingPlayback();
+  state.activeView = "libraryView";
+  document.body.dataset.activeView = "libraryView";
+  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = true;
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.view === "libraryView");
+  });
+  document.querySelectorAll(".view").forEach((view) => {
+    view.classList.toggle("active", view.id === "libraryView");
+  });
+  window.scrollTo(0, 0);
+  renderActiveView();
+}
+
 function bindEvents() {
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -10336,19 +10397,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const viewId = button.dataset.returnView;
       if (viewId === "libraryView") {
-        closeTransientOverlays();
-        closeShadowingPlayback();
-        state.activeView = "libraryView";
-        document.body.dataset.activeView = "libraryView";
-        if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = true;
-        document.querySelectorAll(".tab").forEach((tab) => {
-          tab.classList.toggle("active", tab.dataset.view === "libraryView");
-        });
-        document.querySelectorAll(".view").forEach((view) => {
-          view.classList.toggle("active", view.id === "libraryView");
-        });
-        window.scrollTo(0, 0);
-        renderActiveView();
+        returnToLibraryView();
         return;
       }
       activateView(viewId);
@@ -10394,6 +10443,7 @@ function bindEvents() {
   els.newReadingBtn?.addEventListener("click", () => openReadingEditor(null));
   els.closeReadingEditorBtn?.addEventListener("click", closeReadingEditor);
   els.closeReadingAnalysisBtn?.addEventListener("click", closeReadingResults);
+  els.editReadingResultsTextBtn?.addEventListener("click", editReadingResultsText);
   els.saveReadingBtn?.addEventListener("click", saveCurrentReadingItem);
   els.analyzeReadingBtn?.addEventListener("click", analyzeCurrentReadingItem);
   els.deleteReadingBtn?.addEventListener("click", deleteCurrentReadingItem);

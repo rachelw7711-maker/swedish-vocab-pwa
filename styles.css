@@ -4066,6 +4066,22 @@ h2 {
   margin: 8px 0 12px;
 }
 
+/* 2026-08-03: covers the one thing Tillbaka-goes-straight-to-list would
+   otherwise remove access to — fixing the source text of an
+   already-analyzed article. Deliberately styled as a quiet text link, not
+   a full button, since it's a secondary escape hatch, not the primary
+   action on this page. */
+.reading-edit-text-link {
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  font-size: 0.84rem;
+  font-weight: 660;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
 .field-label,
 .word-form label {
   display: grid;
