@@ -2035,9 +2035,7 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   text-decoration: underline;
 }
 
-.shadowing-editor .visually-hidden,
-.shadowing-player .visually-hidden,
-.shadowing-export .visually-hidden {
+.visually-hidden {
   display: none !important;
 }
 
