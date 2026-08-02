@@ -2849,6 +2849,13 @@ function openReadingEditor(item = null) {
   els.deleteReadingBtn.hidden = !item?.id;
   els.analyzeReadingBtn.hidden = !item?.id;
   if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = !item?.id;
+  // 2026-08-02, Rachel's feedback: Spara staying visible forever (even
+  // right after a successful save, with nothing new to persist) read as a
+  // second, purposeless "spara" step alongside Analysera/Öppna i Shadowing,
+  // which already re-save on the user's behalf before doing their own job.
+  // Hide it once there's nothing unsaved; the input listeners below bring
+  // it back the moment the user actually changes something.
+  els.saveReadingBtn.hidden = Boolean(item?.id);
   updateReadingWordCountNote();
   renderReadingAnnotateSection(item);
   if (els.readingTextInput) els.readingTextInput.classList.remove("reading-text-collapsed");
@@ -2926,6 +2933,7 @@ async function saveCurrentReadingItem() {
     const saved = result.item;
     state.readingItems = [saved, ...state.readingItems.filter((item) => item.id !== saved.id)];
     els.readingItemId.value = saved.id;
+    els.saveReadingBtn.hidden = true;
     if (els.readingEditorHeading) els.readingEditorHeading.textContent = saved.title || "Läsning";
     if (els.readingEditorIntro) els.readingEditorIntro.hidden = true;
     els.deleteReadingBtn.hidden = false;
@@ -10210,6 +10218,12 @@ function bindEvents() {
   });
   els.generateReadingSummaryBtn?.addEventListener("click", generateSummaryForCurrentReadingItem);
   els.readingTextInput?.addEventListener("input", updateReadingWordCountNote);
+  // Bring Spara back the moment there's something new to persist — covers
+  // manual edits and programmatic changes alike (photo import already
+  // dispatches a real "input" event on readingTextInput after setting the
+  // textarea's value, so it's covered here too, no separate call needed).
+  els.readingTextInput?.addEventListener("input", () => { els.saveReadingBtn.hidden = false; });
+  els.readingTitleInput?.addEventListener("input", () => { els.saveReadingBtn.hidden = false; });
   els.importReadingPhotoBtn?.addEventListener("click", () => els.readingPhotoFileInput?.click());
   els.readingPhotoFileInput?.addEventListener("change", handleReadingPhotoImport);
 
