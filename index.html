@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=167" />
+    <link rel="stylesheet" href="/styles.css?v=168" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -326,69 +326,77 @@
               <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
               <button class="secondary-button" id="openInShadowingBtn" type="button" hidden>Öppna i Shadowing</button>
             </div>
-            <section id="readingAnalysisPanel" hidden>
-              <div class="reading-summary-block">
-                <h4>Sammanfattning</h4>
-                <button class="secondary-button" id="generateReadingSummaryBtn" type="button">Generera sammanfattning</button>
-                <p id="readingHeadlineZh" class="reading-headline" hidden></p>
-                <p id="readingSummarySv"></p>
-                <p id="readingSummaryZh" class="example-translation"></p>
-                <ul id="readingKeyPoints" class="reading-key-points" hidden></ul>
-              </div>
-              <div class="reading-deep-pending" id="readingDeepPending" hidden>
-                <p>🔄 AI fortsätter analysera fler ord och uttryck …</p>
-              </div>
-              <div class="reading-keywords-block" id="readingKeywordsBlock">
-                <h4>Ord värda att lära sig</h4>
-                <div id="readingKeyWords" class="reading-chip-list"></div>
-                <div id="readingWordPreview" class="reading-word-preview" hidden></div>
-              </div>
-              <div class="reading-phrases-block" id="readingPhrasesBlock">
-                <h4>Fraser &amp; Uttryck i texten</h4>
-                <div id="readingKeyPhrases" class="reading-phrase-list"></div>
-              </div>
-              <div class="reading-sentences-block" id="readingSentencesBlock">
-                <h4>Viktiga meningar</h4>
-                <div id="readingKeySentences" class="reading-sentence-list"></div>
-              </div>
-              <div class="reading-patterns-block" id="readingPatternsBlock">
-                <h4>🔤 Språkmönster</h4>
-                <div id="readingLanguagePatterns" class="reading-pattern-list"></div>
-              </div>
-              <section class="reading-annotate-section" id="readingAnnotateSection" hidden>
-                <h4>📝 Läs och markera</h4>
-                <p class="reading-annotate-hint">Klicka på en mening för att markera den. Markerade meningar kan få en egen anteckning.</p>
-                <div id="readingAnnotateText" class="reading-annotate-text"></div>
-              </section>
-              <section class="reading-report-card" id="readingReportCard" hidden>
-                <h4>📖 Läsrapport</h4>
-                <div class="reading-report-stats">
-                  <span>Textlängd: <strong data-report-word-count></strong></span>
-                  <span data-report-cefr-row hidden>Nivå: <strong data-report-cefr></strong></span>
-                </div>
-                <p class="reading-report-label">🎯 AI-urval</p>
-                <div class="reading-report-grid">
-                  <span>⭐ Nyckelord <strong data-report-vocab></strong></span>
-                  <span>💬 Fraser <strong data-report-colloc></strong></span>
-                  <span>🌍 Uttryck <strong data-report-idiom></strong></span>
-                  <span>📌 Meningar <strong data-report-sentences></strong></span>
-                  <span>🔤 Mönster <strong data-report-patterns></strong></span>
-                </div>
-                <p class="reading-report-compression">Kunskapskompression: <strong data-report-compression></strong></p>
-                <p class="reading-report-label">⏱ Uppskattad studietid</p>
-                <div class="reading-report-time">
-                  <span>Läsning <strong data-report-read-min></strong> min</span>
-                  <span>Ordinlärning <strong data-report-learn-min></strong> min</span>
-                  <span>Repetition <strong data-report-review-min></strong> min</span>
-                </div>
-                <p class="reading-report-total">Totalt ca <strong data-report-total-min></strong> min</p>
-              </section>
-              <div class="practice-actions">
-                <button class="primary-button" id="sendReadingToShadowingBtn" type="button">Skicka till Shadowing</button>
-                <button class="secondary-button" id="sendSelectedSentencesToShadowingBtn" type="button" hidden>Skicka utvalda meningar</button>
-                <button class="secondary-button" id="exportReadingBtn" type="button">Exportera</button>
-              </div>
+          </section>
+
+          <section class="panel reading-analysis" id="readingAnalysisPanel" hidden>
+            <div class="toolbar">
+              <button class="secondary-button" id="closeReadingAnalysisBtn" type="button">‹ Tillbaka</button>
+            </div>
+            <h3 id="readingAnalysisHeading">Läsning</h3>
+            <div class="reading-analysis-loading" id="readingAnalysisLoading" hidden>
+              <p>🔄 Analyserar …</p>
+            </div>
+            <div class="reading-summary-block">
+              <h4>Sammanfattning</h4>
+              <button class="secondary-button" id="generateReadingSummaryBtn" type="button">Generera sammanfattning</button>
+              <p id="readingHeadlineZh" class="reading-headline" hidden></p>
+              <p id="readingSummarySv"></p>
+              <p id="readingSummaryZh" class="example-translation"></p>
+              <ul id="readingKeyPoints" class="reading-key-points" hidden></ul>
+            </div>
+            <div class="reading-deep-pending" id="readingDeepPending" hidden>
+              <p>🔄 AI fortsätter analysera fler ord och uttryck …</p>
+            </div>
+            <div class="reading-keywords-block" id="readingKeywordsBlock">
+              <h4>Ord värda att lära sig</h4>
+              <div id="readingKeyWords" class="reading-chip-list"></div>
+              <div id="readingWordPreview" class="reading-word-preview" hidden></div>
+            </div>
+            <div class="reading-phrases-block" id="readingPhrasesBlock">
+              <h4>Fraser &amp; Uttryck i texten</h4>
+              <div id="readingKeyPhrases" class="reading-phrase-list"></div>
+            </div>
+            <div class="reading-sentences-block" id="readingSentencesBlock">
+              <h4>Viktiga meningar</h4>
+              <div id="readingKeySentences" class="reading-sentence-list"></div>
+            </div>
+            <div class="reading-patterns-block" id="readingPatternsBlock">
+              <h4>🔤 Språkmönster</h4>
+              <div id="readingLanguagePatterns" class="reading-pattern-list"></div>
+            </div>
+            <section class="reading-annotate-section" id="readingAnnotateSection" hidden>
+              <h4>📝 Läs och markera</h4>
+              <p class="reading-annotate-hint">Klicka på en mening för att markera den. Markerade meningar kan få en egen anteckning.</p>
+              <div id="readingAnnotateText" class="reading-annotate-text"></div>
             </section>
+            <section class="reading-report-card" id="readingReportCard" hidden>
+              <h4>📖 Läsrapport</h4>
+              <div class="reading-report-stats">
+                <span>Textlängd: <strong data-report-word-count></strong></span>
+                <span data-report-cefr-row hidden>Nivå: <strong data-report-cefr></strong></span>
+              </div>
+              <p class="reading-report-label">🎯 AI-urval</p>
+              <div class="reading-report-grid">
+                <span>⭐ Nyckelord <strong data-report-vocab></strong></span>
+                <span>💬 Fraser <strong data-report-colloc></strong></span>
+                <span>🌍 Uttryck <strong data-report-idiom></strong></span>
+                <span>📌 Meningar <strong data-report-sentences></strong></span>
+                <span>🔤 Mönster <strong data-report-patterns></strong></span>
+              </div>
+              <p class="reading-report-compression">Kunskapskompression: <strong data-report-compression></strong></p>
+              <p class="reading-report-label">⏱ Uppskattad studietid</p>
+              <div class="reading-report-time">
+                <span>Läsning <strong data-report-read-min></strong> min</span>
+                <span>Ordinlärning <strong data-report-learn-min></strong> min</span>
+                <span>Repetition <strong data-report-review-min></strong> min</span>
+              </div>
+              <p class="reading-report-total">Totalt ca <strong data-report-total-min></strong> min</p>
+            </section>
+            <div class="practice-actions">
+              <button class="primary-button" id="sendReadingToShadowingBtn" type="button">Skicka till Shadowing</button>
+              <button class="secondary-button" id="sendSelectedSentencesToShadowingBtn" type="button" hidden>Skicka utvalda meningar</button>
+              <button class="secondary-button" id="exportReadingBtn" type="button">Exportera</button>
+            </div>
           </section>
         </section>
 
@@ -1290,6 +1298,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=173" type="module"></script>
+    <script src="/app.js?v=174" type="module"></script>
   </body>
 </html>

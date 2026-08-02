@@ -4162,7 +4162,8 @@ h2 {
   color: #454f45;
 }
 
-.reading-deep-pending {
+.reading-deep-pending,
+.reading-analysis-loading {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4173,8 +4174,14 @@ h2 {
   font-size: 0.88rem;
 }
 
-.reading-deep-pending p {
+.reading-deep-pending p,
+.reading-analysis-loading p {
   margin: 0;
+}
+
+.reading-analysis {
+  display: grid;
+  gap: 14px;
 }
 
 .reading-chip-list {

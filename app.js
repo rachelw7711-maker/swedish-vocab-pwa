@@ -314,6 +314,7 @@ const state = {
   fraserTypeFilter: "all",
   readingItems: [],
   readingItemsLoaded: false,
+  readingListStats: {},
   selectedReadingId: "",
   currentReadingAnalysis: null,
   selectedNotebook: "",
@@ -557,6 +558,9 @@ const els = {
   saveReadingBtn: document.querySelector("#saveReadingBtn"),
   analyzeReadingBtn: document.querySelector("#analyzeReadingBtn"),
   readingAnalysisPanel: document.querySelector("#readingAnalysisPanel"),
+  closeReadingAnalysisBtn: document.querySelector("#closeReadingAnalysisBtn"),
+  readingAnalysisHeading: document.querySelector("#readingAnalysisHeading"),
+  readingAnalysisLoading: document.querySelector("#readingAnalysisLoading"),
   readingSummarySv: document.querySelector("#readingSummarySv"),
   readingSummaryZh: document.querySelector("#readingSummaryZh"),
   readingHeadlineZh: document.querySelector("#readingHeadlineZh"),
@@ -2730,6 +2734,11 @@ async function enhanceReadingListWithStats() {
     console.warn("[SpråkLab] Failed to load reading list stats.", error);
     return;
   }
+  // 2026-08-03: cached so openReadingEditor can synchronously decide
+  // "already analyzed -> go straight to results" without an editor-page
+  // flash in the common case (the list's own stats fetch has usually
+  // already resolved by the time the user taps a card).
+  state.readingListStats = { ...(state.readingListStats || {}), ...statsByResource };
   state.readingItems.forEach((item) => {
     if (!item.text_resource_id) return;
     const meta = els.readingList?.querySelector(`[data-reading-item-meta="${item.id}"]`);
@@ -2829,6 +2838,33 @@ async function handleReadingPhotoImport(event) {
   }
 }
 
+// 2026-08-03, Rachel's decision: Läsning becomes two separate pages — the
+// edit form (this panel) and the AI results/"learning card stream"
+// (readingAnalysisPanel, now a sibling instead of nested inside this one).
+// showReadingEditorPanel/openReadingResults are the two dumb panel-toggle
+// primitives; openReadingEditor is the smart entry point that decides which
+// one to land on (only used from "Ny text" and clicking a list item — NOT
+// from the Tillbaka button on the results page, which must always show the
+// editor regardless of analysis state or it would just bounce right back).
+function showReadingEditorPanel() {
+  els.readingListPanel.hidden = true;
+  els.readingList.hidden = true;
+  els.readingAnalysisPanel.hidden = true;
+  els.readingEditorPanel.hidden = false;
+}
+
+function openReadingResults(item) {
+  if (els.readingAnalysisHeading) els.readingAnalysisHeading.textContent = item?.title || "Läsning";
+  els.readingListPanel.hidden = true;
+  els.readingList.hidden = true;
+  els.readingEditorPanel.hidden = true;
+  els.readingAnalysisPanel.hidden = false;
+}
+
+function closeReadingResults() {
+  showReadingEditorPanel();
+}
+
 function openReadingEditor(item = null) {
   state.selectedReadingId = item?.id || "";
   state.currentReadingAnalysis = null;
@@ -2860,12 +2896,22 @@ function openReadingEditor(item = null) {
   renderReadingAnnotateSection(item);
   if (els.readingTextInput) els.readingTextInput.classList.remove("reading-text-collapsed");
   if (els.readingTextToggleBtn) els.readingTextToggleBtn.hidden = true;
-  els.readingAnalysisPanel.hidden = true;
   if (els.readingPhotoStatus) els.readingPhotoStatus.hidden = true;
   if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = true;
-  els.readingListPanel.hidden = true;
-  els.readingList.hidden = true;
-  els.readingEditorPanel.hidden = false;
+
+  // 2026-08-03: land directly on the results page for an item that's
+  // already analyzed, using the reading list's own cached stats
+  // (enhanceReadingListWithStats) as a synchronous best-effort signal so
+  // there's no editor-page flash in the common case. The async block below
+  // is the real source of truth and can still correct to results if this
+  // cache missed (e.g. the list's own stats fetch hadn't resolved yet).
+  const cachedStats = item?.text_resource_id ? state.readingListStats?.[item.text_resource_id] : null;
+  const likelyAnalyzed = Boolean(cachedStats && (cachedStats.vocabCount || cachedStats.exprCount || cachedStats.sentenceCount || cachedStats.patternCount));
+  if (likelyAnalyzed) {
+    openReadingResults(item);
+  } else {
+    showReadingEditorPanel();
+  }
 
   // Async-enhance once any existing analysis loads, same pattern as
   // enhanceGrammarSectionWithStructuredForms — the panel is already usable
@@ -2884,6 +2930,7 @@ function openReadingEditor(item = null) {
         if (els.readingItemId.value !== item.id) return; // user navigated away
         if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
         state.currentReadingAnalysis = analysis;
+        openReadingResults(item);
         renderReadingAnalysis(analysis, { deepReady: resource.deepReady });
         // A previous session's deep layer may have been interrupted (e.g.
         // the app was closed right after the fast layer landed) — pick it
@@ -2900,6 +2947,7 @@ function closeReadingEditor() {
   els.readingListPanel.hidden = false;
   els.readingList.hidden = false;
   els.readingEditorPanel.hidden = true;
+  els.readingAnalysisPanel.hidden = true;
 }
 
 // 阅读模块设计想法-专业review-2026-07-27.md §"标题问题" — a title should
@@ -2989,6 +3037,12 @@ async function analyzeCurrentReadingItem() {
 
   els.analyzeReadingBtn.disabled = true;
   els.analyzeReadingBtn.textContent = "Analyserar…";
+  // 2026-08-03: navigate to the results page immediately (Rachel's
+  // decision — Analysera opens a full separate page, not more content
+  // further down the editor) rather than waiting for the fast-layer AI
+  // call to resolve first; the loading placeholder fills the gap.
+  openReadingResults(saved);
+  showReadingAnalysisLoading();
   try {
     const { textResource, analysis, deepReady } = await remoteDb.analyzeReadingText(textToAnalyze, "paste", state.readingPendingGlossary || []);
     const updated = { ...saved, text_resource_id: textResource.id };
@@ -2998,20 +3052,37 @@ async function analyzeCurrentReadingItem() {
     state.currentReadingAnalysis = analysis;
     state.currentReadingWordCount = textResource.word_count || readingWordCount(textToAnalyze);
     renderReadingAnalysis(analysis, { deepReady });
-    // Fast layer (headline/summary/key points) is already on screen — the
-    // button can go back to normal immediately instead of staying disabled
-    // through the slower deep layer below (Rachel's 关于阅读模块的调整.pages
-    // 两层生成方案: "让用户几秒内就能开始读").
     els.analyzeReadingBtn.disabled = false;
     els.analyzeReadingBtn.textContent = "Analysera";
     if (!deepReady) continueDeepReadingAnalysis(textResource.id);
   } catch (error) {
     console.warn("[SpråkLab] Reading analysis failed.", error);
-    els.readingAnalysisPanel.hidden = true;
+    closeReadingResults();
     alert(error.message || "Kunde inte analysera texten just nu.");
     els.analyzeReadingBtn.disabled = false;
     els.analyzeReadingBtn.textContent = "Analysera";
   }
+}
+
+// Shows the results page's "Analyserar …" loading state and hides every
+// content block so a fresh navigation (or a re-analyze of an item whose
+// results page still has the PREVIOUS analysis rendered) never flashes
+// stale content before the new fast-layer call resolves.
+function showReadingAnalysisLoading() {
+  if (els.readingAnalysisLoading) {
+    els.readingAnalysisLoading.hidden = false;
+    els.readingAnalysisLoading.querySelector("p").textContent = "🔄 Analyserar …";
+  }
+  if (els.readingDeepPending) els.readingDeepPending.hidden = true;
+  if (els.readingSummarySv) els.readingSummarySv.hidden = true;
+  if (els.readingSummaryZh) els.readingSummaryZh.hidden = true;
+  if (els.readingHeadlineZh) els.readingHeadlineZh.hidden = true;
+  if (els.readingKeyPoints) els.readingKeyPoints.hidden = true;
+  if (els.readingKeywordsBlock) els.readingKeywordsBlock.hidden = true;
+  if (els.readingPhrasesBlock) els.readingPhrasesBlock.hidden = true;
+  if (els.readingSentencesBlock) els.readingSentencesBlock.hidden = true;
+  if (els.readingPatternsBlock) els.readingPatternsBlock.hidden = true;
+  if (els.readingReportCard) els.readingReportCard.hidden = true;
 }
 
 // Deep half of the two-layer pipeline — fires right after the fast layer
@@ -3059,6 +3130,7 @@ function setReadingTextCollapsed(collapsed) {
 // (Rachel's confirmed call — annotate shouldn't wait on AI).
 function renderReadingAnalysis(analysis, { deepReady = true } = {}) {
   els.readingAnalysisPanel.hidden = false;
+  if (els.readingAnalysisLoading) els.readingAnalysisLoading.hidden = true;
   setReadingTextCollapsed(true);
   if (els.readingWordPreview) {
     els.readingWordPreview.hidden = true;
@@ -10173,6 +10245,7 @@ function bindEvents() {
 
   els.newReadingBtn?.addEventListener("click", () => openReadingEditor(null));
   els.closeReadingEditorBtn?.addEventListener("click", closeReadingEditor);
+  els.closeReadingAnalysisBtn?.addEventListener("click", closeReadingResults);
   els.saveReadingBtn?.addEventListener("click", saveCurrentReadingItem);
   els.analyzeReadingBtn?.addEventListener("click", analyzeCurrentReadingItem);
   els.deleteReadingBtn?.addEventListener("click", deleteCurrentReadingItem);
