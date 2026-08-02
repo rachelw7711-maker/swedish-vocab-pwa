@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=168" />
+    <link rel="stylesheet" href="/styles.css?v=169" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -689,7 +689,7 @@
 
         <section id="historyView" class="view">
           <div class="shadowing-top-fixed">
-            <section class="panel shadowing-editor">
+            <section class="panel shadowing-editor" id="shadowingEditorPanel">
               <div class="toolbar">
                 <div>
                   <p class="section-kicker">Shadowing</p>
@@ -739,7 +739,13 @@
               </select>
             </section>
 
-            <section class="panel shadowing-player">
+            <section class="panel shadowing-player" id="shadowingPlayerPanel" hidden>
+              <div class="toolbar">
+                <button class="secondary-button" id="closeShadowingPracticeBtn" type="button">‹ Tillbaka</button>
+              </div>
+              <div class="shadowing-generating" id="shadowingGenerating" hidden>
+                <p>🔄 Genererar ljud …</p>
+              </div>
               <div class="toolbar">
                 <div>
                   <p class="section-kicker">Shadowing</p>
@@ -814,7 +820,7 @@
               </section>
             </section>
 
-            <section class="panel shadowing-export">
+            <section class="panel shadowing-export" id="shadowingExportPanel" hidden>
               <div class="toolbar">
                 <div>
                   <p class="section-kicker">Shadowing</p>
@@ -1298,6 +1304,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=174" type="module"></script>
+    <script src="/app.js?v=175" type="module"></script>
   </body>
 </html>

@@ -593,6 +593,11 @@ const els = {
   historyList: document.querySelector("#historyList"),
   shadowingList: document.querySelector("#shadowingList"),
   shadowingItemId: document.querySelector("#shadowingItemId"),
+  shadowingEditorPanel: document.querySelector("#shadowingEditorPanel"),
+  shadowingPlayerPanel: document.querySelector("#shadowingPlayerPanel"),
+  shadowingExportPanel: document.querySelector("#shadowingExportPanel"),
+  closeShadowingPracticeBtn: document.querySelector("#closeShadowingPracticeBtn"),
+  shadowingGenerating: document.querySelector("#shadowingGenerating"),
   shadowingTitleInput: document.querySelector("#shadowingTitleInput"),
   shadowingSwedishInput: document.querySelector("#shadowingSwedishInput"),
   shadowingChineseInput: document.querySelector("#shadowingChineseInput"),
@@ -3536,6 +3541,13 @@ async function sendTextToShadowing(button, { title, swedish, textResourceId, lin
     await refreshShadowingState();
     state.selectedShadowingId = normalized.id;
     activateView("historyView");
+    // 2026-08-03, Rachel's confirmed decision: text handed off from
+    // Läsning lands directly on the Shadowing practice page with real AI
+    // audio already generating — not the editor, and not left on the free
+    // browser-speech fallback waiting for a manual click.
+    openShadowingPractice(normalized, { generating: true });
+    const token = await getShadowingAccessTokenOrGuide();
+    await runShadowingTtsGeneration(normalized, swedish, token);
   } catch (error) {
     console.warn("[SpråkLab] Failed to send text to Shadowing.", error);
   } finally {
@@ -6186,7 +6198,34 @@ function selectShadowingItem(itemId) {
   renderShadowing();
 }
 
+// 2026-08-03, Rachel's decision: Shadowing becomes two separate pages, same
+// split as Läsning got earlier this session — the text-input editor and
+// the practice page (player/record/export). No prior precedent existed for
+// this in Shadowing (all three panels used to be permanently visible
+// together); these three functions are the toggle primitives.
+function openShadowingEditor() {
+  if (els.shadowingEditorPanel) els.shadowingEditorPanel.hidden = false;
+  if (els.shadowingPlayerPanel) els.shadowingPlayerPanel.hidden = true;
+  if (els.shadowingExportPanel) els.shadowingExportPanel.hidden = true;
+}
+
+function openShadowingPractice(item, { generating = false } = {}) {
+  if (item?.id) state.selectedShadowingId = item.id;
+  if (els.shadowingEditorPanel) els.shadowingEditorPanel.hidden = true;
+  if (els.shadowingPlayerPanel) els.shadowingPlayerPanel.hidden = false;
+  if (els.shadowingExportPanel) els.shadowingExportPanel.hidden = false;
+  if (els.shadowingGenerating) els.shadowingGenerating.hidden = !generating;
+  renderShadowingPlayer();
+}
+
+function closeShadowingPractice() {
+  shadowingAudio.pause();
+  state.shadowingPlaybackState = "paused";
+  openShadowingEditor();
+}
+
 function resetShadowingForm() {
+  state.selectedShadowingId = "";
   if (els.shadowingItemId) els.shadowingItemId.value = "";
   if (els.shadowingTitleInput) els.shadowingTitleInput.value = "";
   if (els.shadowingSwedishInput) els.shadowingSwedishInput.value = "";
@@ -6797,33 +6836,14 @@ function stopShadowingSpeech() {
   speechSynthesis.cancel();
 }
 
-async function generateStandardShadowingAudio() {
-  let item = ensureSelectedShadowingItem();
-  const text = normalizeShadowingFlowText(els.shadowingSwedishInput?.value || item?.swedish || "");
-  if (!text) {
-    alert("Skriv svensk text innan du genererar ljud.");
-    return;
-  }
-  if (els.generateShadowingAudioBtn) {
-    els.generateShadowingAudioBtn.disabled = true;
-    els.generateShadowingAudioBtn.textContent = "Genererar...";
-  }
+// 2026-08-03: extracted from generateStandardShadowingAudio so both the
+// manual "▶️ Shadowing" button and Reading's handoff (sendTextToShadowing)
+// can trigger real audio generation without duplicating the TTS fetch and
+// its speech-synthesis-fallback error handling. Behavior unchanged from
+// before the extraction — success updates the item and autoplays; failure
+// falls back to the browser's own speechSynthesis voice.
+async function runShadowingTtsGeneration(item, text, token) {
   try {
-    const token = await getShadowingAccessTokenOrGuide();
-    if (!item?.id || clean(item.swedish) !== text) {
-      item = await saveShadowingItemFromForm();
-    }
-    if (!item?.id) return;
-    const remoteResult = await remoteDb.upsertShadowingItem({ ...item, swedish: text });
-    if (remoteResult?.item) {
-      item = shadowingStore.normalizeShadowingItem(remoteResult.item);
-      remotePhase4Snapshot = {
-        ...(remotePhase4Snapshot || {}),
-        shadowingItems: mergeShadowingItemsForApp([item], remotePhase4Snapshot?.shadowingItems || []),
-      };
-      await refreshShadowingState();
-      state.selectedShadowingId = item.id;
-    }
     const response = await fetch("/api/shadowing/tts", {
       method: "POST",
       headers: {
@@ -6866,11 +6886,13 @@ async function generateStandardShadowingAudio() {
       }
       state.selectedShadowingId = updatedItem.id;
       populateShadowingForm(updatedItem);
+      if (els.shadowingGenerating) els.shadowingGenerating.hidden = true;
       renderShadowing();
       await playShadowingCurrentItem();
     }
   } catch (error) {
     console.error("[Shadowing] Standard audio generation failed", error);
+    if (els.shadowingGenerating) els.shadowingGenerating.hidden = true;
     const message = shadowingTtsErrorMessage(error);
     if (speakShadowingText(text)) {
       updateShadowingAudioHint("Läser upp med webbläsarens röst. Standardljud kunde inte genereras ännu.");
@@ -6878,8 +6900,48 @@ async function generateStandardShadowingAudio() {
       updateShadowingAudioHint(message);
       alert(message);
     }
+  }
+}
+
+async function generateStandardShadowingAudio() {
+  let item = ensureSelectedShadowingItem();
+  const text = normalizeShadowingFlowText(els.shadowingSwedishInput?.value || item?.swedish || "");
+  if (!text) {
+    alert("Skriv svensk text innan du genererar ljud.");
+    return;
+  }
+  if (els.generateShadowingAudioBtn) {
+    els.generateShadowingAudioBtn.disabled = true;
+    els.generateShadowingAudioBtn.textContent = "Genererar...";
+  }
+  try {
+    const token = await getShadowingAccessTokenOrGuide();
+    if (!item?.id || clean(item.swedish) !== text) {
+      item = await saveShadowingItemFromForm();
+    }
+    if (!item?.id) return;
+    const remoteResult = await remoteDb.upsertShadowingItem({ ...item, swedish: text });
+    if (remoteResult?.item) {
+      item = shadowingStore.normalizeShadowingItem(remoteResult.item);
+      remotePhase4Snapshot = {
+        ...(remotePhase4Snapshot || {}),
+        shadowingItems: mergeShadowingItemsForApp([item], remotePhase4Snapshot?.shadowingItems || []),
+      };
+      await refreshShadowingState();
+      state.selectedShadowingId = item.id;
+    }
+    // 2026-08-03: navigate to the practice page immediately, generation
+    // continues in the background (Rachel's confirmed decision, mirrors
+    // Läsning's fast/deep pattern shipped earlier this session) — the
+    // "Genererar ljud …" placeholder covers the gap.
+    openShadowingPractice(item, { generating: true });
+    await runShadowingTtsGeneration(item, text, token);
+  } catch (error) {
+    console.error("[Shadowing] Failed to prepare standard audio generation", error);
+    alert(shadowingTtsErrorMessage(error));
   } finally {
     if (els.generateShadowingAudioBtn) {
+      els.generateShadowingAudioBtn.disabled = false;
       els.generateShadowingAudioBtn.textContent = "▶️ Shadowing";
       updateShadowingPlaybackUI();
     }
@@ -10181,6 +10243,7 @@ function bindEvents() {
         resetListLimit("notebook");
       }
       if (viewId === "readingView") closeReadingEditor();
+      if (viewId === "historyView") openShadowingEditor();
       activateView(viewId);
     });
   });
@@ -10421,16 +10484,15 @@ function bindEvents() {
     renderNotebook();
   });
 
+  els.closeShadowingPracticeBtn?.addEventListener("click", closeShadowingPractice);
   els.newShadowingBtn?.addEventListener("click", () => {
-    if (els.shadowingSwedishInput) els.shadowingSwedishInput.value = "";
-    state.shadowingFlowStep = "paste";
-    state.shadowingFlowText = "";
-    state.shadowingFlowWordCount = 0;
-    state.shadowingFlowReadTimeText = "";
-    state.shadowingFlowUnknownWords = [];
-    state.shadowingFlowSelectedUnknownWords = [];
-    state.shadowingUnknownExpanded = false;
-    renderShadowingFlow();
+    // 2026-08-03: was a partial inline reset that never cleared item
+    // identity (shadowingItemId/selectedShadowingId) — harmless before the
+    // editor/practice split, but now that Rensa can be followed by
+    // Generate on genuinely new text, use the real shared reset so a
+    // cleared textarea can't accidentally get saved as an update to the
+    // previous item.
+    resetShadowingForm();
     updateShadowingPlaybackUI();
     els.shadowingSwedishInput?.focus();
   });

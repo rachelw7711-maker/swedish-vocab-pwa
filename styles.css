@@ -2511,6 +2511,21 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   gap: 12px;
 }
 
+.shadowing-generating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(90, 122, 90, 0.1);
+  color: #4a5a4a;
+  font-size: 0.88rem;
+}
+
+.shadowing-generating p {
+  margin: 0;
+}
+
 .shadowing-export-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
