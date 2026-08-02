@@ -1765,6 +1765,24 @@ export async function analyzeReadingTextDeep(textResourceId) {
   return { analysis: fromTextAnalysisRow(payload.analysis), tier: payload.tier };
 }
 
+// 2026-08-03: lets the user file a reading-analysis phrase/expression into
+// Fraser or Uttryck themselves, overriding whatever the AI auto-classified
+// it as at analysis time.
+export async function classifyReadingExpression(expressionId, classification) {
+  const token = await getAccessToken().catch(() => "");
+  const response = await fetch("/api/reading/classify-expression", {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ expressionId, classification }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Kunde inte spara frasen.");
+  return payload.entry;
+}
+
 // 规范§9.3/§10 — summary is a separate, user-initiated call, never bundled
 // into analyzeReadingText above.
 export async function generateReadingSummary(textResourceId) {

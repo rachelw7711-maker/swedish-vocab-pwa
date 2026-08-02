@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=169" />
+    <link rel="stylesheet" href="/styles.css?v=170" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -350,7 +350,6 @@
             <div class="reading-keywords-block" id="readingKeywordsBlock">
               <h4>Ord värda att lära sig</h4>
               <div id="readingKeyWords" class="reading-chip-list"></div>
-              <div id="readingWordPreview" class="reading-word-preview" hidden></div>
             </div>
             <div class="reading-phrases-block" id="readingPhrasesBlock">
               <h4>Fraser &amp; Uttryck i texten</h4>
@@ -368,6 +367,7 @@
               <h4>📝 Läs och markera</h4>
               <p class="reading-annotate-hint">Klicka på en mening för att markera den. Markerade meningar kan få en egen anteckning.</p>
               <div id="readingAnnotateText" class="reading-annotate-text"></div>
+              <button class="reading-text-toggle-btn" id="readingAnnotateToggleBtn" type="button" hidden>Visa hela texten</button>
             </section>
             <section class="reading-report-card" id="readingReportCard" hidden>
               <h4>📖 Läsrapport</h4>
@@ -1304,6 +1304,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=175" type="module"></script>
+    <script src="/app.js?v=176" type="module"></script>
   </body>
 </html>

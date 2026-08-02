@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import { analyzeReadingResourceFast, analyzeReadingResourceDeep, generateReadingSummary, extractTextFromImage, calculateCredits } from "./server-reading.mjs";
+import { analyzeReadingResourceFast, analyzeReadingResourceDeep, classifyReadingExpression, generateReadingSummary, extractTextFromImage, calculateCredits } from "./server-reading.mjs";
 import { generateWord, promoteCollocationToPhrase, readPublicWords, markWordsReviewed } from "./server-words.mjs";
 
 const PORT = Number(process.env.PORT || 4174);
@@ -527,6 +527,14 @@ createServer(async (req, res) => {
       }
       const { analysis, tier } = await analyzeReadingResourceDeep({ supabaseAdmin, userId: user.id, textResourceId });
       sendJson(res, 200, { analysis, tier });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/reading/classify-expression") {
+      await readAuthenticatedUser(req);
+      const { expressionId, classification } = await readBody(req);
+      const entry = await classifyReadingExpression({ supabaseAdmin, expressionId, classification });
+      sendJson(res, 200, { entry });
       return;
     }
 

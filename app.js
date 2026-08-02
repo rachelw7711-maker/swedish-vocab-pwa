@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=137";
+import * as remoteDb from "./src/lib/db.js?v=138";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -577,6 +577,7 @@ const els = {
   readingReportCard: document.querySelector("#readingReportCard"),
   readingAnnotateSection: document.querySelector("#readingAnnotateSection"),
   readingAnnotateText: document.querySelector("#readingAnnotateText"),
+  readingAnnotateToggleBtn: document.querySelector("#readingAnnotateToggleBtn"),
   readingTextbookGlossary: document.querySelector("#readingTextbookGlossary"),
   readingTextbookGlossaryList: document.querySelector("#readingTextbookGlossaryList"),
   readingSentencesBlock: document.querySelector("#readingSentencesBlock"),
@@ -584,7 +585,6 @@ const els = {
   readingPatternsBlock: document.querySelector("#readingPatternsBlock"),
   readingLanguagePatterns: document.querySelector("#readingLanguagePatterns"),
   sendSelectedSentencesToShadowingBtn: document.querySelector("#sendSelectedSentencesToShadowingBtn"),
-  readingWordPreview: document.querySelector("#readingWordPreview"),
   generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
   sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
   exportReadingBtn: document.querySelector("#exportReadingBtn"),
@@ -3137,10 +3137,6 @@ function renderReadingAnalysis(analysis, { deepReady = true } = {}) {
   els.readingAnalysisPanel.hidden = false;
   if (els.readingAnalysisLoading) els.readingAnalysisLoading.hidden = true;
   setReadingTextCollapsed(true);
-  if (els.readingWordPreview) {
-    els.readingWordPreview.hidden = true;
-    els.readingWordPreview.replaceChildren();
-  }
 
   const hasSummary = Boolean(analysis.summarySv);
   els.readingSummarySv.textContent = analysis.summarySv || "";
@@ -3179,17 +3175,29 @@ function renderReadingAnalysis(analysis, { deepReady = true } = {}) {
   const vocabulary = analysis.selectedVocabulary || [];
   vocabulary.forEach((entry, index) => {
     const word = state.words.find((item) => item.id === entry.word_id);
-    const wrap = document.createElement("span");
-    wrap.className = "reading-item-wrap";
-    wrap.dataset.readingItemType = "vocabulary";
-    wrap.dataset.readingItemSortOrder = index;
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip reading-keyword-chip";
-    chip.dataset.readingWordId = entry.word_id;
-    chip.textContent = word ? `${word.swedish} · ${word.chinese}` : entry.swedish;
-    wrap.append(chip);
-    els.readingKeyWords.append(wrap);
+    // 2026-08-03, Rachel's feedback: word and Chinese meaning were crammed
+    // onto one chip line; now the word gets its own line in the box, with
+    // part-of-speech + meaning on a second line below it.
+    const card = document.createElement("div");
+    card.className = "reading-word-card";
+    card.dataset.readingItemType = "vocabulary";
+    card.dataset.readingItemSortOrder = index;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "reading-word-card-toggle";
+    toggle.dataset.readingWordId = entry.word_id;
+    const term = document.createElement("strong");
+    term.className = "reading-word-card-term";
+    term.textContent = word ? word.swedish : entry.swedish;
+    const meta = document.createElement("span");
+    meta.className = "reading-word-card-meta";
+    meta.textContent = word ? `${posBadgeLabel(word.pos)} · ${word.chinese}` : "";
+    toggle.append(term, meta);
+    const detail = document.createElement("div");
+    detail.className = "reading-word-card-detail";
+    detail.hidden = true;
+    card.append(toggle, detail);
+    els.readingKeyWords.append(card);
   });
   // 2026-08-01, 关于阅读模块的调整.pages: hide a section entirely when it's
   // empty rather than showing "inga ... hittades" placeholder text — reads
@@ -3199,36 +3207,59 @@ function renderReadingAnalysis(analysis, { deepReady = true } = {}) {
   els.readingKeyPhrases.replaceChildren();
   const expressions = analysis.selectedExpressions || [];
   expressions.forEach((entry, index) => {
-    const row = document.createElement("div");
-    row.className = "reading-phrase-row";
-    row.dataset.readingItemType = "expression";
-    row.dataset.readingItemSortOrder = index;
-    const heading = document.createElement("div");
-    heading.className = "reading-phrase-heading";
-    const phrase = document.createElement("strong");
-    phrase.textContent = entry.expression_text;
-    const badge = document.createElement("span");
-    badge.className = "pos-badge";
-    badge.textContent = entry.category === "idiom" ? "Uttryck" : "Fras";
-    heading.append(phrase, badge);
-    const meaning = document.createElement("span");
-    meaning.textContent = entry.meaning_zh;
+    // 2026-08-03, Rachel's feedback: same box-card logic as the vocabulary
+    // cards above — phrase on its own line, meaning below it, detail
+    // (example sentence + save destination) expands directly underneath
+    // when clicked. The AI's collocation/idiom guess is a starting point,
+    // not final — "Skicka till Fraser"/"Skicka till Uttryck" let her file
+    // it into whichever catalog she actually wants, overriding the guess.
+    const card = document.createElement("div");
+    card.className = "reading-phrase-card";
+    card.dataset.readingItemType = "expression";
+    card.dataset.readingItemSortOrder = index;
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "reading-phrase-card-toggle";
+    const term = document.createElement("strong");
+    term.className = "reading-phrase-card-term";
+    term.textContent = entry.expression_text;
+    const meta = document.createElement("span");
+    meta.className = "reading-phrase-card-meta";
+    meta.textContent = entry.meaning_zh;
+    toggle.append(term, meta);
+
+    const detail = document.createElement("div");
+    detail.className = "reading-phrase-card-detail";
+    detail.hidden = true;
     const example = document.createElement("p");
-    example.className = "reading-phrase-example";
     example.textContent = entry.source_sentence;
     const exampleZh = document.createElement("p");
-    exampleZh.className = "reading-phrase-example example-translation";
+    exampleZh.className = "example-translation";
     exampleZh.textContent = entry.source_sentence_zh;
-    row.append(heading, meaning, example, exampleZh);
+    detail.append(example, exampleZh);
     if (entry.expression_id) {
-      const link = document.createElement("button");
-      link.type = "button";
-      link.className = "reading-expression-link";
-      link.dataset.readingExpressionOpenId = entry.expression_id;
-      link.textContent = entry.category === "idiom" ? "Visa i Uttryck" : "Visa i Fraser";
-      row.append(link);
+      const actions = document.createElement("div");
+      actions.className = "reading-phrase-card-actions";
+      const toFraser = document.createElement("button");
+      toFraser.type = "button";
+      toFraser.className = "secondary-button";
+      toFraser.dataset.readingClassify = "collocation";
+      toFraser.dataset.readingExpressionId = entry.expression_id;
+      toFraser.textContent = "Skicka till Fraser";
+      toFraser.classList.toggle("active", entry.category !== "idiom");
+      const toUttryck = document.createElement("button");
+      toUttryck.type = "button";
+      toUttryck.className = "secondary-button";
+      toUttryck.dataset.readingClassify = "idiom";
+      toUttryck.dataset.readingExpressionId = entry.expression_id;
+      toUttryck.textContent = "Skicka till Uttryck";
+      toUttryck.classList.toggle("active", entry.category === "idiom");
+      actions.append(toFraser, toUttryck);
+      detail.append(actions);
     }
-    els.readingKeyPhrases.append(row);
+    card.append(toggle, detail);
+    els.readingKeyPhrases.append(card);
   });
   if (els.readingPhrasesBlock) els.readingPhrasesBlock.hidden = !expressions.length;
 
@@ -3436,18 +3467,25 @@ function markReadingItemViewedFromElement(el) {
 // 规范§9.4 — the light preview reads directly from the already-loaded Ordbok
 // snapshot (state.words), no AI call. "Visa hela ordkortet" is the only
 // path into the full word card.
-function showReadingWordPreview(wordId) {
-  const container = els.readingWordPreview;
-  if (!container) return;
-  const word = state.words.find((item) => item.id === wordId);
-  if (!word) {
-    container.hidden = true;
+// 2026-08-03, Rachel's feedback: the word-detail preview used to be one
+// shared box appended after the whole vocabulary list — clicking any word
+// jumped focus away from it. Now each word card owns its own detail slot,
+// directly below that word, accordion-style (only one open at a time).
+function toggleReadingWordDetail(toggle) {
+  const card = toggle.closest(".reading-word-card");
+  const detail = card?.querySelector(".reading-word-card-detail");
+  if (!detail) return;
+  const alreadyOpen = !detail.hidden;
+  els.readingKeyWords?.querySelectorAll(".reading-word-card-detail").forEach((el) => {
+    if (el !== detail) el.hidden = true;
+  });
+  if (alreadyOpen) {
+    detail.hidden = true;
     return;
   }
-  container.replaceChildren();
-  container.hidden = false;
-  const title = document.createElement("strong");
-  title.textContent = word.swedish;
+  const word = state.words.find((item) => item.id === toggle.dataset.readingWordId);
+  detail.replaceChildren();
+  if (!word) return;
   const pos = document.createElement("span");
   pos.className = "pos-badge";
   pos.textContent = posBadgeLabel(word.pos);
@@ -3461,15 +3499,40 @@ function showReadingWordPreview(wordId) {
   openFull.className = "secondary-button";
   openFull.textContent = "Visa hela ordkortet";
   openFull.addEventListener("click", () => openWordFromReadingChip(word.swedish));
-  container.append(title, pos, meaning, example, openFull);
+  detail.append(pos, meaning, example, openFull);
+  detail.hidden = false;
 }
 
-async function openExpressionFromReadingLink(expressionId) {
+// 2026-08-03: accordion-style detail, same pattern as toggleReadingWordDetail.
+function toggleReadingPhraseDetail(toggle) {
+  const card = toggle.closest(".reading-phrase-card");
+  const detail = card?.querySelector(".reading-phrase-card-detail");
+  if (!detail) return;
+  const alreadyOpen = !detail.hidden;
+  els.readingKeyPhrases?.querySelectorAll(".reading-phrase-card-detail").forEach((el) => {
+    if (el !== detail) el.hidden = true;
+  });
+  detail.hidden = alreadyOpen;
+}
+
+// Lets the user file this phrase into Fraser or Uttryck themselves,
+// overriding whatever the AI auto-classified it as at analysis time.
+async function classifyReadingPhrase(button) {
+  const expressionId = button.dataset.readingExpressionId;
+  const classification = button.dataset.readingClassify;
+  if (!expressionId || !classification) return;
+  const actions = button.closest(".reading-phrase-card-actions");
+  actions?.querySelectorAll("button").forEach((btn) => { btn.disabled = true; });
   try {
-    const entry = await remoteDb.loadWordOrPhraseById(expressionId);
-    if (entry) openWordDetail(entry, "library");
+    await remoteDb.classifyReadingExpression(expressionId, classification);
+    actions?.querySelectorAll("[data-reading-classify]").forEach((btn) => {
+      btn.classList.toggle("active", btn === button);
+    });
   } catch (error) {
-    console.warn("[SpråkLab] Failed to open expression detail.", error);
+    console.warn("[SpråkLab] Failed to classify reading phrase.", error);
+    alert(error.message || "Kunde inte spara frasen just nu.");
+  } finally {
+    actions?.querySelectorAll("button").forEach((btn) => { btn.disabled = false; });
   }
 }
 
@@ -3592,6 +3655,8 @@ function splitReadingSentences(text) {
   return (clean(text).match(/[^.!?]+[.!?]*/g) || []).map((s) => s.trim()).filter(Boolean);
 }
 
+const READING_ANNOTATE_COLLAPSED_COUNT = 4;
+
 function renderReadingAnnotateSection(item) {
   if (!els.readingAnnotateSection || !els.readingAnnotateText) return;
   if (!item?.id || !clean(item.source_text)) {
@@ -3599,7 +3664,23 @@ function renderReadingAnnotateSection(item) {
     return;
   }
   els.readingAnnotateSection.hidden = false;
-  const sentences = splitReadingSentences(item.source_text);
+  // 2026-08-03, Rachel's feedback: the original text dominated the results
+  // page — collapse to the first few sentences by default (mirrors the
+  // editor's own "Visa allt" text-collapse), expand only when she actually
+  // wants to mark something further down. A JS-based slice, not a CSS
+  // max-height crop — highlighted sentences grow a block-level note
+  // textarea right after them, which a height crop would visually slice
+  // instead of cleanly hiding. Expand state resets when a different item
+  // loads but survives this section's own in-place re-renders (adding a
+  // note re-renders this same section — collapsing mid-edit would be
+  // jarring).
+  if (els.readingAnnotateSection.dataset.readingAnnotateItemId !== item.id) {
+    els.readingAnnotateSection.dataset.readingAnnotateItemId = item.id;
+    els.readingAnnotateSection.dataset.expanded = "false";
+  }
+  const expanded = els.readingAnnotateSection.dataset.expanded === "true";
+  const allSentences = splitReadingSentences(item.source_text);
+  const sentences = expanded ? allSentences : allSentences.slice(0, READING_ANNOTATE_COLLAPSED_COUNT);
   const notesByIndex = new Map((item.notes || []).map((n) => [n.sentenceIndex, n]));
   els.readingAnnotateText.replaceChildren();
   sentences.forEach((sentence, index) => {
@@ -3623,6 +3704,10 @@ function renderReadingAnnotateSection(item) {
     }
     els.readingAnnotateText.append(wrap);
   });
+  if (els.readingAnnotateToggleBtn) {
+    els.readingAnnotateToggleBtn.hidden = allSentences.length <= READING_ANNOTATE_COLLAPSED_COUNT;
+    els.readingAnnotateToggleBtn.textContent = expanded ? "Visa mindre" : "Visa hela texten";
+  }
 }
 
 async function persistReadingNotes(updatedNotes) {
@@ -10319,6 +10404,13 @@ function bindEvents() {
   els.readingTextToggleBtn?.addEventListener("click", () => {
     setReadingTextCollapsed(!els.readingTextInput.classList.contains("reading-text-collapsed"));
   });
+  els.readingAnnotateToggleBtn?.addEventListener("click", () => {
+    const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+    if (!item || !els.readingAnnotateSection) return;
+    const expanded = els.readingAnnotateSection.dataset.expanded === "true";
+    els.readingAnnotateSection.dataset.expanded = expanded ? "false" : "true";
+    renderReadingAnnotateSection(item);
+  });
   els.readingAnnotateText?.addEventListener("click", (event) => {
     const span = event.target.closest(".reading-annotate-sentence");
     if (!span) return;
@@ -10341,16 +10433,21 @@ function bindEvents() {
     if (item) openReadingEditor(item);
   });
   els.readingKeyWords?.addEventListener("click", (event) => {
-    const chip = event.target.closest("[data-reading-word-id]");
-    if (!chip) return;
-    markReadingItemViewedFromElement(chip.closest("[data-reading-item-type]"));
-    showReadingWordPreview(chip.dataset.readingWordId);
+    const toggle = event.target.closest("[data-reading-word-id]");
+    if (!toggle) return;
+    markReadingItemViewedFromElement(toggle.closest("[data-reading-item-type]"));
+    toggleReadingWordDetail(toggle);
   });
   els.readingKeyPhrases?.addEventListener("click", (event) => {
-    const link = event.target.closest("[data-reading-expression-open-id]");
-    if (!link) return;
-    markReadingItemViewedFromElement(link.closest("[data-reading-item-type]"));
-    openExpressionFromReadingLink(link.dataset.readingExpressionOpenId);
+    const classifyBtn = event.target.closest("[data-reading-classify]");
+    if (classifyBtn) {
+      classifyReadingPhrase(classifyBtn);
+      return;
+    }
+    const toggle = event.target.closest(".reading-phrase-card-toggle");
+    if (!toggle) return;
+    markReadingItemViewedFromElement(toggle.closest("[data-reading-item-type]"));
+    toggleReadingPhraseDetail(toggle);
   });
   els.generateReadingSummaryBtn?.addEventListener("click", generateSummaryForCurrentReadingItem);
   els.readingTextInput?.addEventListener("input", updateReadingWordCountNote);

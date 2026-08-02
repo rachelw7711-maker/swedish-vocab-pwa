@@ -4200,36 +4200,66 @@ h2 {
 }
 
 .reading-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-width: 100%;
-}
-
-.reading-keyword-chip {
-  cursor: pointer;
-  /* The base .chip rule sets white-space: nowrap for short category tags —
-     these chips carry a full word + Chinese meaning, which needs to wrap
-     instead of stretching the chip (and its flex ancestors) past the
-     viewport width on mobile. */
-  white-space: normal;
-  max-width: 100%;
-  text-align: left;
-  height: auto;
-  min-height: 40px;
-}
-
-.reading-phrase-list {
   display: grid;
   gap: 8px;
   max-width: 100%;
 }
 
-/* Per-item discovery-state tracking (2026-07-30) */
-.reading-item-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* 2026-08-03: word on its own line, part-of-speech + meaning on a second
+   line below it — replaces the old single-line "swedish · chinese" chip. */
+.reading-word-card {
+  position: relative;
+  border-radius: 12px;
+  background: var(--secondary-surface);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.44);
+  overflow: hidden;
+}
+
+.reading-word-card .reading-item-ignore-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.reading-word-card-toggle {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.reading-word-card-term {
+  display: block;
+  font-weight: 700;
+  color: #23281f;
+}
+
+.reading-word-card-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.reading-word-card-detail {
+  display: grid;
+  gap: 6px;
+  padding: 0 14px 12px;
+}
+
+.reading-word-card-detail p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.reading-phrase-list {
+  display: grid;
+  gap: 8px;
   max-width: 100%;
 }
 
@@ -4248,18 +4278,18 @@ h2 {
   opacity: 0.45;
 }
 
-.reading-phrase-row {
-  display: grid;
-  gap: 2px;
-  padding: 8px 12px;
+/* 2026-08-03: same box-card logic as .reading-word-card — phrase on its
+   own line, meaning below it, detail (example + Fraser/Uttryck save
+   buttons) expands directly underneath on click. */
+.reading-phrase-card {
+  position: relative;
   border-radius: 12px;
   background: var(--secondary-surface);
+  overflow: hidden;
   max-width: 100%;
-  overflow-wrap: break-word;
-  position: relative;
 }
 
-.reading-phrase-row .reading-item-ignore-btn,
+.reading-phrase-card .reading-item-ignore-btn,
 .reading-sentence-row .reading-item-ignore-btn,
 .reading-pattern-row .reading-item-ignore-btn {
   position: absolute;
@@ -4267,21 +4297,56 @@ h2 {
   right: 6px;
 }
 
-.reading-phrase-row span {
-  color: var(--muted);
-  font-size: 0.84rem;
+.reading-phrase-card-toggle {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
-.reading-phrase-example {
+.reading-phrase-card-term {
+  display: block;
+  font-weight: 700;
+  color: #23281f;
+  overflow-wrap: break-word;
+}
+
+.reading-phrase-card-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.reading-phrase-card-detail {
+  display: grid;
+  gap: 6px;
+  padding: 0 14px 12px;
+}
+
+.reading-phrase-card-detail p {
   margin: 0;
   font-size: 0.84rem;
   color: var(--muted);
+  overflow-wrap: break-word;
 }
 
-.reading-phrase-heading {
+.reading-phrase-card-actions {
   display: flex;
-  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.reading-phrase-card-actions button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 .reading-sentence-list {
@@ -4342,18 +4407,6 @@ h2 {
 .review-queue-row p {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.reading-expression-link {
-  justify-self: start;
-  margin-top: 4px;
-  border: none;
-  background: none;
-  color: var(--accent, #2f7d5f);
-  font-size: 0.82rem;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
 }
 
 .reading-word-count-note {
@@ -4512,19 +4565,6 @@ h2 {
 .reading-import-photo-status {
   font-size: 0.82rem;
   color: var(--muted);
-}
-
-.reading-word-preview {
-  display: grid;
-  gap: 6px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--secondary-surface);
-}
-
-.reading-word-preview p {
-  margin: 0;
-  font-size: 0.88rem;
 }
 
 .load-more-state {

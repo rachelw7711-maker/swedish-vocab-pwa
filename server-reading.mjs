@@ -579,6 +579,46 @@ async function resolveExpressionEntries(supabaseAdmin, items, { objectType, cate
   return items.map((item) => ({ ...item, expression_id: byText.get(item.expression_text.toLowerCase()) || null }));
 }
 
+// 2026-08-03, Rachel's decision: reading-analysis phrases already get
+// auto-filed into Fraser (collocation) or Uttryck (idiom) by the AI at
+// analysis time — this lets the user override that classification
+// themselves, since "fixed collocation" vs. "genuinely idiomatic
+// expression" is a judgment call the AI doesn't always get right, and she
+// wants to be able to file a phrase into whichever catalog she thinks it
+// belongs in rather than only ever seeing where the AI put it.
+const EXPRESSION_CLASSIFICATIONS = {
+  collocation: { objectType: "phrase", category: "common_collocation" },
+  idiom: { objectType: "expression", category: "everyday_expression" },
+};
+
+export async function classifyReadingExpression({ supabaseAdmin, expressionId, classification }) {
+  const target = EXPRESSION_CLASSIFICATIONS[classification];
+  if (!target) {
+    const error = new Error("Ogiltig kategori.");
+    error.status = 400;
+    throw error;
+  }
+  const id = String(expressionId || "").trim();
+  if (!id) {
+    const error = new Error("expressionId saknas.");
+    error.status = 400;
+    throw error;
+  }
+  const { data, error } = await supabaseAdmin
+    .from("learning_objects")
+    .update({ object_type: target.objectType, category: target.category, status: "human_reviewed", updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id, object_type, category")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    const notFound = new Error("Frasen hittades inte.");
+    notFound.status = 404;
+    throw notFound;
+  }
+  return data;
+}
+
 // Cross-user by design (service-role bypasses RLS) — only ever reads
 // text_analysis (structured knowledge), never another user's
 // text_resources.original_text/cleaned_text.
