@@ -1713,6 +1713,8 @@ function fromTextAnalysisRow(row) {
     summarySv: row.summary_sv || "",
     summaryZh: row.summary_zh || "",
     summaryGeneratedAt: dateToMillis(row.summary_generated_at),
+    headlineZh: row.headline_zh || "",
+    keyPoints: row.key_points || [],
   };
 }
 
@@ -1741,7 +1743,26 @@ export async function analyzeReadingText(text, sourceType = "paste", glossary = 
     analysis: fromTextAnalysisRow(payload.analysis),
     tier: payload.tier,
     cached: Boolean(payload.cached),
+    deepReady: Boolean(payload.deepReady),
   };
+}
+
+// Two-layer generation, deep half (2026-08-02) — called right after
+// analyzeReadingText above when its deepReady comes back false. Fills in
+// vocabulary/expressions/sentences/patterns on the same text_analysis row.
+export async function analyzeReadingTextDeep(textResourceId) {
+  const token = await getAccessToken().catch(() => "");
+  const response = await fetch("/api/reading/analyze-deep", {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ textResourceId }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Kunde inte slutföra analysen.");
+  return { analysis: fromTextAnalysisRow(payload.analysis), tier: payload.tier };
 }
 
 // 规范§9.3/§10 — summary is a separate, user-initiated call, never bundled
@@ -1892,9 +1913,11 @@ export async function loadReadingListStats(textResourceIds) {
 export async function loadTextResource(textResourceId) {
   const id = clean(textResourceId);
   if (!id) return null;
-  const { data, error } = await supabase.from("text_resources").select("id, word_count, textbook_glossary").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("text_resources").select("id, word_count, textbook_glossary, analysis_status").eq("id", id).maybeSingle();
   if (error) throw error;
-  return data ? { id: data.id, wordCount: data.word_count || 0, textbookGlossary: data.textbook_glossary || [] } : null;
+  return data
+    ? { id: data.id, wordCount: data.word_count || 0, textbookGlossary: data.textbook_glossary || [], deepReady: data.analysis_status === "ready" }
+    : null;
 }
 
 export async function loadTextAnalysis(textResourceId) {

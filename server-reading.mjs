@@ -642,7 +642,44 @@ async function materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis
 }
 
 // Main entry point. Returns { textResource, analysis, tier, cached }.
-export async function analyzeReadingResource({ supabaseAdmin, userId, text, sourceType = "paste", glossary = [] }) {
+// 2026-08-02, two-layer generation (Rachel's confirmed decision from 关于
+// 阅读模块的调整.pages 两层生成方案): analysis used to be one long
+// sequential call chain (missing-word batch gen -> Worth Learning scoring
+// -> key-expressions extraction) before the user saw anything. Now split
+// into a fast layer (this function — one small AI call, headline + summary
+// + 3 content-highlight key points, enough to start reading in seconds) and
+// a deep layer (analyzeReadingResourceDeep below — the original heavy
+// vocabulary/expressions/sentences/patterns work), which the client calls
+// right after this one returns. Both write into the SAME text_analysis row
+// (insert here, update there) so cache-hit/public-reuse logic still keys
+// off one row per text_hash exactly as before.
+async function generateFastLayer(cleanedText, tier) {
+  const [minSentences, maxSentences] = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier].summarySentences;
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      headline_zh: { type: "string" },
+      summary_sv: { type: "string" },
+      summary_zh: { type: "string" },
+      key_points: { type: "array", items: { type: "string" } },
+    },
+    required: ["headline_zh", "summary_sv", "summary_zh", "key_points"],
+  };
+  return callOpenAI({
+    schemaName: "reading_fast_layer",
+    schema,
+    maxOutputTokens: 900,
+    systemPrompt: `You orient a Chinese-speaking learner to a Swedish text before they start reading — this must be fast to read and fast to generate, it is NOT the full analysis (vocabulary/expressions/grammar come later from a separate step).
+
+1. headline_zh: one short Chinese sentence naming what the article is about.
+2. summary_sv/summary_zh: ${minSentences}-${maxSentences} sentences (max 5) each, covering only the main topic, core content, and key conclusion — no background info, no grammar explanation.
+3. key_points: exactly 3 short Chinese bullet points (fewer only if the text is too short/simple to genuinely support 3 distinct ones) naming the most important pieces of CONTENT in the article — what a reader should watch for or take away. These are about content, never about grammar or language structure (that's a separate feature elsewhere in the app) — do not describe a grammatical construction here.`,
+    userPrompt: cleanedText,
+  });
+}
+
+export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, sourceType = "paste", glossary = [] }) {
   const cleaned = cleanText(text);
   const wordCount = countWords(cleaned);
   const hash = textHash(cleaned);
@@ -683,8 +720,14 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
     .maybeSingle();
 
   if (existingAnalysis) {
-    await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: existingAnalysis });
-    return { textResource, analysis: existingAnalysis, tier, cached: true };
+    // Either fully cached (deep layer already ran a previous time) or a
+    // fast-only row left over from an interrupted previous attempt (e.g.
+    // the user closed the app before the deep call finished) — either way,
+    // no new AI call needed here; the client decides whether to also call
+    // the deep endpoint based on deepReady.
+    const deepReady = textResource.analysis_status === "ready";
+    if (deepReady) await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: existingAnalysis });
+    return { textResource, analysis: existingAnalysis, tier, cached: true, deepReady };
   }
 
   // SPK-ADR-001/SPK-SPEC-003 upgrade (2026-07-27): "Generate Once, Reuse
@@ -702,7 +745,8 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   const publicAnalysis = await findPublicAnalysisByHash(supabaseAdmin, hash);
   if (publicAnalysis) {
     await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: publicAnalysis });
-    return { textResource, analysis: publicAnalysis, tier, cached: true, reusedFromPublic: true };
+    await supabaseAdmin.from("text_resources").update({ analysis_status: "ready" }).eq("id", textResource.id);
+    return { textResource, analysis: publicAnalysis, tier, cached: true, deepReady: true, reusedFromPublic: true };
   }
 
   if (tier === "oversized") {
@@ -711,7 +755,74 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
     throw error;
   }
 
-  const tierConfig = LENGTH_TIERS[tier];
+  const { result, usage } = await generateFastLayer(cleaned, tier);
+  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_fast_layer", model: MODEL, usage, cacheHit: false });
+  if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
+
+  const { data: analysisRow, error: analysisError } = await supabaseAdmin
+    .from("text_analysis")
+    .insert({
+      text_resource_id: textResource.id,
+      analysis_version: 1,
+      headline_zh: result.headline_zh,
+      summary_sv: result.summary_sv,
+      summary_zh: result.summary_zh,
+      key_points: result.key_points || [],
+      summary_generated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (analysisError) throw analysisError;
+
+  await supabaseAdmin.from("text_resources").update({ analysis_status: "summary_ready" }).eq("id", textResource.id);
+  return { textResource, analysis: analysisRow, tier, cached: false, deepReady: false };
+}
+
+// Deep layer — the original heavy vocabulary/expressions/sentences/patterns
+// work, unchanged in substance, now operating on a text_resource +
+// text_analysis row the fast layer already created, UPDATING that same row
+// instead of inserting a new one. Idempotent: if analysis_status is already
+// "ready" (e.g. a duplicate client call), just returns the existing row
+// rather than re-spending AI calls.
+export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textResourceId }) {
+  const { data: textResource, error: resourceError } = await supabaseAdmin
+    .from("text_resources")
+    .select("id, cleaned_text, word_count, analysis_status, textbook_glossary")
+    .eq("id", textResourceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (resourceError || !textResource) {
+    const error = new Error("Texten hittades inte.");
+    error.status = 404;
+    throw error;
+  }
+
+  const { data: existingAnalysis } = await supabaseAdmin
+    .from("text_analysis")
+    .select("*")
+    .eq("text_resource_id", textResource.id)
+    .order("analysis_version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!existingAnalysis) {
+    const error = new Error("Ingen snabbanalys hittades att bygga vidare på.");
+    error.status = 409;
+    throw error;
+  }
+
+  const tier = classifyLength(textResource.word_count);
+
+  if (textResource.analysis_status === "ready") {
+    await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: existingAnalysis });
+    return { analysis: existingAnalysis, tier };
+  }
+
+  const cleaned = textResource.cleaned_text;
+  const wordCount = textResource.word_count;
+  const glossary = textResource.textbook_glossary || [];
+  const usageLogEntries = [];
+
+  const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const vocabularyLimit = Math.min(tierConfig.keyVocabulary[1], MAX_KEY_VOCABULARY);
 
   const { freq, firstSeenCapitalized } = extractCandidateTokens(cleaned);
@@ -786,14 +897,13 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
 
   const { data: analysisRow, error: analysisError } = await supabaseAdmin
     .from("text_analysis")
-    .insert({
-      text_resource_id: textResource.id,
-      analysis_version: 1,
+    .update({
       selected_vocabulary: selectedVocabulary,
       selected_expressions: selectedExpressions,
       key_sentences: selectedSentences,
       language_patterns: selectedPatterns,
     })
+    .eq("id", existingAnalysis.id)
     .select()
     .single();
   if (analysisError) throw analysisError;
@@ -817,7 +927,7 @@ export async function analyzeReadingResource({ supabaseAdmin, userId, text, sour
   if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
 
   await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: analysisRow });
-  return { textResource, analysis: analysisRow, tier, cached: false };
+  return { analysis: analysisRow, tier };
 }
 
 // 规范§9.3/§10 — summary is on-demand only, never generated at import time.

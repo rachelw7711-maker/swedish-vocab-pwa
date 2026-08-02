@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import { analyzeReadingResource, generateReadingSummary, extractTextFromImage, calculateCredits } from "./server-reading.mjs";
+import { analyzeReadingResourceFast, analyzeReadingResourceDeep, generateReadingSummary, extractTextFromImage, calculateCredits } from "./server-reading.mjs";
 import { generateWord, promoteCollocationToPhrase, readPublicWords, markWordsReviewed } from "./server-words.mjs";
 
 const PORT = Number(process.env.PORT || 4174);
@@ -507,14 +507,26 @@ createServer(async (req, res) => {
         sendJson(res, 400, { error: "Texten är för lång (max 20 000 tecken)." });
         return;
       }
-      const { textResource, analysis, tier, cached } = await analyzeReadingResource({
+      const { textResource, analysis, tier, cached, deepReady } = await analyzeReadingResourceFast({
         supabaseAdmin,
         userId: user.id,
         text: text.trim(),
         sourceType: sourceType || "paste",
         glossary: Array.isArray(glossary) ? glossary : [],
       });
-      sendJson(res, 200, { textResource, analysis, tier, cached });
+      sendJson(res, 200, { textResource, analysis, tier, cached, deepReady });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/reading/analyze-deep") {
+      const user = await readAuthenticatedUser(req);
+      const { textResourceId } = await readBody(req);
+      if (!textResourceId) {
+        sendJson(res, 400, { error: "textResourceId saknas." });
+        return;
+      }
+      const { analysis, tier } = await analyzeReadingResourceDeep({ supabaseAdmin, userId: user.id, textResourceId });
+      sendJson(res, 200, { analysis, tier });
       return;
     }
 

@@ -1,16 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
-import { analyzeReadingResourceFast } from "../../server-reading.mjs";
+import { analyzeReadingResourceDeep } from "../../server-reading.mjs";
 
-// Real Vercel serverless function — server.mjs's own /api/reading/analyze
-// route only ever runs when someone does `node server.mjs` locally.
-// vercel.json rewrites every unmatched path to index.html, so in
-// production only files under api/ (like this one, and the pre-existing
-// api/shadowing/tts.js) actually execute. This was true from the very
-// first "Production v1.0" commit — discovered 2026-07-26/27 when Rachel
-// hit "Kunde inte analysera texten." testing the new Läsning pipeline; the
-// same gap silently affected /api/generate-word, /api/promote-collocation,
-// and /api/words too (see Reviews/AI成本控制与阅读模块-实施计划-2026-07-26.md
-// follow-up note).
+// Deep layer of the two-layer generation pipeline (2026-08-02) — the client
+// calls this right after /api/reading/analyze returns a fast-layer result
+// with deepReady:false. Runs the heavier vocabulary/expressions/sentences/
+// patterns work and fills in the same text_analysis row analyze.js already
+// created. See analyze.js for the production-vs-local-dev routing context
+// (every real endpoint needs a file under api/, not just a server.mjs
+// route, or it silently no-ops in production).
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
@@ -56,30 +53,20 @@ export default async function handler(req, res) {
     }
 
     const userId = await readUserId(req);
-    const { text, sourceType, glossary } = req.body || {};
-    const trimmed = clean(text);
-    if (!trimmed) {
-      sendJson(res, 400, { error: "Klistra in en text att analysera." });
-      return;
-    }
-    if (trimmed.length > 20000) {
-      sendJson(res, 400, { error: "Texten är för lång (max 20 000 tecken)." });
+    const { textResourceId } = req.body || {};
+    const id = clean(textResourceId);
+    if (!id) {
+      sendJson(res, 400, { error: "textResourceId saknas." });
       return;
     }
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { textResource, analysis, tier, cached, deepReady } = await analyzeReadingResourceFast({
-      supabaseAdmin,
-      userId,
-      text: trimmed,
-      sourceType: sourceType || "paste",
-      glossary: Array.isArray(glossary) ? glossary : [],
-    });
-    sendJson(res, 200, { textResource, analysis, tier, cached, deepReady });
+    const { analysis, tier } = await analyzeReadingResourceDeep({ supabaseAdmin, userId, textResourceId: id });
+    sendJson(res, 200, { analysis, tier });
   } catch (error) {
-    console.error("[api/reading/analyze]", error);
-    sendJson(res, error.status || 500, { error: error.message || "Kunde inte analysera texten." });
+    console.error("[api/reading/analyze-deep]", error);
+    sendJson(res, error.status || 500, { error: error.message || "Kunde inte slutföra analysen." });
   }
 }

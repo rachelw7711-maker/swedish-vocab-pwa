@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=136";
+import * as remoteDb from "./src/lib/db.js?v=137";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -559,6 +559,9 @@ const els = {
   readingAnalysisPanel: document.querySelector("#readingAnalysisPanel"),
   readingSummarySv: document.querySelector("#readingSummarySv"),
   readingSummaryZh: document.querySelector("#readingSummaryZh"),
+  readingHeadlineZh: document.querySelector("#readingHeadlineZh"),
+  readingKeyPoints: document.querySelector("#readingKeyPoints"),
+  readingDeepPending: document.querySelector("#readingDeepPending"),
   readingKeywordsBlock: document.querySelector("#readingKeywordsBlock"),
   readingKeyWords: document.querySelector("#readingKeyWords"),
   readingPhrasesBlock: document.querySelector("#readingPhrasesBlock"),
@@ -2861,7 +2864,8 @@ function openReadingEditor(item = null) {
   // enhanceGrammarSectionWithStructuredForms — the panel is already usable
   // synchronously above.
   if (item?.text_resource_id) {
-    remoteDb.loadTextResource(item.text_resource_id).then((resource) => {
+    const textResourceId = item.text_resource_id;
+    remoteDb.loadTextResource(textResourceId).then((resource) => {
       if (els.readingItemId.value !== item.id || !resource) return;
       state.currentReadingWordCount = resource.wordCount;
       if (resource.textbookGlossary.length) {
@@ -2869,13 +2873,17 @@ function openReadingEditor(item = null) {
         renderTextbookGlossary(resource.textbookGlossary);
       }
       renderReadingReport();
+      remoteDb.loadTextAnalysis(textResourceId).then((analysis) => {
+        if (els.readingItemId.value !== item.id) return; // user navigated away
+        if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
+        state.currentReadingAnalysis = analysis;
+        renderReadingAnalysis(analysis, { deepReady: resource.deepReady });
+        // A previous session's deep layer may have been interrupted (e.g.
+        // the app was closed right after the fast layer landed) — pick it
+        // back up here rather than leaving the placeholder stuck forever.
+        if (!resource.deepReady) continueDeepReadingAnalysis(textResourceId);
+      }).catch((error) => console.warn("[SpråkLab] Failed to load existing text analysis.", error));
     }).catch((error) => console.warn("[SpråkLab] Failed to load text resource.", error));
-    remoteDb.loadTextAnalysis(item.text_resource_id).then((analysis) => {
-      if (els.readingItemId.value !== item.id) return; // user navigated away
-      if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
-      state.currentReadingAnalysis = analysis;
-      renderReadingAnalysis(analysis);
-    }).catch((error) => console.warn("[SpråkLab] Failed to load existing text analysis.", error));
   }
 }
 
@@ -2974,21 +2982,50 @@ async function analyzeCurrentReadingItem() {
   els.analyzeReadingBtn.disabled = true;
   els.analyzeReadingBtn.textContent = "Analyserar…";
   try {
-    const { textResource, analysis } = await remoteDb.analyzeReadingText(textToAnalyze, "paste", state.readingPendingGlossary || []);
+    const { textResource, analysis, deepReady } = await remoteDb.analyzeReadingText(textToAnalyze, "paste", state.readingPendingGlossary || []);
     const updated = { ...saved, text_resource_id: textResource.id };
     const result = await remoteDb.upsertReadingItem(updated);
     const finalItem = result?.item || updated;
     state.readingItems = state.readingItems.map((item) => (item.id === finalItem.id ? finalItem : item));
     state.currentReadingAnalysis = analysis;
     state.currentReadingWordCount = textResource.word_count || readingWordCount(textToAnalyze);
-    renderReadingAnalysis(analysis);
+    renderReadingAnalysis(analysis, { deepReady });
+    // Fast layer (headline/summary/key points) is already on screen — the
+    // button can go back to normal immediately instead of staying disabled
+    // through the slower deep layer below (Rachel's 关于阅读模块的调整.pages
+    // 两层生成方案: "让用户几秒内就能开始读").
+    els.analyzeReadingBtn.disabled = false;
+    els.analyzeReadingBtn.textContent = "Analysera";
+    if (!deepReady) continueDeepReadingAnalysis(textResource.id);
   } catch (error) {
     console.warn("[SpråkLab] Reading analysis failed.", error);
     els.readingAnalysisPanel.hidden = true;
     alert(error.message || "Kunde inte analysera texten just nu.");
-  } finally {
     els.analyzeReadingBtn.disabled = false;
     els.analyzeReadingBtn.textContent = "Analysera";
+  }
+}
+
+// Deep half of the two-layer pipeline — fires right after the fast layer
+// renders, fills in vocabulary/phrases/sentences/patterns/report once it
+// resolves. Runs detached from analyzeCurrentReadingItem's own try/finally
+// so a slow or failed deep call never blocks the button/UI the fast layer
+// already unlocked.
+async function continueDeepReadingAnalysis(textResourceId) {
+  try {
+    const { analysis } = await remoteDb.analyzeReadingTextDeep(textResourceId);
+    // Guard against the user having navigated to a different reading item
+    // while the deep call was in flight — only apply the result if we're
+    // still looking at the same one.
+    if (state.currentReadingAnalysis?.textResourceId !== textResourceId) return;
+    state.currentReadingAnalysis = analysis;
+    renderReadingAnalysis(analysis, { deepReady: true });
+  } catch (error) {
+    console.warn("[SpråkLab] Deep reading analysis failed.", error);
+    if (els.readingDeepPending) {
+      els.readingDeepPending.hidden = false;
+      els.readingDeepPending.querySelector("p").textContent = "⚠️ Kunde inte slutföra analysen. Försök igen senare.";
+    }
   }
 }
 
@@ -3003,7 +3040,16 @@ function setReadingTextCollapsed(collapsed) {
   els.readingTextToggleBtn.textContent = collapsed ? "Visa allt" : "Visa mindre";
 }
 
-function renderReadingAnalysis(analysis) {
+// 2026-08-02, two-layer generation: `deepReady` false means only the fast
+// layer (headline/summary/key points) is in and vocabulary/phrases/
+// sentences/patterns/report haven't been generated yet — show those
+// sections' placeholder instead of the (empty) sections themselves, and
+// skip the item-state/report calls that need real deep content to mean
+// anything. "Läs och markera" (annotate) is deliberately NOT gated on
+// deepReady — it only needs the original text, which the fast layer
+// already has, so the user can start marking sentences immediately
+// (Rachel's confirmed call — annotate shouldn't wait on AI).
+function renderReadingAnalysis(analysis, { deepReady = true } = {}) {
   els.readingAnalysisPanel.hidden = false;
   setReadingTextCollapsed(true);
   if (els.readingWordPreview) {
@@ -3017,6 +3063,32 @@ function renderReadingAnalysis(analysis) {
   els.readingSummarySv.hidden = !hasSummary;
   els.readingSummaryZh.hidden = !hasSummary;
   if (els.generateReadingSummaryBtn) els.generateReadingSummaryBtn.hidden = hasSummary;
+
+  if (els.readingHeadlineZh) {
+    els.readingHeadlineZh.textContent = analysis.headlineZh || "";
+    els.readingHeadlineZh.hidden = !analysis.headlineZh;
+  }
+  if (els.readingKeyPoints) {
+    els.readingKeyPoints.replaceChildren();
+    const points = analysis.keyPoints || [];
+    points.forEach((point) => {
+      const li = document.createElement("li");
+      li.textContent = point;
+      els.readingKeyPoints.append(li);
+    });
+    els.readingKeyPoints.hidden = !points.length;
+  }
+
+  if (els.readingDeepPending) els.readingDeepPending.hidden = deepReady;
+  if (!deepReady) {
+    if (els.readingKeywordsBlock) els.readingKeywordsBlock.hidden = true;
+    if (els.readingPhrasesBlock) els.readingPhrasesBlock.hidden = true;
+    if (els.readingSentencesBlock) els.readingSentencesBlock.hidden = true;
+    if (els.readingPatternsBlock) els.readingPatternsBlock.hidden = true;
+    if (els.readingReportCard) els.readingReportCard.hidden = true;
+    if (els.sendSelectedSentencesToShadowingBtn) els.sendSelectedSentencesToShadowingBtn.hidden = true;
+    return;
+  }
 
   els.readingKeyWords.replaceChildren();
   const vocabulary = analysis.selectedVocabulary || [];
