@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v104";
+const CACHE_NAME = "ordbok-v105";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",
@@ -81,7 +81,21 @@ self.addEventListener("fetch", (event) => {
   // verifying sentence highlights/notes didn't survive a reload. API data
   // should prefer live network and only fall back to cache when actually
   // offline, same as networkFirst already does for the app shell.
-  const isSupabaseApi = url.pathname.startsWith("/rest/v1/") || url.pathname.startsWith("/auth/v1/");
+  // 2026-08-07 fix: /storage/v1/ (Shadowing's standard-audio signed URLs)
+  // had the same gap and a worse failure mode — cacheFirst calls
+  // cache.put() on every ok response, but the browser's <audio> element
+  // requests these with a Range header, so the server answers 206 Partial
+  // Content, and the Cache API throws on cache.put() with a 206 response
+  // ("Partial response (status code 206) is unsupported"). That throw
+  // breaks the fetch event's respondWith() promise, which left the
+  // audio element's request stuck at "stalled" forever — silent, no
+  // error event, no console output (the throw happens inside the SW's own
+  // execution context) — this is what made Läsning-to-Shadowing audio look
+  // like it "played" (button showed Spelar) while producing no sound.
+  // Signed URLs are also single-use/expiring, so caching them was never
+  // useful to begin with.
+  const isSupabaseApi =
+    url.pathname.startsWith("/rest/v1/") || url.pathname.startsWith("/auth/v1/") || url.pathname.startsWith("/storage/v1/");
   if (networkFirstAsset || isSupabaseApi) {
     event.respondWith(networkFirst(event.request));
     return;
