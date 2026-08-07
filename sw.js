@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v105";
+const CACHE_NAME = "ordbok-v106";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",
@@ -115,11 +115,24 @@ async function cleanupIconAndManifestCache(cache) {
   );
 }
 
+// 2026-08-07: the Cache API throws on cache.put() for a 206 Partial
+// Content response ("Partial response (status code 206) is unsupported").
+// Range-header requests (exactly what an <audio>/<video> element issues)
+// get 206 answers from a server that supports ranges, so an unconditional
+// `response.ok` check (206 is in the 200-299 "ok" range) let that throw
+// reach callers — inside networkFirst it re-threw as "no cache entry
+// exists" after the failed put, and inside cacheFirst it broke the fetch
+// event's respondWith() promise outright, leaving the request stuck at
+// "stalled" forever with no error surfaced anywhere.
+function isCacheableResponse(response) {
+  return response.ok && response.status !== 206;
+}
+
 async function networkFirst(request, fallbackPath = null) {
   const cache = await caches.open(CACHE_NAME);
   try {
     const response = await fetch(request);
-    if (response.ok) await cache.put(request, response.clone());
+    if (isCacheableResponse(response)) await cache.put(request, response.clone());
     return response;
   } catch {
     const cached = await cache.match(request);
@@ -134,6 +147,6 @@ async function cacheFirst(request) {
   const cached = await cache.match(request);
   if (cached) return cached;
   const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
+  if (isCacheableResponse(response)) await cache.put(request, response.clone());
   return response;
 }
