@@ -615,11 +615,14 @@ const els = {
   bookActionMenu: document.querySelector("#bookActionMenu"),
   historyList: document.querySelector("#historyList"),
   shadowingList: document.querySelector("#shadowingList"),
+  shadowingHistorySection: document.querySelector("#shadowingHistorySection"),
+  shadowingHistorySummary: document.querySelector("#shadowingHistorySummary"),
   shadowingItemId: document.querySelector("#shadowingItemId"),
   shadowingEditorPanel: document.querySelector("#shadowingEditorPanel"),
   shadowingPlayerPanel: document.querySelector("#shadowingPlayerPanel"),
   shadowingExportPanel: document.querySelector("#shadowingExportPanel"),
   closeShadowingPracticeBtn: document.querySelector("#closeShadowingPracticeBtn"),
+  editShadowingTextBtn: document.querySelector("#editShadowingTextBtn"),
   shadowingGenerating: document.querySelector("#shadowingGenerating"),
   shadowingTitleInput: document.querySelector("#shadowingTitleInput"),
   shadowingSwedishInput: document.querySelector("#shadowingSwedishInput"),
@@ -6470,6 +6473,10 @@ function openShadowingEditor() {
   if (els.shadowingEditorPanel) els.shadowingEditorPanel.hidden = false;
   if (els.shadowingPlayerPanel) els.shadowingPlayerPanel.hidden = true;
   if (els.shadowingExportPanel) els.shadowingExportPanel.hidden = true;
+  // The history list only makes sense while browsing/starting new practice
+  // on Prepare — showing it under Practice too just repeated the item
+  // you're already looking at (Rachel, 2026-08-09).
+  if (els.shadowingHistorySection) els.shadowingHistorySection.hidden = false;
 }
 
 function openShadowingPractice(item, { generating = false } = {}) {
@@ -6478,7 +6485,21 @@ function openShadowingPractice(item, { generating = false } = {}) {
   if (els.shadowingPlayerPanel) els.shadowingPlayerPanel.hidden = false;
   if (els.shadowingExportPanel) els.shadowingExportPanel.hidden = false;
   if (els.shadowingGenerating) els.shadowingGenerating.hidden = !generating;
+  if (els.shadowingHistorySection) els.shadowingHistorySection.hidden = true;
   renderShadowingPlayer();
+}
+
+// "✎ Redigera text" on Practice — same escape hatch Läsning's results page
+// has (editReadingResultsText/editReadingResultsTextBtn): the one thing
+// removing the list's per-item Redigera button took away was a way to fix
+// a typo in the source text without retyping it from scratch.
+function editCurrentShadowingText() {
+  const item = getSelectedShadowingItem();
+  if (!item) return;
+  populateShadowingForm(item);
+  state.selectedShadowingId = item.id;
+  openShadowingEditor();
+  renderShadowing();
 }
 
 // 2026-08-03, Rachel's feedback: Tillbaka used to always land on
@@ -6808,6 +6829,7 @@ function renderShadowing() {
 function renderShadowingList() {
   if (!els.shadowingList) return;
   const items = getShadowingItems();
+  if (els.shadowingHistorySummary) els.shadowingHistorySummary.textContent = `Tidigare Shadowing (${items.length})`;
   els.shadowingList.replaceChildren();
   if (items.length === 0) {
     const empty = document.createElement("div");
@@ -6840,8 +6862,13 @@ function renderShadowingList() {
     header.append(title, meta, preview);
     const actions = document.createElement("div");
     actions.className = "shadowing-item-actions";
+    // Redigera used to live here, but tapping a card already opens
+    // Practice directly (listen/record/download) — a per-item "edit the
+    // text" action on what's meant to be a finished recording didn't add
+    // anything (Rachel, 2026-08-09). Fixing a typo in the source text now
+    // lives as the quiet "✎ Redigera text" link on the Practice page
+    // itself instead, same pattern as Läsning's editReadingResultsTextBtn.
     actions.innerHTML = `
-      <button type="button" data-shadowing-action="edit" data-shadowing-id="${escapeHtml(item.id)}">Redigera</button>
       <button type="button" data-shadowing-action="delete" data-shadowing-id="${escapeHtml(item.id)}">Radera</button>
     `;
     card.append(header, actions);
@@ -10799,6 +10826,7 @@ function bindEvents() {
   });
 
   els.closeShadowingPracticeBtn?.addEventListener("click", closeShadowingPractice);
+  els.editShadowingTextBtn?.addEventListener("click", editCurrentShadowingText);
   els.newShadowingBtn?.addEventListener("click", () => {
     // 2026-08-03: was a partial inline reset that never cleared item
     // identity (shadowingItemId/selectedShadowingId) — harmless before the
@@ -10967,16 +10995,6 @@ function bindEvents() {
     const deleteButton = event.target.closest('[data-shadowing-action="delete"]');
     if (deleteButton) {
       deleteShadowingItem(deleteButton.dataset.shadowingId).catch((error) => console.error("[Shadowing] Delete failed", error));
-      return;
-    }
-    const editButton = event.target.closest('[data-shadowing-action="edit"]');
-    if (editButton) {
-      const item = getShadowingItems().find((row) => row.id === editButton.dataset.shadowingId);
-      if (item) {
-        populateShadowingForm(item);
-        state.selectedShadowingId = item.id;
-        renderShadowing();
-      }
       return;
     }
     const selectButton = event.target.closest("[data-shadowing-select]");

@@ -811,6 +811,7 @@
                   <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
                 <button class="secondary-button" id="closeShadowingPracticeBtn" type="button">‹ Tillbaka</button>
+                <button class="reading-edit-text-link" id="editShadowingTextBtn" type="button">✎ Redigera text</button>
               </div>
               <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
               <div class="shadowing-controls">
@@ -891,9 +892,11 @@
               </div>
             </section>
           </div>
-          <section class="shadowing-scroll-area">
-            <p class="section-kicker">Tidigare Shadowing</p>
-            <section class="shadowing-list" id="shadowingList" aria-live="polite"></section>
+          <section class="shadowing-scroll-area" id="shadowingHistorySection">
+            <details class="detail-layer-group-collapsible">
+              <summary class="detail-layer-label" id="shadowingHistorySummary">Tidigare Shadowing</summary>
+              <section class="shadowing-list" id="shadowingList" aria-live="polite"></section>
+            </details>
           </section>
         </section>
       </main>
@@ -1343,6 +1346,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=182" type="module"></script>
+    <script src="/app.js?v=183" type="module"></script>
   </body>
 </html>
