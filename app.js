@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=138";
+import * as remoteDb from "./src/lib/db.js?v=139";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -524,6 +524,20 @@ const els = {
   profileRatingHint: document.querySelector("#profileRatingHint"),
   profileReadingCount: document.querySelector("#profileReadingCount"),
   profileShadowingCount: document.querySelector("#profileShadowingCount"),
+  profileCumulativeDays: document.querySelector("#profileCumulativeDays"),
+  profileLongestStreak: document.querySelector("#profileLongestStreak"),
+  profileActiveDaysWeek: document.querySelector("#profileActiveDaysWeek"),
+  profileReviewCount: document.querySelector("#profileReviewCount"),
+  profileSessionCount: document.querySelector("#profileSessionCount"),
+  profileSessionTime: document.querySelector("#profileSessionTime"),
+  profileReadingWordsTotal: document.querySelector("#profileReadingWordsTotal"),
+  profileReadingVocabTotal: document.querySelector("#profileReadingVocabTotal"),
+  profileReadingExprTotal: document.querySelector("#profileReadingExprTotal"),
+  profileReadingMarkedSentences: document.querySelector("#profileReadingMarkedSentences"),
+  profileReadingNotesTotal: document.querySelector("#profileReadingNotesTotal"),
+  profileShadowingRecordings: document.querySelector("#profileShadowingRecordings"),
+  profileShadowingRecordedTime: document.querySelector("#profileShadowingRecordedTime"),
+  profileAiTimeSaved: document.querySelector("#profileAiTimeSaved"),
   profileAiCreditsToday: document.querySelector("#profileAiCreditsToday"),
   profileAiCreditsMonth: document.querySelector("#profileAiCreditsMonth"),
   profileAiCostHint: document.querySelector("#profileAiCostHint"),
@@ -756,6 +770,7 @@ const els = {
   readingShadowingEntryBtn: document.querySelector("#readingShadowingEntryBtn"),
   openInShadowingBtn: document.querySelector("#openInShadowingBtn"),
   dailyNewWordTargetSelect: document.querySelector("#dailyNewWordTargetSelect"),
+  dailyNewWordTargetReadout: document.querySelector("#dailyNewWordTargetReadout"),
   studyCompletePanel: document.querySelector("#studyCompletePanel"),
   completeTodayCount: document.querySelector("#completeTodayCount"),
   completeMasteredCount: document.querySelector("#completeMasteredCount"),
@@ -3958,6 +3973,9 @@ function renderStudyStats() {
   if (els.dailyNewWordTargetSelect && document.activeElement !== els.dailyNewWordTargetSelect) {
     els.dailyNewWordTargetSelect.value = String(dailyTarget);
   }
+  if (els.dailyNewWordTargetReadout) {
+    els.dailyNewWordTargetReadout.textContent = `Mål/dag: ${dailyTarget}`;
+  }
   if (els.startNewStudyBtn) {
     els.startNewStudyBtn.disabled = availableNew === 0 || newSession.completed;
     els.startNewStudyBtn.textContent = workload.allowedNewWords === 0 && dueOverdueTotal > 0 ? "Slutför repetition först" : "Börja lära";
@@ -4106,10 +4124,26 @@ async function markCurrentReviewPageReviewed() {
   }
 }
 
-// Fills the "Mina studier" breakdown cards (CEFR distribution, review
-// rating quality, reading/Shadowing activity) — computed on demand when
-// the subpage opens rather than on every renderAuthState() call, since
-// it iterates the full word list (~10k+ words with the shared corpus).
+// "Xh Ymin"/"Ymin" formatter shared by every Mina studier duration stat
+// (study sessions, Shadowing recordings) — mirrors the "18 h 25 min" style
+// from the source design docs (Reviews/Mina-studier数据整合...-2026-08-09.md).
+function formatMsAsDuration(ms) {
+  const totalMinutes = Math.round(Math.max(0, Number(ms || 0) || 0) / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours} h ${minutes} min` : `${minutes} min`;
+}
+
+// Fills the "Mina studier" breakdown cards (persistence, CEFR distribution,
+// review rating quality, reading/Shadowing/AI activity) — computed on
+// demand when the subpage opens rather than on every renderAuthState()
+// call, since it iterates the full word list (~10k+ words with the shared
+// corpus) and fires a handful of aggregate queries (2026-08-09: expanded
+// from the 2026-07-25 version per Reviews/Mina-studier数据整合与Nya-ord
+// 设置迁移-评审与实施方案-2026-08-09.md — every new field below is either
+// computed from data already loaded in state (state.words review_count,
+// state.shadowingRecordings) or a zero-new-schema aggregate over an
+// existing table (effective_study_time, study_sessions).
 function renderProfileStudiesBreakdown() {
   const words = state.words || [];
   const reviewed = words.filter((word) => word.last_rating);
@@ -4201,7 +4235,90 @@ function renderProfileStudiesBreakdown() {
 
   if (els.profileReadingCount) els.profileReadingCount.textContent = state.readingItems.length;
   if (els.profileShadowingCount) els.profileShadowingCount.textContent = getShadowingItems().length;
+
+  const totalReviews = words.reduce((sum, word) => sum + Math.max(0, Math.floor(Number(word.review_count || 0) || 0)), 0);
+  if (els.profileReviewCount) els.profileReviewCount.textContent = totalReviews;
+
+  const shadowingRecords = validShadowingRecordings();
+  if (els.profileShadowingRecordings) els.profileShadowingRecordings.textContent = shadowingRecords.length;
+  if (els.profileShadowingRecordedTime) {
+    const recordedMs = shadowingRecords.reduce((sum, recording) => sum + Math.max(0, Number(recording.audio_duration_ms || 0) || 0), 0);
+    els.profileShadowingRecordedTime.textContent = formatMsAsDuration(recordedMs);
+  }
+
+  renderProfileReadingStats();
+  renderProfilePersistenceStats();
+  renderProfileSessionStats();
   renderProfileAiUsage();
+}
+
+// Reuses the already-loaded reading item list + the same batched
+// text_resources/text_analysis stats query the "Mina läsningar" list uses
+// (loadReadingListStats/enhanceReadingListWithStats) — Mina studier just
+// sums what that already fetches instead of adding a second query path.
+async function renderProfileReadingStats() {
+  if (!state.readingItemsLoaded) {
+    state.readingItemsLoaded = true;
+    try {
+      state.readingItems = await remoteDb.loadReadingItems();
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to load reading items for Mina studier.", error);
+    }
+    if (els.profileReadingCount) els.profileReadingCount.textContent = state.readingItems.length;
+  }
+
+  let markedSentences = 0;
+  let notesTotal = 0;
+  state.readingItems.forEach((item) => {
+    const notes = item.notes || [];
+    markedSentences += notes.length;
+    notesTotal += notes.filter((note) => clean(note.note)).length;
+  });
+  if (els.profileReadingMarkedSentences) els.profileReadingMarkedSentences.textContent = markedSentences;
+  if (els.profileReadingNotesTotal) els.profileReadingNotesTotal.textContent = notesTotal;
+
+  if (state.readingItems.some((item) => item.text_resource_id)) {
+    await enhanceReadingListWithStats().catch(() => {});
+  }
+  let wordsTotal = 0;
+  let vocabTotal = 0;
+  let exprTotal = 0;
+  state.readingItems.forEach((item) => {
+    const stats = item.text_resource_id ? state.readingListStats?.[item.text_resource_id] : null;
+    if (!stats) return;
+    wordsTotal += stats.wordCount || 0;
+    vocabTotal += stats.vocabCount || 0;
+    exprTotal += stats.exprCount || 0;
+  });
+  if (els.profileReadingWordsTotal) els.profileReadingWordsTotal.textContent = wordsTotal;
+  if (els.profileReadingVocabTotal) els.profileReadingVocabTotal.textContent = vocabTotal;
+  if (els.profileReadingExprTotal) els.profileReadingExprTotal.textContent = exprTotal;
+}
+
+// "Uthållighet" card — derived from effective_study_time, see
+// loadEffectiveStudyTimeHistory's own comment in db.js for why this needed
+// no new schema (the table already existed, just was never aggregated).
+async function renderProfilePersistenceStats() {
+  try {
+    const history = await remoteDb.loadEffectiveStudyTimeHistory();
+    if (els.profileCumulativeDays) els.profileCumulativeDays.textContent = history.totalDays;
+    if (els.profileLongestStreak) els.profileLongestStreak.textContent = `${history.longestStreak} dagar`;
+    if (els.profileActiveDaysWeek) els.profileActiveDaysWeek.textContent = `${history.activeDaysThisWeek} / 7`;
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load study time history.", error);
+  }
+}
+
+// "Studiepass" card — same reasoning, study_sessions was already being
+// written to on every Repetera/Lär dig nya ord session.
+async function renderProfileSessionStats() {
+  try {
+    const summary = await remoteDb.loadStudySessionsSummary();
+    if (els.profileSessionCount) els.profileSessionCount.textContent = summary.completedCount;
+    if (els.profileSessionTime) els.profileSessionTime.textContent = formatMsAsDuration(summary.totalMs);
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load study sessions summary.", error);
+  }
 }
 
 const AI_FEATURE_LABELS = {
@@ -4215,6 +4332,18 @@ const AI_FEATURE_LABELS = {
   key_expressions: "Uttryck (bakgrund)",
 };
 
+// Rough per-call minutes-saved estimate for "Tid sparad" (文稿① §6 —
+// "SpråkLab har hjälpt dig spara ~48 timmar"). Not measured, a documented
+// heuristic per call (looking up/typing/summarizing manually vs. one AI
+// call) — Rachel can tune these constants directly if the number feels off.
+const AI_TIME_SAVED_MINUTES = {
+  analysis: 5,
+  summary: 2,
+  ocr: 3,
+  missing_word_batch: 2,
+  key_expressions: 2,
+};
+
 // 规范§14/§21 — shows real usage/cost, not a hard limit (limits aren't
 // enforced yet, single-user stage). Computed on demand when the subpage
 // opens, same pattern as renderProfileStudiesBreakdown above.
@@ -4224,6 +4353,13 @@ async function renderProfileAiUsage() {
     if (!summary) return;
     if (els.profileAiCreditsToday) els.profileAiCreditsToday.textContent = summary.creditsToday;
     if (els.profileAiCreditsMonth) els.profileAiCreditsMonth.textContent = summary.creditsMonth;
+    if (els.profileAiTimeSaved) {
+      const minutesSaved = Object.entries(summary.byFeature).reduce(
+        (sum, [feature, stats]) => sum + (AI_TIME_SAVED_MINUTES[feature] ?? 1) * stats.count,
+        0,
+      );
+      els.profileAiTimeSaved.textContent = formatMsAsDuration(minutesSaved * 60000);
+    }
     if (els.profileAiCostHint) {
       els.profileAiCostHint.textContent = `Cachträff: ${summary.cacheHitRate}% · Verklig kostnad denna månad: $${summary.costMonth.toFixed(3)}`;
     }

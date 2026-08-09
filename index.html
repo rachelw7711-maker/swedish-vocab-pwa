@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=171" />
+    <link rel="stylesheet" href="/styles.css?v=172" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -158,15 +158,7 @@
                   <h3>Lär dig nya ord</h3>
                 </div>
                 <strong id="entryNewCount">0 ord idag</strong>
-                <label class="study-entry-target-label" for="dailyNewWordTargetSelect">
-                  Mål/dag
-                  <select id="dailyNewWordTargetSelect">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="15">15</option>
-                    <option value="20">20</option>
-                  </select>
-                </label>
+                <span class="study-entry-target-readonly" id="dailyNewWordTargetReadout">Mål/dag: 10</span>
                 <button class="secondary-button" id="startNewStudyBtn" type="button">Börja lära</button>
               </article>
               <article class="study-entry-card" id="readingShadowingEntryCard">
@@ -558,6 +550,14 @@
                   <h2>Mina studier</h2>
                   <p>Din statistik, aktivitet och utveckling.</p>
                 </header>
+                <section class="profile-detail-card">
+                  <span>🌱 Uthållighet</span>
+                  <div class="profile-overview-grid">
+                    <article><strong id="profileCumulativeDays">0</strong><span>Dagar totalt</span></article>
+                    <article><strong id="profileLongestStreak">0</strong><span>Längsta serie</span></article>
+                    <article><strong id="profileActiveDaysWeek">0</strong><span>Denna vecka</span></article>
+                  </div>
+                </section>
                 <section class="profile-overview-card">
                   <p class="section-kicker">Statistik</p>
                   <div class="profile-overview-grid profile-overview-grid-4">
@@ -573,6 +573,11 @@
                   <small id="profileStudyHint">0 lärda ord · 0 klara idag</small>
                 </section>
                 <section class="profile-detail-card">
+                  <span>Repetitioner</span>
+                  <strong id="profileReviewCount">0</strong>
+                  <small>Totalt antal genomförda repetitioner.</small>
+                </section>
+                <section class="profile-detail-card">
                   <span>Nivåfördelning (CEFR)</span>
                   <div id="profileCefrBreakdown" class="profile-cefr-breakdown"></div>
                 </section>
@@ -582,10 +587,30 @@
                   <small id="profileRatingHint"></small>
                 </section>
                 <section class="profile-detail-card">
-                  <span>Läsning &amp; Shadowing</span>
+                  <span>Studiepass</span>
+                  <div class="profile-overview-grid">
+                    <article><strong id="profileSessionCount">0</strong><span>Studiepass</span></article>
+                    <article><strong id="profileSessionTime">0 min</strong><span>Studietid</span></article>
+                  </div>
+                </section>
+                <section class="profile-detail-card">
+                  <span>📚 Läsning</span>
                   <div class="profile-overview-grid">
                     <article><strong id="profileReadingCount">0</strong><span>Texter lästa</span></article>
+                    <article><strong id="profileReadingWordsTotal">0</strong><span>Lästa ord</span></article>
+                    <article><strong id="profileReadingVocabTotal">0</strong><span>Upptäckta ord</span></article>
+                    <article><strong id="profileReadingExprTotal">0</strong><span>Uttryck &amp; fraser</span></article>
+                    <article><strong id="profileReadingMarkedSentences">0</strong><span>Markerade meningar</span></article>
+                    <article><strong id="profileReadingNotesTotal">0</strong><span>Anteckningar</span></article>
+                  </div>
+                  <small>"Uttryck &amp; fraser" är vad AI hittat i dina texter, inte bara det du aktivt sparat.</small>
+                </section>
+                <section class="profile-detail-card">
+                  <span>🎤 Shadowing</span>
+                  <div class="profile-overview-grid">
                     <article><strong id="profileShadowingCount">0</strong><span>Shadowing-pass</span></article>
+                    <article><strong id="profileShadowingRecordings">0</strong><span>Inspelningar</span></article>
+                    <article><strong id="profileShadowingRecordedTime">0 min</strong><span>Inspelad tid</span></article>
                   </div>
                 </section>
                 <section class="profile-detail-card">
@@ -593,6 +618,7 @@
                   <div class="profile-overview-grid">
                     <article><strong id="profileAiCreditsToday">0</strong><span id="profileAiCreditsTodayLabel">poäng idag</span></article>
                     <article><strong id="profileAiCreditsMonth">0</strong><span id="profileAiCreditsMonthLabel">poäng denna månad</span></article>
+                    <article><strong id="profileAiTimeSaved">0 min</strong><span>Tid sparad, denna månad</span></article>
                   </div>
                   <small id="profileAiCostHint"></small>
                   <div id="profileAiFeatureBreakdown" class="profile-ai-feature-breakdown"></div>
@@ -634,6 +660,19 @@
                   <span>Konto</span>
                   <strong id="profileAccountEmail">Inte inloggad</strong>
                   <small id="profileSettingsSummary">Standardläge</small>
+                </section>
+                <section class="profile-detail-card">
+                  <span>Nya ord</span>
+                  <label class="field-label" for="dailyNewWordTargetSelect">
+                    Mål per dag
+                    <select id="dailyNewWordTargetSelect">
+                      <option value="5">5</option>
+                      <option value="10" selected>10</option>
+                      <option value="15">15</option>
+                      <option value="20">20</option>
+                    </select>
+                  </label>
+                  <small>Hur många nya ord "Lär dig nya ord" föreslår per dag. Gäller tills du ändrar det igen.</small>
                 </section>
                 <section class="profile-settings-list" aria-label="Inställningar">
                   <button type="button"><span>Synkronisering</span><strong id="profileSyncStatus">Aktiv</strong></button>
@@ -697,6 +736,27 @@
                   <h2>Prepare</h2>
                   <p class="shadowing-section-subtitle">Paste Swedish text and find new words</p>
                 </div>
+                <details class="shadowing-voice-control">
+                  <summary aria-label="Välj uppläsningsröst" title="Välj uppläsningsröst">🗣️ Röst</summary>
+                  <div class="shadowing-voice-options" role="listbox" aria-label="Uppläsningsröster">
+                    <button type="button" data-shadowing-voice="sv-SE-SofieNeural">Sofie</button>
+                    <button type="button" data-shadowing-voice="sv-SE-MattiasNeural">Mattias</button>
+                    <button type="button" data-shadowing-voice="sv-SE-HilleviNeural">Hillevi</button>
+                    <button type="button" data-shadowing-voice="en-US-AvaMultilingualNeural">Ava · flerspråkig</button>
+                    <button type="button" data-shadowing-voice="en-US-AndrewMultilingualNeural">Andrew · flerspråkig</button>
+                    <button type="button" data-shadowing-voice="en-US-EmmaMultilingualNeural">Emma · flerspråkig</button>
+                    <button type="button" data-shadowing-voice="en-US-BrianMultilingualNeural">Brian · flerspråkig</button>
+                  </div>
+                  <select class="visually-hidden" id="shadowingVoiceSelect" aria-hidden="true" tabindex="-1">
+                    <option value="sv-SE-SofieNeural">Sofie</option>
+                    <option value="sv-SE-MattiasNeural">Mattias</option>
+                    <option value="sv-SE-HilleviNeural">Hillevi</option>
+                    <option value="en-US-AvaMultilingualNeural">Ava · flerspråkig</option>
+                    <option value="en-US-AndrewMultilingualNeural">Andrew · flerspråkig</option>
+                    <option value="en-US-EmmaMultilingualNeural">Emma · flerspråkig</option>
+                    <option value="en-US-BrianMultilingualNeural">Brian · flerspråkig</option>
+                  </select>
+                </details>
               </div>
               <input type="hidden" id="shadowingItemId" />
               <label class="field-label">
@@ -741,9 +801,6 @@
             </section>
 
             <section class="panel shadowing-player" id="shadowingPlayerPanel" hidden>
-              <div class="toolbar">
-                <button class="secondary-button" id="closeShadowingPracticeBtn" type="button">‹ Tillbaka</button>
-              </div>
               <div class="shadowing-generating" id="shadowingGenerating" hidden>
                 <p>🔄 Genererar ljud …</p>
               </div>
@@ -753,27 +810,7 @@
                   <h2>Practice</h2>
                   <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
-                <details class="shadowing-voice-control">
-                  <summary aria-label="Välj uppläsningsröst" title="Välj uppläsningsröst">🗣️ Röst</summary>
-                  <div class="shadowing-voice-options" role="listbox" aria-label="Uppläsningsröster">
-                    <button type="button" data-shadowing-voice="sv-SE-SofieNeural">Sofie</button>
-                    <button type="button" data-shadowing-voice="sv-SE-MattiasNeural">Mattias</button>
-                    <button type="button" data-shadowing-voice="sv-SE-HilleviNeural">Hillevi</button>
-                    <button type="button" data-shadowing-voice="en-US-AvaMultilingualNeural">Ava · flerspråkig</button>
-                    <button type="button" data-shadowing-voice="en-US-AndrewMultilingualNeural">Andrew · flerspråkig</button>
-                    <button type="button" data-shadowing-voice="en-US-EmmaMultilingualNeural">Emma · flerspråkig</button>
-                    <button type="button" data-shadowing-voice="en-US-BrianMultilingualNeural">Brian · flerspråkig</button>
-                  </div>
-                  <select class="visually-hidden" id="shadowingVoiceSelect" aria-hidden="true" tabindex="-1">
-                    <option value="sv-SE-SofieNeural">Sofie</option>
-                    <option value="sv-SE-MattiasNeural">Mattias</option>
-                    <option value="sv-SE-HilleviNeural">Hillevi</option>
-                    <option value="en-US-AvaMultilingualNeural">Ava · flerspråkig</option>
-                    <option value="en-US-AndrewMultilingualNeural">Andrew · flerspråkig</option>
-                    <option value="en-US-EmmaMultilingualNeural">Emma · flerspråkig</option>
-                    <option value="en-US-BrianMultilingualNeural">Brian · flerspråkig</option>
-                  </select>
-                </details>
+                <button class="secondary-button" id="closeShadowingPracticeBtn" type="button">‹ Tillbaka</button>
               </div>
               <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
               <div class="shadowing-controls">
@@ -1305,6 +1342,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=177" type="module"></script>
+    <script src="/app.js?v=178" type="module"></script>
   </body>
 </html>

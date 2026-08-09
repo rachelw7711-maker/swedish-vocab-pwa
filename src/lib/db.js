@@ -1859,6 +1859,80 @@ export async function loadAiUsageSummary() {
   };
 }
 
+// Mina studier "Uthållighet"/"Studiepass" cards (2026-08-09) — reuses the
+// existing effective_study_time table (already populated per calendar day
+// per device by tickEffectiveStudyTime, previously only ever read for
+// "today") to derive cumulative days learned / longest streak / this
+// week's active days without any new schema. Rows are summed by date
+// client-side since Supabase JS has no GROUP BY; a single user's history
+// (days x devices) is small enough that this is not an N+1/pagination risk.
+export async function loadEffectiveStudyTimeHistory() {
+  const user = await readCurrentUser();
+  if (!user?.id) return { totalDays: 0, longestStreak: 0, activeDaysThisWeek: 0 };
+  const { data, error } = await supabase
+    .from(TABLES.effectiveStudyTime)
+    .select("study_date, active_ms")
+    .eq("user_id", user.id)
+    .order("study_date", { ascending: true })
+    .limit(3660);
+  if (error) throw error;
+
+  const msByDate = new Map();
+  (data || []).forEach((row) => {
+    const date = clean(row.study_date);
+    if (!date) return;
+    msByDate.set(date, (msByDate.get(date) || 0) + Math.max(0, Number(row.active_ms || 0) || 0));
+  });
+  const activeDates = [...msByDate.entries()].filter(([, ms]) => ms > 0).map(([date]) => date).sort();
+
+  let longestStreak = 0;
+  let currentRun = 0;
+  let previousDate = null;
+  activeDates.forEach((date) => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const isConsecutive = previousDate && new Date(date) - new Date(previousDate) === dayMs;
+    currentRun = isConsecutive ? currentRun + 1 : 1;
+    longestStreak = Math.max(longestStreak, currentRun);
+    previousDate = date;
+  });
+
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  const weekAgoKey = weekAgo.toISOString().slice(0, 10);
+  const activeDaysThisWeek = activeDates.filter((date) => date >= weekAgoKey).length;
+
+  return {
+    totalDays: activeDates.length,
+    longestStreak,
+    activeDaysThisWeek,
+  };
+}
+
+// Mina studier "Studiepass" card — study_sessions/study_session_items were
+// already collecting real started_at/completed_at timestamps for every
+// "Repetera"/"Lär dig nya ord" session (see saveStudySessionItem/
+// completeStudySession) but nothing ever aggregated them for display.
+export async function loadStudySessionsSummary() {
+  const user = await readCurrentUser();
+  if (!user?.id) return { completedCount: 0, totalMs: 0 };
+  const { data, error } = await supabase
+    .from(TABLES.studySessions)
+    .select("started_at, completed_at")
+    .eq("user_id", user.id)
+    .eq("status", "completed")
+    .not("completed_at", "is", null)
+    .limit(5000);
+  if (error) throw error;
+  const rows = data || [];
+  const totalMs = rows.reduce((sum, row) => {
+    const started = dateToMillis(row.started_at);
+    const completed = dateToMillis(row.completed_at);
+    if (!started || !completed || completed <= started) return sum;
+    return sum + (completed - started);
+  }, 0);
+  return { completedCount: rows.length, totalMs };
+}
+
 // SPK-DIC-001 §11 review gate, flag-only (2026-07-30 decision) — reads
 // straight from Supabase like any other word list (anon key can already
 // read all of learning_objects), only the actual status write needs the

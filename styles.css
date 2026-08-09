@@ -3258,6 +3258,13 @@ h2 {
   font-size: 0.8rem;
 }
 
+.study-entry-target-readonly {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: -4px;
+}
+
 .study-workload-message {
   margin: 4px 0 0;
   padding: 8px 12px;
