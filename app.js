@@ -7150,6 +7150,16 @@ async function runShadowingTtsGeneration(item, text, token) {
         tts_error: "",
         updatedAt: Date.now(),
       });
+      // The standard-audio storage path is deterministic per item
+      // (userId/itemId/standard.mp3), so regenerating with a different
+      // voice overwrites the exact same object. signedShadowingAudioUrl
+      // caches its signed URL per bucket:path for up to 55 minutes, so
+      // without this the player kept reusing the pre-regeneration URL —
+      // same signed URL, same (browser-cached) audio bytes, new voice
+      // never actually heard until the cache happened to expire.
+      if (updatedItem.standard_audio_bucket && updatedItem.standard_audio_path) {
+        shadowingSignedUrlCache.delete(`${updatedItem.standard_audio_bucket}:${updatedItem.standard_audio_path}`);
+      }
       remotePhase4Snapshot = {
         ...(remotePhase4Snapshot || {}),
         shadowingItems: mergeShadowingItemsForApp([updatedItem], remotePhase4Snapshot?.shadowingItems || []),
