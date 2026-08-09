@@ -6363,7 +6363,21 @@ function activeShadowingLineIndex(item) {
   }
   const duration = Number(shadowingAudio.duration || 0);
   if (!duration) return 0;
-  return Math.min(lines.length - 1, Math.floor((shadowingAudio.currentTime / duration) * lines.length));
+  // Weight each line's time slice by its character count instead of
+  // dividing the audio into N equal slices — an even split assumes every
+  // sentence takes the same time to read, which drifts badly out of sync
+  // as soon as sentence lengths vary (a 4-word sentence and a 40-word one
+  // do not take equally long). Character count is still only an estimate
+  // (no real per-sentence timing comes back from the TTS API), but tracks
+  // actual speech duration far more closely than an equal split.
+  const currentTime = Number(shadowingAudio.currentTime || 0);
+  const totalChars = lines.reduce((sum, line) => sum + line.length, 0) || 1;
+  let cursorChars = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    cursorChars += lines[index].length;
+    if (currentTime < (cursorChars / totalChars) * duration) return index;
+  }
+  return lines.length - 1;
 }
 
 function updateShadowingActiveLine(item) {
