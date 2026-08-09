@@ -6454,14 +6454,6 @@ async function refreshShadowingState() {
   void applyShadowingRecordingForItem(state.selectedShadowingId).then(() => renderShadowingPlayer());
 }
 
-function selectShadowingItem(itemId) {
-  const items = getShadowingItems();
-  const selected = items.find((item) => item.id === itemId) || items[0] || null;
-  state.selectedShadowingId = selected?.id || "";
-  void applyShadowingRecordingForItem(state.selectedShadowingId).then(() => renderShadowingPlayer());
-  renderShadowing();
-}
-
 // 2026-08-03, Rachel's decision: Shadowing becomes two separate pages, same
 // split as Läsning got earlier this session — the text-input editor and
 // the practice page (player/record/export). No prior precedent existed for
@@ -10974,7 +10966,17 @@ function bindEvents() {
     }
     const selectButton = event.target.closest("[data-shadowing-select]");
     if (!selectButton) return;
-    selectShadowingItem(selectButton.dataset.shadowingSelect);
+    const itemId = selectButton.dataset.shadowingSelect;
+    const item = getShadowingItems().find((row) => row.id === itemId);
+    if (!item) return;
+    // Tapping a past item used to only update state.selectedShadowingId
+    // (selectShadowingItem) without ever switching off the editor panel —
+    // combined with .shadowing-scroll-area being force-hidden (see its
+    // 2026-08-09 CSS fix), there was no way back into an existing item's
+    // Practice/Export page (where standard-audio playback and the "Ladda
+    // ner min inspelning" button live) once you navigated away from it.
+    openShadowingPractice(item);
+    void applyShadowingRecordingForItem(itemId).then(() => renderShadowingPlayer());
   });
 
   els.notebookPinnedBookList.addEventListener("click", (event) => {
