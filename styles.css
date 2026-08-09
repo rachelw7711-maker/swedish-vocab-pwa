@@ -2204,16 +2204,14 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   line-height: 1.45;
 }
 
-.shadowing-subtitle-line,
-.shadowing-translation-line {
+.shadowing-subtitle-line {
   display: block;
   border-radius: 8px;
   padding: 3px 6px;
   transition: background-color 0.18s ease, color 0.18s ease;
 }
 
-.shadowing-subtitle-line + .shadowing-subtitle-line,
-.shadowing-translation-line + .shadowing-translation-line {
+.shadowing-subtitle-line + .shadowing-subtitle-line {
   margin-top: 6px;
 }
 

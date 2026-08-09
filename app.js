@@ -3625,7 +3625,14 @@ async function sendTextToShadowing(button, { title, swedish, textResourceId, lin
     const result = await remoteDb.upsertShadowingItem({
       title,
       swedish,
-      chinese: state.currentReadingAnalysis?.summaryZh || "",
+      // Rachel, 2026-08-09: Shadowing practice content should be Swedish
+      // only. The article's whole-text Chinese summary used to land here,
+      // but it's a summary of the *whole* Läsning article, not a
+      // translation of whatever partial Swedish text actually got sent
+      // (e.g. sendSelectedSentencesToShadowing only sends a few
+      // sentences) — never accurate, and never displayed anymore either
+      // (see renderShadowingList/renderShadowingPlayer).
+      chinese: "",
       category: "Läsning",
       // 规范§4/§13 — same text_resource, so Shadowing never re-analyzes or
       // re-transcribes what Läsning already processed.
@@ -6824,7 +6831,12 @@ function renderShadowingList() {
     const meta = document.createElement("span");
     meta.textContent = [item.category || "Ungrouped", shadowingLevelLabel(item.level)].filter(Boolean).join(" · ");
     const preview = document.createElement("p");
-    preview.textContent = item.chinese || "无中文翻译";
+    // Shadowing is Swedish-only practice content — item.chinese on
+    // Läsning-handoff items is the source article's whole-article Chinese
+    // *summary*, not a per-sentence translation, so it never lined up with
+    // whatever partial Swedish text was actually sent (see sendTextToShadowing).
+    // A snippet of the real practice text is a more honest preview.
+    preview.textContent = clean(item.swedish).slice(0, 80) || "Ingen text";
     header.append(title, meta, preview);
     const actions = document.createElement("div");
     actions.className = "shadowing-item-actions";
@@ -6877,9 +6889,12 @@ function renderShadowingPlayer() {
     const subtitlesHidden = !state.shadowingShowSubtitles || normalizeShadowingLevel(item.level) >= 5;
     els.shadowingSubtitle.hidden = false;
     els.shadowingSubtitle.classList.toggle("shadowing-subtitles-hidden", subtitlesHidden);
+    // Shadowing practice is Swedish-only by design (Rachel, 2026-08-09) —
+    // item.chinese (a Läsning-handoff artifact, see renderShadowingList's
+    // comment) never rendered here anymore either.
     els.shadowingSubtitle.innerHTML = subtitlesHidden
       ? "<strong>字幕已隐藏</strong><span>切换级别或打开字幕查看文本。</span>"
-      : `<strong>${renderShadowingTextLines(item.swedish, "shadowing-subtitle-line")}</strong><span>${renderShadowingTextLines(item.chinese, "shadowing-translation-line")}</span>`;
+      : `<strong>${renderShadowingTextLines(item.swedish, "shadowing-subtitle-line")}</strong>`;
     updateShadowingActiveLine(item);
   }
   if (els.shadowingAudioHint) {
