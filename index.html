@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=174" />
+    <link rel="stylesheet" href="/styles.css?v=175" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -313,16 +313,23 @@
             </section>
             <p class="reading-auth-note" id="readingAuthNote" hidden>Logga in för att spara dina texter.</p>
             <p class="reading-word-count-note" id="readingWordCountNote" hidden></p>
-            <div class="practice-actions">
-              <button class="primary-button" id="saveReadingBtn" type="button">Spara</button>
-              <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
+            <button class="primary-button" id="saveReadingBtn" type="button">Spara</button>
+            <div class="practice-actions reading-editor-secondary-actions">
               <button class="secondary-button" id="openInShadowingBtn" type="button" hidden>Öppna i Shadowing</button>
+              <button class="secondary-button" id="analyzeReadingBtn" type="button" hidden>Analysera</button>
             </div>
           </section>
 
           <section class="panel reading-analysis" id="readingAnalysisPanel" hidden>
             <div class="toolbar">
-              <button class="reading-edit-text-link" id="editReadingResultsTextBtn" type="button">✎ Redigera text</button>
+              <div class="reading-more-menu-wrap">
+                <button class="icon-button" id="readingMoreBtn" type="button" title="Mer">⋯</button>
+                <div id="readingMoreMenu" class="detail-more-menu" hidden>
+                  <button type="button" data-reading-menu-action="edit">✎ Redigera text</button>
+                  <button type="button" data-reading-menu-action="export">Exportera</button>
+                  <button type="button" class="reading-more-menu-danger" data-reading-menu-action="delete">Ta bort</button>
+                </div>
+              </div>
             </div>
             <h3 id="readingAnalysisHeading">Läsning</h3>
             <div class="reading-analysis-loading" id="readingAnalysisLoading" hidden>
@@ -387,7 +394,6 @@
             <div class="practice-actions">
               <button class="primary-button" id="sendReadingToShadowingBtn" type="button">Skicka till Shadowing</button>
               <button class="secondary-button" id="sendSelectedSentencesToShadowingBtn" type="button" hidden>Skicka utvalda meningar</button>
-              <button class="secondary-button" id="exportReadingBtn" type="button">Exportera</button>
             </div>
           </section>
         </section>
@@ -1344,6 +1350,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=184" type="module"></script>
+    <script src="/app.js?v=185" type="module"></script>
   </body>
 </html>

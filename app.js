@@ -317,6 +317,9 @@ const state = {
   readingListStats: {},
   selectedReadingId: "",
   currentReadingAnalysis: null,
+  // Set right before showing the editor panel — true only when reached via
+  // "✎ Redigera text" on the results page (see showReadingEditorPanel).
+  readingEditorFromResults: false,
   selectedNotebook: "",
   historyPos: "all",
   historyAction: "all",
@@ -572,7 +575,8 @@ const els = {
   saveReadingBtn: document.querySelector("#saveReadingBtn"),
   analyzeReadingBtn: document.querySelector("#analyzeReadingBtn"),
   readingAnalysisPanel: document.querySelector("#readingAnalysisPanel"),
-  editReadingResultsTextBtn: document.querySelector("#editReadingResultsTextBtn"),
+  readingMoreBtn: document.querySelector("#readingMoreBtn"),
+  readingMoreMenu: document.querySelector("#readingMoreMenu"),
   readingAnalysisHeading: document.querySelector("#readingAnalysisHeading"),
   readingAnalysisLoading: document.querySelector("#readingAnalysisLoading"),
   readingSummarySv: document.querySelector("#readingSummarySv"),
@@ -601,7 +605,6 @@ const els = {
   sendSelectedSentencesToShadowingBtn: document.querySelector("#sendSelectedSentencesToShadowingBtn"),
   generateReadingSummaryBtn: document.querySelector("#generateReadingSummaryBtn"),
   sendReadingToShadowingBtn: document.querySelector("#sendReadingToShadowingBtn"),
-  exportReadingBtn: document.querySelector("#exportReadingBtn"),
   backToBooksBtn: document.querySelector("#backToBooksBtn"),
   bookActionMenu: document.querySelector("#bookActionMenu"),
   historyList: document.querySelector("#historyList"),
@@ -2873,6 +2876,13 @@ function showReadingEditorPanel() {
   els.readingList.hidden = true;
   els.readingAnalysisPanel.hidden = true;
   els.readingEditorPanel.hidden = false;
+  // 2026-08-10, Rachel's request: reached via "✎ Redigera text" on the
+  // results page → Tillbaka moves into the header (replacing Till
+  // Bibliotek there) and Ta bort lives only in that page's "⋯" menu now,
+  // so both local buttons hide here to avoid duplicating them. Reached the
+  // normal way (Ny text / a list item) → both stay exactly as before.
+  if (els.closeReadingEditorBtn) els.closeReadingEditorBtn.hidden = state.readingEditorFromResults;
+  if (state.readingEditorFromResults && els.deleteReadingBtn) els.deleteReadingBtn.hidden = true;
   updateTopbarLibraryBack();
 }
 
@@ -2882,6 +2892,7 @@ function openReadingResults(item) {
   els.readingList.hidden = true;
   els.readingEditorPanel.hidden = true;
   els.readingAnalysisPanel.hidden = false;
+  closeReadingMoreMenu();
   updateTopbarLibraryBack();
 }
 
@@ -2889,20 +2900,34 @@ function openReadingResults(item) {
 // top-right header slot (replacing "Till Bibliotek" there — see
 // updateTopbarLibraryBack) and now always returns straight to the Läsning
 // main list, regardless of how the page was reached. "✎ Redigera text"
-// (editReadingResultsText, top-left on this page) remains the only path
-// back into the editor, to fix a typo in an already-analyzed article's
-// source text.
+// (editReadingResultsText, now inside the "⋯" menu — readingMoreMenu)
+// remains the only path back into the editor, to fix a typo in an
+// already-analyzed article's source text.
 function closeReadingResults() {
   closeReadingEditor();
 }
 
+// Reached only from the results page's "⋯" menu (Rachel, 2026-08-10):
+// Tillbaka there moves into the header too, replacing Till Bibliotek, and
+// returns straight to results instead of the main list.
+function closeReadingEditorToResults() {
+  const item = state.readingItems.find((entry) => entry.id === els.readingItemId.value);
+  openReadingResults(item);
+}
+
 function editReadingResultsText() {
+  state.readingEditorFromResults = true;
   showReadingEditorPanel();
+}
+
+function closeReadingMoreMenu() {
+  if (els.readingMoreMenu) els.readingMoreMenu.hidden = true;
 }
 
 function openReadingEditor(item = null) {
   state.selectedReadingId = item?.id || "";
   state.currentReadingAnalysis = null;
+  state.readingEditorFromResults = false;
   state.readingPendingGlossary = [];
   state.currentReadingWordCount = 0;
   renderTextbookGlossary([]);
@@ -3020,7 +3045,10 @@ async function saveCurrentReadingItem() {
     els.saveReadingBtn.hidden = true;
     if (els.readingEditorHeading) els.readingEditorHeading.textContent = saved.title || "Läsning";
     if (els.readingEditorIntro) els.readingEditorIntro.hidden = true;
-    els.deleteReadingBtn.hidden = false;
+    // Stays hidden if this editor was reached via "✎ Redigera text" on the
+    // results page — Ta bort lives only in that page's "⋯" menu now, not
+    // duplicated here too (Rachel, 2026-08-10).
+    els.deleteReadingBtn.hidden = state.readingEditorFromResults;
     els.analyzeReadingBtn.hidden = false;
     if (els.openInShadowingBtn) els.openInShadowingBtn.hidden = false;
     renderReadingAnnotateSection(saved);
@@ -3879,6 +3907,11 @@ function openReadingExportPreview() {
 async function deleteCurrentReadingItem() {
   const id = els.readingItemId.value;
   if (!id) return;
+  // 2026-08-10, Rachel's request: deleting a whole reading note now needs a
+  // second confirmation — same confirm() pattern already used for deleting
+  // a notebook (deleteBookAction) or Shadowing content (deleteShadowingItem).
+  const item = state.readingItems.find((entry) => entry.id === id);
+  if (!confirm(`Ta bort "${item?.title || "den här läsningen"}"? Det går inte att ångra.`)) return;
   try {
     await remoteDb.deleteReadingItem(id);
     state.readingItems = state.readingItems.filter((item) => item.id !== id);
@@ -6492,9 +6525,9 @@ function openShadowingPractice(item, { generating = false } = {}) {
 }
 
 // "✎ Redigera text" on Practice — same escape hatch Läsning's results page
-// has (editReadingResultsText/editReadingResultsTextBtn): the one thing
-// removing the list's per-item Redigera button took away was a way to fix
-// a typo in the source text without retyping it from scratch.
+// has (editReadingResultsText, reachable via readingMoreMenu there): the
+// one thing removing the list's per-item Redigera button took away was a
+// way to fix a typo in the source text without retyping it from scratch.
 function editCurrentShadowingText() {
   const item = getSelectedShadowingItem();
   if (!item) return;
@@ -6862,7 +6895,7 @@ function renderShadowingList() {
     // text" action on what's meant to be a finished recording didn't add
     // anything (Rachel, 2026-08-09). Fixing a typo in the source text now
     // lives as the quiet "✎ Redigera text" link on the Practice page
-    // itself instead, same pattern as Läsning's editReadingResultsTextBtn.
+    // itself instead, same pattern as Läsning's editReadingResultsText.
     actions.innerHTML = `
       <button type="button" data-shadowing-action="delete" data-shadowing-id="${escapeHtml(item.id)}">Radera</button>
     `;
@@ -10439,10 +10472,14 @@ function updateTopbarLibraryBack() {
   els.topbarLibraryBack.hidden = !eligible;
   if (!eligible) return;
   const onReadingResults = state.activeView === "readingView" && els.readingAnalysisPanel && !els.readingAnalysisPanel.hidden;
+  const onReadingEditorFromResults = state.activeView === "readingView" && state.readingEditorFromResults && els.readingEditorPanel && !els.readingEditorPanel.hidden;
   const onShadowingPractice = state.activeView === "historyView" && els.shadowingPlayerPanel && !els.shadowingPlayerPanel.hidden;
   if (onReadingResults) {
     els.topbarLibraryBack.textContent = "‹ Tillbaka";
     els.topbarLibraryBack.dataset.topbarBackMode = "readingResults";
+  } else if (onReadingEditorFromResults) {
+    els.topbarLibraryBack.textContent = "‹ Tillbaka";
+    els.topbarLibraryBack.dataset.topbarBackMode = "readingEditor";
   } else if (onShadowingPractice) {
     els.topbarLibraryBack.textContent = "‹ Tillbaka";
     els.topbarLibraryBack.dataset.topbarBackMode = "shadowingPractice";
@@ -10515,6 +10552,7 @@ function closeTransientOverlays() {
   state.wordDialogReturnView = "";
   setWordDialogOpen(false);
   closeDetailMoreMenu();
+  closeReadingMoreMenu();
   if (els.discardWordDialog?.open) els.discardWordDialog.close();
   els.studySessionDialog.hidden = true;
   els.studySessionDialog.dataset.mode = "";
@@ -10615,6 +10653,10 @@ function bindEvents() {
           closeReadingResults();
           return;
         }
+        if (button.dataset.topbarBackMode === "readingEditor") {
+          closeReadingEditorToResults();
+          return;
+        }
         if (button.dataset.topbarBackMode === "shadowingPractice") {
           closeShadowingPractice();
           return;
@@ -10667,14 +10709,27 @@ function bindEvents() {
 
   els.newReadingBtn?.addEventListener("click", () => openReadingEditor(null));
   els.closeReadingEditorBtn?.addEventListener("click", closeReadingEditor);
-  els.editReadingResultsTextBtn?.addEventListener("click", editReadingResultsText);
   els.saveReadingBtn?.addEventListener("click", saveCurrentReadingItem);
   els.analyzeReadingBtn?.addEventListener("click", analyzeCurrentReadingItem);
   els.deleteReadingBtn?.addEventListener("click", deleteCurrentReadingItem);
   els.sendReadingToShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
   els.sendSelectedSentencesToShadowingBtn?.addEventListener("click", sendSelectedSentencesToShadowing);
   els.openInShadowingBtn?.addEventListener("click", sendCurrentReadingItemToShadowing);
-  els.exportReadingBtn?.addEventListener("click", openReadingExportPreview);
+  // 2026-08-10, Rachel's request: Redigera text/Exportera/Ta bort on the
+  // results page consolidated into one "⋯" overflow menu (same toggle +
+  // outside-click-close shape as studySessionMoreMenu/detailMoreMenu).
+  els.readingMoreBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (els.readingMoreMenu) els.readingMoreMenu.hidden = !els.readingMoreMenu.hidden;
+  });
+  els.readingMoreMenu?.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-reading-menu-action]")?.dataset.readingMenuAction;
+    if (!action) return;
+    closeReadingMoreMenu();
+    if (action === "edit") editReadingResultsText();
+    else if (action === "export") openReadingExportPreview();
+    else if (action === "delete") deleteCurrentReadingItem();
+  });
   els.readingTextToggleBtn?.addEventListener("click", () => {
     setReadingTextCollapsed(!els.readingTextInput.classList.contains("reading-text-collapsed"));
   });
@@ -11412,6 +11467,11 @@ function bindEvents() {
     if (els.detailMoreMenu?.hidden) return;
     if (event.target.closest("#detailMoreMenu") || event.target.closest("#detailMoreBtn")) return;
     closeDetailMoreMenu();
+  });
+  document.addEventListener("click", (event) => {
+    if (els.readingMoreMenu?.hidden) return;
+    if (event.target.closest("#readingMoreMenu") || event.target.closest("#readingMoreBtn")) return;
+    closeReadingMoreMenu();
   });
   els.profileLoginButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {

@@ -4088,6 +4088,25 @@ h2 {
   padding: 0;
 }
 
+/* 2026-08-10, Rachel's request: Redigera text/Exportera/Ta bort on the
+   Läsning results page consolidated into one "⋯" overflow menu,
+   top-right of the panel — reuses .detail-more-menu's dropdown look. */
+.reading-more-menu-wrap {
+  position: relative;
+  margin-left: auto;
+}
+
+.detail-more-menu button.reading-more-menu-danger {
+  margin-top: 4px;
+  border-top: 1px solid rgba(112, 118, 128, 0.14);
+  border-radius: 10px 10px 0 0;
+  color: #b3432f;
+}
+
+.reading-editor-secondary-actions {
+  justify-content: space-between;
+}
+
 .field-label,
 .word-form label {
   display: grid;
