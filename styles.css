@@ -4147,11 +4147,13 @@ h2 {
 
 /* 2026-08-10, Rachel's request: "🎧 Shadowing" moved off the bottom action
    row into the original-text box itself, sharing a row with its own
-   Visa hela texten/Visa mindre toggle, both packed to the right edge. */
+   Visa hela texten/Visa mindre toggle. Toggle moved back to its original
+   bottom-left spot (was packed to the right alongside Shadowing) —
+   space-between puts it back on the left, Shadowing stays on the right. */
 .reading-annotate-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 10px;
   margin-top: 8px;
 }
