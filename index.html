@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=175" />
+    <link rel="stylesheet" href="/styles.css?v=176" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -322,12 +322,13 @@
 
           <section class="panel reading-analysis" id="readingAnalysisPanel" hidden>
             <div class="toolbar">
+              <h3 class="reading-analysis-toolbar-title">📖 Läsanteckningar</h3>
               <div class="reading-more-menu-wrap">
                 <button class="icon-button" id="readingMoreBtn" type="button" title="Mer">⋯</button>
                 <div id="readingMoreMenu" class="detail-more-menu" hidden>
                   <button type="button" data-reading-menu-action="edit">✎ Redigera text</button>
-                  <button type="button" data-reading-menu-action="export">Exportera</button>
-                  <button type="button" class="reading-more-menu-danger" data-reading-menu-action="delete">Ta bort</button>
+                  <button type="button" data-reading-menu-action="export">📤 Exportera</button>
+                  <button type="button" class="reading-more-menu-danger" data-reading-menu-action="delete">🗑️ Ta bort</button>
                 </div>
               </div>
             </div>
@@ -366,7 +367,10 @@
               <h4>📝 Läs och markera</h4>
               <p class="reading-annotate-hint">Klicka på en mening för att markera den. Markerade meningar kan få en egen anteckning.</p>
               <div id="readingAnnotateText" class="reading-annotate-text"></div>
-              <button class="reading-text-toggle-btn" id="readingAnnotateToggleBtn" type="button" hidden>Visa hela texten</button>
+              <div class="reading-annotate-actions">
+                <button class="reading-text-toggle-btn" id="readingAnnotateToggleBtn" type="button" hidden>Visa hela texten</button>
+                <button class="secondary-button reading-annotate-shadowing-btn" id="sendReadingToShadowingBtn" type="button">🎧 Shadowing</button>
+              </div>
             </section>
             <section class="reading-report-card" id="readingReportCard" hidden>
               <h4>📖 Läsrapport</h4>
@@ -392,7 +396,6 @@
               <p class="reading-report-total">Totalt ca <strong data-report-total-min></strong> min</p>
             </section>
             <div class="practice-actions">
-              <button class="primary-button" id="sendReadingToShadowingBtn" type="button">Skicka till Shadowing</button>
               <button class="secondary-button" id="sendSelectedSentencesToShadowingBtn" type="button" hidden>Skicka utvalda meningar</button>
             </div>
           </section>

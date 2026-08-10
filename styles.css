@@ -4096,6 +4096,10 @@ h2 {
   margin-left: auto;
 }
 
+#readingMoreMenu button {
+  font-weight: 500;
+}
+
 .detail-more-menu button.reading-more-menu-danger {
   margin-top: 4px;
   border-top: 1px solid rgba(112, 118, 128, 0.14);
@@ -4105,6 +4109,44 @@ h2 {
 
 .reading-editor-secondary-actions {
   justify-content: space-between;
+}
+
+/* 2026-08-10, Rachel's request: label what this page actually is, flush
+   against the topbar instead of floating in unlabeled empty space. */
+.reading-analysis-toolbar-title {
+  font-size: 0.98rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+#readingAnalysisPanel {
+  padding-top: 6px;
+}
+
+#readingAnalysisPanel > .toolbar {
+  margin-top: 0;
+}
+
+/* 2026-08-10, Rachel's request: "🎧 Shadowing" moved off the bottom action
+   row into the original-text box itself, sharing a row with its own
+   Visa hela texten/Visa mindre toggle, both packed to the right edge. */
+.reading-annotate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.reading-annotate-actions .reading-text-toggle-btn {
+  align-self: center;
+  margin-top: 0;
+}
+
+.reading-annotate-shadowing-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.82rem;
 }
 
 .field-label,
