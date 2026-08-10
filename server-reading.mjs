@@ -229,15 +229,15 @@ function extractCandidateTokens(cleanedText) {
 // 规范§3/§8: check user's own word state, then the main dictionary, before
 // ever considering AI. Batches the lookup instead of one query per token.
 async function matchAgainstCorpus(supabaseAdmin, tokens) {
-  const found = new Map(); // token -> { id, swedish, pos, cefr_level, frequency_rank }
+  const found = new Map(); // token -> { id, swedish, pos, chinese, cefr_level, frequency_rank }
   if (!tokens.length) return found;
 
   const { data: exact } = await supabaseAdmin
     .from("learning_objects")
-    .select("id, swedish, part_of_speech, cefr_level, frequency_rank")
+    .select("id, swedish, part_of_speech, chinese, cefr_level, frequency_rank")
     .eq("object_type", "word")
     .in("swedish", tokens);
-  (exact || []).forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
+  (exact || []).forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: row.chinese, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
 
   const remaining = tokens.filter((t) => !found.has(t));
   if (remaining.length) {
@@ -246,14 +246,14 @@ async function matchAgainstCorpus(supabaseAdmin, tokens) {
     if (stillMissingIds.length) {
       const { data: baseWords } = await supabaseAdmin
         .from("learning_objects")
-        .select("id, swedish, part_of_speech, cefr_level, frequency_rank")
+        .select("id, swedish, part_of_speech, chinese, cefr_level, frequency_rank")
         .in("id", stillMissingIds);
       const byId = new Map((baseWords || []).map((w) => [w.id, w]));
       (forms || []).forEach((f) => {
         const base = byId.get(f.learning_object_id);
         if (!base) return;
         const token = f.form_value.toLowerCase();
-        if (!found.has(token)) found.set(token, { id: base.id, swedish: base.swedish, pos: base.part_of_speech, cefr_level: base.cefr_level, frequency_rank: base.frequency_rank });
+        if (!found.has(token)) found.set(token, { id: base.id, swedish: base.swedish, pos: base.part_of_speech, chinese: base.chinese, cefr_level: base.cefr_level, frequency_rank: base.frequency_rank });
       });
     }
   }
@@ -898,10 +898,10 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
         example: w.example,
         status: "ai_generated",
       }));
-      const { data: inserted, error: insertErr } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish, part_of_speech, cefr_level, frequency_rank");
+      const { data: inserted, error: insertErr } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish, part_of_speech, chinese, cefr_level, frequency_rank");
       if (!insertErr && inserted) {
         generatedWords = inserted;
-        inserted.forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
+        inserted.forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: row.chinese, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
       }
     }
     // Keep a real surplus pool (still 2x) here too — the AI Worth Learning
@@ -919,6 +919,13 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   const selectedVocabulary = ranked.map((c, index) => ({
     word_id: c.word.id,
     swedish: c.word.swedish,
+    // Rachel, 2026-08-10: the reading word list's collapsed card needs to
+    // show ordklass + Chinese meaning right away, but a just-generated
+    // missing word isn't in the client's own (session-start) word snapshot
+    // yet — carry both fields on the entry itself so the frontend never
+    // has to depend on that snapshot being fresh.
+    pos: c.word.pos,
+    chinese: c.word.chinese,
     occurrences: c.occurrences,
     worth_learning_score: c.worthLearningScore ?? null,
     sort_order: index,

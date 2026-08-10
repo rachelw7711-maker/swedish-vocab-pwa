@@ -315,14 +315,6 @@ const state = {
   readingItems: [],
   readingItemsLoaded: false,
   readingListStats: {},
-  // 2026-08-03: which page Tillbaka on the results/practice page should
-  // return to — set right before navigating there. "editor" when reached
-  // by analyzing/generating from that module's own edit form (so Tillbaka
-  // lets you tweak and redo); "list"/"handoff" when reached by opening an
-  // already-finished item directly from Bibliotek or via a cross-module
-  // handoff, where the edit form was never actually visited.
-  readingResultsEntry: "editor",
-  shadowingPracticeEntry: "editor",
   selectedReadingId: "",
   currentReadingAnalysis: null,
   selectedNotebook: "",
@@ -580,7 +572,6 @@ const els = {
   saveReadingBtn: document.querySelector("#saveReadingBtn"),
   analyzeReadingBtn: document.querySelector("#analyzeReadingBtn"),
   readingAnalysisPanel: document.querySelector("#readingAnalysisPanel"),
-  closeReadingAnalysisBtn: document.querySelector("#closeReadingAnalysisBtn"),
   editReadingResultsTextBtn: document.querySelector("#editReadingResultsTextBtn"),
   readingAnalysisHeading: document.querySelector("#readingAnalysisHeading"),
   readingAnalysisLoading: document.querySelector("#readingAnalysisLoading"),
@@ -621,7 +612,6 @@ const els = {
   shadowingEditorPanel: document.querySelector("#shadowingEditorPanel"),
   shadowingPlayerPanel: document.querySelector("#shadowingPlayerPanel"),
   shadowingExportPanel: document.querySelector("#shadowingExportPanel"),
-  closeShadowingPracticeBtn: document.querySelector("#closeShadowingPracticeBtn"),
   editShadowingTextBtn: document.querySelector("#editShadowingTextBtn"),
   shadowingGenerating: document.querySelector("#shadowingGenerating"),
   shadowingTitleInput: document.querySelector("#shadowingTitleInput"),
@@ -2883,6 +2873,7 @@ function showReadingEditorPanel() {
   els.readingList.hidden = true;
   els.readingAnalysisPanel.hidden = true;
   els.readingEditorPanel.hidden = false;
+  updateTopbarLibraryBack();
 }
 
 function openReadingResults(item) {
@@ -2891,22 +2882,18 @@ function openReadingResults(item) {
   els.readingList.hidden = true;
   els.readingEditorPanel.hidden = true;
   els.readingAnalysisPanel.hidden = false;
+  updateTopbarLibraryBack();
 }
 
-// 2026-08-03, Rachel's feedback: Tillbaka on the results page used to
-// always land on the editor, even for an item opened directly from the
-// Läsning list — where the editor was never actually visited, so bouncing
-// through it felt wrong. Now it returns to wherever the user actually came
-// from (see readingResultsEntry, set right before each openReadingResults
-// call). A separate always-available "✎ Redigera text" link on the results
-// page (editReadingResultsText) covers the case that would otherwise
-// disappear — fixing a typo in an already-analyzed article's source text.
+// 2026-08-10, Rachel's request: Tillbaka on the results page moved into the
+// top-right header slot (replacing "Till Bibliotek" there — see
+// updateTopbarLibraryBack) and now always returns straight to the Läsning
+// main list, regardless of how the page was reached. "✎ Redigera text"
+// (editReadingResultsText, top-left on this page) remains the only path
+// back into the editor, to fix a typo in an already-analyzed article's
+// source text.
 function closeReadingResults() {
-  if (state.readingResultsEntry === "list") {
-    closeReadingEditor();
-  } else {
-    showReadingEditorPanel();
-  }
+  closeReadingEditor();
 }
 
 function editReadingResultsText() {
@@ -2956,7 +2943,6 @@ function openReadingEditor(item = null) {
   const cachedStats = item?.text_resource_id ? state.readingListStats?.[item.text_resource_id] : null;
   const likelyAnalyzed = Boolean(cachedStats && (cachedStats.vocabCount || cachedStats.exprCount || cachedStats.sentenceCount || cachedStats.patternCount));
   if (likelyAnalyzed) {
-    state.readingResultsEntry = "list";
     openReadingResults(item);
   } else {
     showReadingEditorPanel();
@@ -2979,7 +2965,6 @@ function openReadingEditor(item = null) {
         if (els.readingItemId.value !== item.id) return; // user navigated away
         if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
         state.currentReadingAnalysis = analysis;
-        state.readingResultsEntry = "list";
         openReadingResults(item);
         renderReadingAnalysis(analysis, { deepReady: resource.deepReady });
         // A previous session's deep layer may have been interrupted (e.g.
@@ -2998,6 +2983,7 @@ function closeReadingEditor() {
   els.readingList.hidden = false;
   els.readingEditorPanel.hidden = true;
   els.readingAnalysisPanel.hidden = true;
+  updateTopbarLibraryBack();
 }
 
 // 阅读模块设计想法-专业review-2026-07-27.md §"标题问题" — a title should
@@ -3091,7 +3077,6 @@ async function analyzeCurrentReadingItem() {
   // decision — Analysera opens a full separate page, not more content
   // further down the editor) rather than waiting for the fast-layer AI
   // call to resolve first; the loading placeholder fills the gap.
-  state.readingResultsEntry = "editor";
   openReadingResults(saved);
   showReadingAnalysisLoading();
   try {
@@ -3224,6 +3209,12 @@ function renderReadingAnalysis(analysis, { deepReady = true } = {}) {
     // 2026-08-03, Rachel's feedback: word and Chinese meaning were crammed
     // onto one chip line; now the word gets its own line in the box, with
     // part-of-speech + meaning on a second line below it.
+    // 2026-08-10: a just-generated missing word isn't in the client's own
+    // word snapshot (state.words) yet, so this used to render with no
+    // ordklass/meaning at all — the analysis entry itself now always
+    // carries pos/chinese (server-reading.mjs), used as the fallback.
+    const pos = word ? word.pos : entry.pos;
+    const chinese = word ? word.chinese : entry.chinese;
     const card = document.createElement("div");
     card.className = "reading-word-card";
     card.dataset.readingItemType = "vocabulary";
@@ -3237,7 +3228,7 @@ function renderReadingAnalysis(analysis, { deepReady = true } = {}) {
     term.textContent = word ? word.swedish : entry.swedish;
     const meta = document.createElement("span");
     meta.className = "reading-word-card-meta";
-    meta.textContent = word ? `${posBadgeLabel(word.pos)} · ${word.chinese}` : "";
+    meta.textContent = pos && chinese ? `${posBadgeLabel(pos)} · ${chinese}` : "";
     toggle.append(term, meta);
     const detail = document.createElement("div");
     detail.className = "reading-word-card-detail";
@@ -3530,22 +3521,32 @@ function toggleReadingWordDetail(toggle) {
     return;
   }
   const word = state.words.find((item) => item.id === toggle.dataset.readingWordId);
+  const entry = (state.currentReadingAnalysis?.selectedVocabulary || []).find((e) => e.word_id === toggle.dataset.readingWordId);
+  const wordPos = word ? word.pos : entry?.pos;
+  const wordChinese = word ? word.chinese : entry?.chinese;
   detail.replaceChildren();
-  if (!word) return;
+  if (!wordPos && !wordChinese) return;
   const pos = document.createElement("span");
   pos.className = "pos-badge";
-  pos.textContent = posBadgeLabel(word.pos);
+  pos.textContent = posBadgeLabel(wordPos);
   const meaning = document.createElement("p");
-  meaning.textContent = word.chinese;
-  const example = document.createElement("p");
-  example.className = "example-translation";
-  example.textContent = clean(word.example).split("\n")[0] || "";
-  const openFull = document.createElement("button");
-  openFull.type = "button";
-  openFull.className = "secondary-button";
-  openFull.textContent = "Visa hela ordkortet";
-  openFull.addEventListener("click", () => openWordFromReadingChip(word.swedish));
-  detail.append(pos, meaning, example, openFull);
+  meaning.textContent = wordChinese || "";
+  detail.append(pos, meaning);
+  // The example sentence and full-card link only exist once the word is
+  // actually in the loaded Ordbok snapshot — a just-generated missing word
+  // gets pos/chinese above (from the analysis entry itself) but nothing
+  // more without a real dictionary lookup, which stays out of scope here.
+  if (word) {
+    const example = document.createElement("p");
+    example.className = "example-translation";
+    example.textContent = clean(word.example).split("\n")[0] || "";
+    const openFull = document.createElement("button");
+    openFull.type = "button";
+    openFull.className = "secondary-button";
+    openFull.textContent = "Visa hela ordkortet";
+    openFull.addEventListener("click", () => openWordFromReadingChip(word.swedish));
+    detail.append(example, openFull);
+  }
   detail.hidden = false;
 }
 
@@ -3661,7 +3662,6 @@ async function sendTextToShadowing(button, { title, swedish, textResourceId, lin
     // Läsning lands directly on the Shadowing practice page with real AI
     // audio already generating — not the editor, and not left on the free
     // browser-speech fallback waiting for a manual click.
-    state.shadowingPracticeEntry = "handoff";
     openShadowingPractice(normalized, { generating: true });
     const token = await getShadowingAccessTokenOrGuide();
     await runShadowingTtsGeneration(normalized, swedish, token);
@@ -6477,6 +6477,7 @@ function openShadowingEditor() {
   // on Prepare — showing it under Practice too just repeated the item
   // you're already looking at (Rachel, 2026-08-09).
   if (els.shadowingHistorySection) els.shadowingHistorySection.hidden = false;
+  updateTopbarLibraryBack();
 }
 
 function openShadowingPractice(item, { generating = false } = {}) {
@@ -6487,6 +6488,7 @@ function openShadowingPractice(item, { generating = false } = {}) {
   if (els.shadowingGenerating) els.shadowingGenerating.hidden = !generating;
   if (els.shadowingHistorySection) els.shadowingHistorySection.hidden = true;
   renderShadowingPlayer();
+  updateTopbarLibraryBack();
 }
 
 // "✎ Redigera text" on Practice — same escape hatch Läsning's results page
@@ -6502,21 +6504,14 @@ function editCurrentShadowingText() {
   renderShadowing();
 }
 
-// 2026-08-03, Rachel's feedback: Tillbaka used to always land on
-// Shadowing's own editor, even when practice was reached via a handoff
-// from Läsning — where that editor was never actually visited. Now it
-// returns to wherever the user actually came from (shadowingPracticeEntry,
-// set right before each openShadowingPractice call): the editor for the
-// "generate from here" flow, straight up to Bibliotek for the
-// cross-module handoff flow (no in-module list to return to instead).
+// 2026-08-10, Rachel's request: Tillbaka on Practice moved into the
+// top-right header slot (replacing "Till Bibliotek" there — see
+// updateTopbarLibraryBack) and now always returns straight to Prepare,
+// regardless of how Practice was reached (including the Läsning handoff).
 function closeShadowingPractice() {
   shadowingAudio.pause();
   state.shadowingPlaybackState = "paused";
-  if (state.shadowingPracticeEntry === "handoff") {
-    returnToLibraryView();
-  } else {
-    openShadowingEditor();
-  }
+  openShadowingEditor();
 }
 
 function resetShadowingForm() {
@@ -7253,7 +7248,6 @@ async function generateStandardShadowingAudio() {
     // continues in the background (Rachel's confirmed decision, mirrors
     // Läsning's fast/deep pattern shipped earlier this session) — the
     // "Genererar ljud …" placeholder covers the gap.
-    state.shadowingPracticeEntry = "editor";
     openShadowingPractice(item, { generating: true });
     await runShadowingTtsGeneration(item, text, token);
   } catch (error) {
@@ -10433,13 +10427,38 @@ function waitForImageReady(image) {
   });
 }
 
+// The single shared header button (topbarLibraryBack) also stands in for
+// the Läsning results page's and Shadowing Practice page's own Tillbaka
+// (Rachel, 2026-08-10: move those into this top-right slot instead of a
+// second Tillbaka duplicated inside each panel). It swaps label/behavior
+// based on which panel is actually visible right now; stays
+// "Till Bibliotek" (→ libraryView) everywhere else eligible.
+function updateTopbarLibraryBack() {
+  if (!els.topbarLibraryBack) return;
+  const eligible = ["notebookView", "wordLibraryView", "historyView", "fraserView", "readingView"].includes(state.activeView);
+  els.topbarLibraryBack.hidden = !eligible;
+  if (!eligible) return;
+  const onReadingResults = state.activeView === "readingView" && els.readingAnalysisPanel && !els.readingAnalysisPanel.hidden;
+  const onShadowingPractice = state.activeView === "historyView" && els.shadowingPlayerPanel && !els.shadowingPlayerPanel.hidden;
+  if (onReadingResults) {
+    els.topbarLibraryBack.textContent = "‹ Tillbaka";
+    els.topbarLibraryBack.dataset.topbarBackMode = "readingResults";
+  } else if (onShadowingPractice) {
+    els.topbarLibraryBack.textContent = "‹ Tillbaka";
+    els.topbarLibraryBack.dataset.topbarBackMode = "shadowingPractice";
+  } else {
+    els.topbarLibraryBack.textContent = "Till Bibliotek";
+    els.topbarLibraryBack.dataset.topbarBackMode = "";
+  }
+}
+
 function activateView(viewId) {
   if (!viewId) return;
   closeTransientOverlays();
   if (viewId !== "historyView") closeShadowingPlayback();
   state.activeView = viewId;
   document.body.dataset.activeView = state.activeView;
-  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = !["notebookView", "wordLibraryView", "historyView", "fraserView", "readingView"].includes(state.activeView);
+  updateTopbarLibraryBack();
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === state.activeView);
   });
@@ -10544,16 +10563,14 @@ function forceStartsideOnPwaLaunch() {
   forceHomeView({ resetScroll: true });
 }
 
-// 2026-08-03: extracted from the [data-return-view="libraryView"] handler
-// so closeShadowingPractice can reuse the exact same "go up to Bibliotek"
-// behavior for the cross-module-handoff case (see readingResultsEntry's
-// comment above for the same principle applied to Läsning).
+// 2026-08-03: extracted from the [data-return-view="libraryView"] handler,
+// the "go up to Bibliotek" behavior shared by every module's own Tillbaka.
 function returnToLibraryView() {
   closeTransientOverlays();
   closeShadowingPlayback();
   state.activeView = "libraryView";
   document.body.dataset.activeView = "libraryView";
-  if (els.topbarLibraryBack) els.topbarLibraryBack.hidden = true;
+  updateTopbarLibraryBack();
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === "libraryView");
   });
@@ -10589,6 +10606,20 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-return-view]").forEach((button) => {
     button.addEventListener("click", () => {
+      // topbarLibraryBack doubles as Läsning results' and Shadowing
+      // Practice's own Tillbaka when one of those panels is open (see
+      // updateTopbarLibraryBack) — branch there before the generic
+      // "go to Bibliotek" behavior below.
+      if (button === els.topbarLibraryBack) {
+        if (button.dataset.topbarBackMode === "readingResults") {
+          closeReadingResults();
+          return;
+        }
+        if (button.dataset.topbarBackMode === "shadowingPractice") {
+          closeShadowingPractice();
+          return;
+        }
+      }
       const viewId = button.dataset.returnView;
       if (viewId === "libraryView") {
         returnToLibraryView();
@@ -10636,7 +10667,6 @@ function bindEvents() {
 
   els.newReadingBtn?.addEventListener("click", () => openReadingEditor(null));
   els.closeReadingEditorBtn?.addEventListener("click", closeReadingEditor);
-  els.closeReadingAnalysisBtn?.addEventListener("click", closeReadingResults);
   els.editReadingResultsTextBtn?.addEventListener("click", editReadingResultsText);
   els.saveReadingBtn?.addEventListener("click", saveCurrentReadingItem);
   els.analyzeReadingBtn?.addEventListener("click", analyzeCurrentReadingItem);
@@ -10825,7 +10855,6 @@ function bindEvents() {
     renderNotebook();
   });
 
-  els.closeShadowingPracticeBtn?.addEventListener("click", closeShadowingPractice);
   els.editShadowingTextBtn?.addEventListener("click", editCurrentShadowingText);
   els.newShadowingBtn?.addEventListener("click", () => {
     // 2026-08-03: was a partial inline reset that never cleared item
