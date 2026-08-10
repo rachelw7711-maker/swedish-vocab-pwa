@@ -615,7 +615,8 @@ const els = {
   shadowingEditorPanel: document.querySelector("#shadowingEditorPanel"),
   shadowingPlayerPanel: document.querySelector("#shadowingPlayerPanel"),
   shadowingExportPanel: document.querySelector("#shadowingExportPanel"),
-  editShadowingTextBtn: document.querySelector("#editShadowingTextBtn"),
+  shadowingMoreBtn: document.querySelector("#shadowingMoreBtn"),
+  shadowingMoreMenu: document.querySelector("#shadowingMoreMenu"),
   shadowingGenerating: document.querySelector("#shadowingGenerating"),
   shadowingTitleInput: document.querySelector("#shadowingTitleInput"),
   shadowingSwedishInput: document.querySelector("#shadowingSwedishInput"),
@@ -3686,13 +3687,12 @@ async function sendTextToShadowing(button, { title, swedish, textResourceId, lin
     await refreshShadowingState();
     state.selectedShadowingId = normalized.id;
     activateView("historyView");
-    // 2026-08-03, Rachel's confirmed decision: text handed off from
-    // Läsning lands directly on the Shadowing practice page with real AI
-    // audio already generating — not the editor, and not left on the free
-    // browser-speech fallback waiting for a manual click.
-    openShadowingPractice(normalized, { generating: true });
-    const token = await getShadowingAccessTokenOrGuide();
-    await runShadowingTtsGeneration(normalized, swedish, token);
+    // 2026-08-11, Rachel's request: text handed off from Läsning now lands
+    // on Prepare (review/pick a voice first) instead of jumping straight
+    // to Practice with audio already auto-generating.
+    populateShadowingForm(normalized);
+    openShadowingEditor();
+    renderShadowing();
   } catch (error) {
     console.warn("[SpråkLab] Failed to send text to Shadowing.", error);
   } finally {
@@ -6510,6 +6510,7 @@ function openShadowingEditor() {
   // on Prepare — showing it under Practice too just repeated the item
   // you're already looking at (Rachel, 2026-08-09).
   if (els.shadowingHistorySection) els.shadowingHistorySection.hidden = false;
+  closeShadowingMoreMenu();
   updateTopbarLibraryBack();
 }
 
@@ -6521,6 +6522,7 @@ function openShadowingPractice(item, { generating = false } = {}) {
   if (els.shadowingGenerating) els.shadowingGenerating.hidden = !generating;
   if (els.shadowingHistorySection) els.shadowingHistorySection.hidden = true;
   renderShadowingPlayer();
+  closeShadowingMoreMenu();
   updateTopbarLibraryBack();
 }
 
@@ -6535,6 +6537,21 @@ function editCurrentShadowingText() {
   state.selectedShadowingId = item.id;
   openShadowingEditor();
   renderShadowing();
+}
+
+function closeShadowingMoreMenu() {
+  if (els.shadowingMoreMenu) els.shadowingMoreMenu.hidden = true;
+}
+
+// 2026-08-11, Rachel's request: Ta bort on Practice's "⋯" menu — same
+// logic as Läsning's results-page delete (deleteCurrentReadingItem):
+// confirm() lives inside deleteShadowingItem already; only navigate back
+// to Prepare if the delete actually went through (not cancelled).
+async function deleteCurrentShadowingItemFromPractice() {
+  const item = getSelectedShadowingItem();
+  if (!item) return;
+  await deleteShadowingItem(item.id);
+  if (!getShadowingItems().some((row) => row.id === item.id)) openShadowingEditor();
 }
 
 // 2026-08-10, Rachel's request: Tillbaka on Practice moved into the
@@ -10553,6 +10570,7 @@ function closeTransientOverlays() {
   setWordDialogOpen(false);
   closeDetailMoreMenu();
   closeReadingMoreMenu();
+  closeShadowingMoreMenu();
   if (els.discardWordDialog?.open) els.discardWordDialog.close();
   els.studySessionDialog.hidden = true;
   els.studySessionDialog.dataset.mode = "";
@@ -10910,7 +10928,20 @@ function bindEvents() {
     renderNotebook();
   });
 
-  els.editShadowingTextBtn?.addEventListener("click", editCurrentShadowingText);
+  // 2026-08-11, Rachel's request: Redigera text/Ta bort on Practice
+  // consolidated into one "⋯" overflow menu, same pattern as Läsning's
+  // readingMoreMenu (toggle + outside-click-close + delegated actions).
+  els.shadowingMoreBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (els.shadowingMoreMenu) els.shadowingMoreMenu.hidden = !els.shadowingMoreMenu.hidden;
+  });
+  els.shadowingMoreMenu?.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-shadowing-menu-action]")?.dataset.shadowingMenuAction;
+    if (!action) return;
+    closeShadowingMoreMenu();
+    if (action === "edit") editCurrentShadowingText();
+    else if (action === "delete") deleteCurrentShadowingItemFromPractice();
+  });
   els.newShadowingBtn?.addEventListener("click", () => {
     // 2026-08-03: was a partial inline reset that never cleared item
     // identity (shadowingItemId/selectedShadowingId) — harmless before the
@@ -11472,6 +11503,11 @@ function bindEvents() {
     if (els.readingMoreMenu?.hidden) return;
     if (event.target.closest("#readingMoreMenu") || event.target.closest("#readingMoreBtn")) return;
     closeReadingMoreMenu();
+  });
+  document.addEventListener("click", (event) => {
+    if (els.shadowingMoreMenu?.hidden) return;
+    if (event.target.closest("#shadowingMoreMenu") || event.target.closest("#shadowingMoreBtn")) return;
+    closeShadowingMoreMenu();
   });
   els.profileLoginButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {

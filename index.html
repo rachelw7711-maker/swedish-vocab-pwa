@@ -821,7 +821,13 @@
                   <h2>Practice</h2>
                   <span class="visually-hidden" id="shadowingTitle">Practice</span>
                 </div>
-                <button class="reading-edit-text-link" id="editShadowingTextBtn" type="button">✎ Redigera text</button>
+                <div class="reading-more-menu-wrap">
+                  <button class="icon-button reading-more-btn" id="shadowingMoreBtn" type="button" title="Mer">⋯</button>
+                  <div id="shadowingMoreMenu" class="detail-more-menu" hidden>
+                    <button type="button" data-shadowing-menu-action="edit">✎ Redigera text</button>
+                    <button type="button" class="reading-more-menu-danger" data-shadowing-menu-action="delete">🗑️ Ta bort</button>
+                  </div>
+                </div>
               </div>
               <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
               <div class="shadowing-controls">
@@ -1356,6 +1362,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=185" type="module"></script>
+    <script src="/app.js?v=186" type="module"></script>
   </body>
 </html>

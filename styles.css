@@ -4099,12 +4099,15 @@ h2 {
 /* 2026-08-10: menu items were inconsistent — "✎ Redigera text" wrapped to
    two lines (icon stranded above "text") while the shorter two didn't.
    Widen the menu and stop wrapping so the icon always stays on the same
-   line as its label, for all three. */
-#readingMoreMenu {
+   line as its label, for all three. Same treatment applied to Shadowing
+   Practice's "⋯" menu (shadowingMoreMenu, 2026-08-11) — identical pattern. */
+#readingMoreMenu,
+#shadowingMoreMenu {
   min-width: 180px;
 }
 
-#readingMoreMenu button {
+#readingMoreMenu button,
+#shadowingMoreMenu button {
   font-weight: 500;
   white-space: nowrap;
 }
