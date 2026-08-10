@@ -4096,8 +4096,17 @@ h2 {
   margin-left: auto;
 }
 
+/* 2026-08-10: menu items were inconsistent — "✎ Redigera text" wrapped to
+   two lines (icon stranded above "text") while the shorter two didn't.
+   Widen the menu and stop wrapping so the icon always stays on the same
+   line as its label, for all three. */
+#readingMoreMenu {
+  min-width: 180px;
+}
+
 #readingMoreMenu button {
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .detail-more-menu button.reading-more-menu-danger {
@@ -4111,12 +4120,21 @@ h2 {
   justify-content: space-between;
 }
 
-/* 2026-08-10, Rachel's request: label what this page actually is, flush
-   against the topbar instead of floating in unlabeled empty space. */
-.reading-analysis-toolbar-title {
+/* 2026-08-10, Rachel's request: a lone "📖 Läsanteckningar" line felt too
+   sparse next to the round "⋯" button — paired with a small-caps "LÄSNING"
+   kicker above it (same .section-kicker pattern as e.g. notebookView's
+   "Fasta boklistor" → "Snabbval"), so the left side is two lines to match
+   the button's own visual weight. */
+.reading-analysis-toolbar-title h2 {
   font-size: 0.98rem;
   font-weight: 720;
   white-space: nowrap;
+}
+
+.reading-more-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 1.05rem;
 }
 
 #readingAnalysisPanel {

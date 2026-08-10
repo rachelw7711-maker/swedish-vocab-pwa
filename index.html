@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=176" />
+    <link rel="stylesheet" href="/styles.css?v=177" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -322,9 +322,12 @@
 
           <section class="panel reading-analysis" id="readingAnalysisPanel" hidden>
             <div class="toolbar">
-              <h3 class="reading-analysis-toolbar-title">📖 Läsanteckningar</h3>
+              <div class="reading-analysis-toolbar-title">
+                <p class="section-kicker">Läsning</p>
+                <h2>📖 Läsanteckningar</h2>
+              </div>
               <div class="reading-more-menu-wrap">
-                <button class="icon-button" id="readingMoreBtn" type="button" title="Mer">⋯</button>
+                <button class="icon-button reading-more-btn" id="readingMoreBtn" type="button" title="Mer">⋯</button>
                 <div id="readingMoreMenu" class="detail-more-menu" hidden>
                   <button type="button" data-reading-menu-action="edit">✎ Redigera text</button>
                   <button type="button" data-reading-menu-action="export">📤 Exportera</button>
