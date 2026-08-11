@@ -3959,12 +3959,13 @@ async function renderReadingShadowingEntryCard() {
   const readingsToday = (state.readingItems || []).filter((item) => item.text_resource_id && Number(item.updatedAt || item.createdAt || 0) >= todayMs).length;
   const shadowingToday = getShadowingItems().filter((item) => Number(item.createdAt || 0) >= todayMs).length;
 
+  // 2026-08-11, Rachel's request: the card's title is now a static
+  // "Läs/Lyssna/Härma" explaining what Studio is (set in index.html),
+  // not swapped per state — only the detail line and button still change.
   if (!readingsToday && !shadowingToday) {
-    els.readingShadowingEntryTitle.textContent = "Läsning och Shadowing börjar här";
     els.readingShadowingEntryDetail.textContent = "Ta ett foto eller klistra in en text";
-    els.readingShadowingEntryBtn.textContent = "Kom igång";
+    els.readingShadowingEntryBtn.textContent = "Börja träna";
   } else {
-    els.readingShadowingEntryTitle.textContent = "Bra jobbat idag";
     els.readingShadowingEntryDetail.textContent = `${readingsToday} läsning${readingsToday === 1 ? "" : "ar"} idag · ${shadowingToday} Shadowing-pass idag`;
     els.readingShadowingEntryBtn.textContent = "Fortsätt";
   }

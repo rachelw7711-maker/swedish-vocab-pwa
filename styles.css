@@ -3166,22 +3166,16 @@ h2 {
 .study-entry-card {
   display: grid;
   align-content: space-between;
-  gap: 10px;
-  min-height: 164px;
-  flex: 0 0 82%;
-  max-width: 320px;
+  gap: 8px;
+  min-height: 148px;
+  flex: 0 0 158px;
+  width: 158px;
   scroll-snap-align: start;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid rgba(55, 65, 72, 0.08);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.66);
   box-shadow: 0 12px 30px rgba(31, 42, 48, 0.055);
-}
-
-@media (min-width: 520px) {
-  .study-entry-card {
-    flex: 0 0 calc(33.333% - 8px);
-  }
 }
 
 .study-entry-copy {
@@ -3223,6 +3217,9 @@ h2 {
   color: #303735;
   font-size: 1.08rem;
   font-weight: 740;
+  /* "Läs/Lyssna/Härma" has no spaces, so without this the browser treats
+     it as one unbreakable word and it overflows the card's fixed width. */
+  overflow-wrap: anywhere;
 }
 
 .study-entry-card > strong {
@@ -6214,7 +6211,6 @@ dialog::backdrop {
   }
 
   .study-entry-card {
-    min-height: 0;
     padding: 11px;
     border-radius: 16px;
     gap: 8px;
