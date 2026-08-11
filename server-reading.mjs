@@ -296,6 +296,22 @@ const HIGH_VALUE_CONNECTIVES = new Set([
   "sålunda", "härav", "ehuru", "huruvida", "beträffande", "således",
 ]);
 
+// V2.1 阅读AI提取规则 §四 (2026-08-11): months/weekdays and very common
+// deictic time words are excluded even though they pass the POS/frequency
+// filters below — Swedish month names are lowercase so the proper-noun
+// capitalization heuristic can't catch them, and words like "idag"/"nu" are
+// far too basic to earn a vocabulary slot on their own. If one of these is
+// genuinely doing something idiomatic in the text, extractKeyExpressions
+// (which reads the whole text independently, not this candidate list) still
+// catches it as a phrase — this only stops the bare word from competing for
+// a Viktiga ord slot.
+const LOW_VALUE_TIME_WORDS = new Set([
+  "januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti",
+  "september", "oktober", "november", "december",
+  "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag",
+  "idag", "igår", "imorgon", "nu", "sedan", "snart", "nyss", "strax",
+]);
+
 function rankFoundWords(found, freq, firstSeenCapitalized, userWordState, limit) {
   const excludedPos = new Set(["preposition", "conjunction", "pronoun", "numeral", "interjection"]);
   const candidates = [...found.entries()]
@@ -305,6 +321,7 @@ function rankFoundWords(found, freq, firstSeenCapitalized, userWordState, limit)
     // heuristic can't tell them apart, so the curated set bypasses it too.
     .filter(([token]) => HIGH_VALUE_CONNECTIVES.has(token) || !firstSeenCapitalized.get(token) || freq.get(token) > 1)
     .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !word.frequency_rank || word.frequency_rank > VERY_COMMON_FREQUENCY_RANK)
+    .filter(([token]) => !LOW_VALUE_TIME_WORDS.has(token))
     .map(([token, word]) => {
       const state = userWordState.get(word.id);
       const alreadyMastered = state?.mastered || (state?.review_stage ?? 0) >= 5;
@@ -361,7 +378,13 @@ Calibration — score by how much a word actually determines whether the reader 
 - "regering" → moderate (40-60) if the article is genuinely about government/policy; otherwise low.
 - "däremot", "trots", "dessutom" → very high (80-100), even though they're short, frequent, and CEFR A2-B1. A connective word that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands the article correctly — never downgrade a word just because it "looks too simple" or "too common" to be worth learning.
 - A phrasal/idiomatic verb sense (e.g. "lägga ner", "komma fram till") → very high (80-100) — these carry far more meaning than any single component word.
-Do not let surface simplicity or high frequency pull a score down — score purely on how much understanding of THIS article depends on this specific word.`;
+Do not let surface simplicity or high frequency pull a score down — score purely on how much understanding of THIS article depends on this specific word.
+
+Category exclusions (V2.1 阅读AI提取规则 §四, 2026-08-11) — score very low (1-10) regardless of capitalization or frequency if the word is:
+- A person name, place name, or country/nationality name (e.g. "Jonas", "Catrin", "Stockholm", "Darfur").
+- A month or weekday name, a specific date, or a plain cardinal/ordinal number used as a quantity (e.g. "december", "måndag", "2019", "femton", "15:e").
+- A very common deictic time word (e.g. "idag", "nu", "sedan") that isn't doing anything unusual here.
+Exception: if the name/date/number carries real idiomatic weight in this specific text (e.g. it's part of a fixed expression like "på tu man hand"), that belongs in Fraser & Uttryck as a phrase — score the isolated word low here regardless, the expression is a separate extraction.`;
 
 async function scoreVocabularyWorthLearning(candidates, cleanedText, targetCount) {
   if (candidates.length <= targetCount) {
@@ -447,7 +470,7 @@ async function batchGenerateMissingWords(missingTokens) {
 // possibly non-literal expression". Key sentences are a third, independent
 // output (not just the source_sentence attached to a word/phrase) — the
 // most Shadowing-worthy sentences in the article.
-async function extractKeyExpressions(cleanedText, tier, glossary = []) {
+async function extractKeyExpressions(cleanedText, tier, glossary = [], vocabularyWords = []) {
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const [collocMin, collocMax] = tierConfig.keyCollocations;
   const [idiomMin, idiomMax] = tierConfig.keyIdioms;
@@ -502,21 +525,41 @@ async function extractKeyExpressions(cleanedText, tier, glossary = []) {
   const glossaryNote = glossary.length
     ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${glossary.map((g) => g.word).join(", ")}. Do not select any of these as a collocation or idiom — the book already did that job. Spend the collocation/idiom slots on other things the glossary didn't cover.`
     : "";
+  // V2.1 阅读AI提取规则 §六/§十七 (2026-08-11): the vocabulary step already ran
+  // and picked these words in isolation — cross-module dedup means the
+  // isolated word should lose to a genuine fixed expression built around it.
+  // analyzeReadingResourceDeep removes the word programmatically whenever it
+  // turns up inside a collocation/idiom returned here, so it's safe (and
+  // encouraged) to still extract that expression even though the word is
+  // "already covered".
+  const vocabNote = vocabularyWords.length
+    ? `\n\nThese words were already selected as standalone key vocabulary for this article: ${vocabularyWords.join(", ")}. If one of them is really only valuable as part of a fixed expression, extract that expression as a collocation or idiom below — don't skip it just because the word is "already covered" (the isolated word will be dropped programmatically in favor of your expression). Conversely, when choosing key_sentences and language_patterns, don't select one only to re-teach a point already fully covered by this vocabulary list or by a collocation/idiom you're returning in this same response — only include it if it adds real comprehension value beyond what's already covered.`
+    : "";
   const { result, usage } = await callOpenAI({
     schemaName: "key_expressions_and_sentences",
     schema,
     maxOutputTokens: 3000,
     systemPrompt: `You extract four things from a Swedish text for a Chinese-speaking learner, each with its own criteria — never invent content, everything must actually appear in the text.
 
-1. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious.
+1. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious. Words that merely happen to sit next to each other in the sentence are not a collocation — the real test is: would a learner want to memorize this exact combination as one unit? If not, don't extract it.
 
 2. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
 
-3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences worth reading aloud and repeating — chosen because they showcase a grammatical structure worth noticing (a tense, a subordinate clause, a passive construction, a notable word order) or because they're excellent standalone material for spoken practice (natural rhythm, self-contained meaning, not overly long or dependent on surrounding context). Do NOT pick a sentence just because it is an important plot point or states a key fact — a sentence that only restates something the reader already understood from following the story (e.g. "this is where the twist happens") has no language-learning value by itself and must not be included. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, so it must be written in Chinese (like meaning_zh/translation_zh elsewhere), one short clause naming what's worth noticing — never an English rationale.
+Both collocations and idioms must be normalized to a reusable "learnable form", never copied as the sentence's own accidental inflected fragment: verbs go to infinitive, and use "någon"/"något" as a placeholder for an open object/subject slot the learner would fill in themselves. E.g. if the text has "gick inte ihop med" or "hade skänkt bort", extract "gå ihop med något" / "skänka bort något" — not the sentence's own conjugated fragment. Also merge near-duplicate surface variants of the same underlying expression into one canonical entry (e.g. "gå ihop med", "gick inte ihop", "går ihop med" are the same knowledge point — return it once).
 
-4. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). Give the pattern name, its meaning in Chinese, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
+3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences with real comprehension/language-learning value — NOT sentences that matter to the plot. Select a sentence only when at least one of these applies, in priority order:
+   a. (highest priority) The words are individually simple, but the sentence as a whole is hard to understand — e.g. a non-literal phrase, an idiom, or a combination whose meaning isn't the sum of its parts.
+   b. Complex structure: multiple clauses, embedded subordinate clauses, unusual word order, or long-distance dependencies between sentence parts.
+   c. Ellipsis: a meaningful chunk of the sentence is grammatically omitted and must be inferred.
+   d. A tense relationship worth explaining — e.g. past perfect marking an "earlier past" within past narration — but only when the tense actually affects comprehension, not for routine tense usage.
+   e. Unclear reference or implied meaning — a pronoun or demonstrative (det/sådant/allt det där) that's genuinely hard to resolve without context.
+   f. Tone, attitude, or a rhetorical question that changes the sentence's real meaning beyond its literal words.
+   g. The sentence models a high-value, directly-reusable expression structure.
+   Do NOT select a sentence merely because: it's plot-important, it's the article's first sentence, it contains exactly one unfamiliar word (that word belongs in Viktiga ord, not here), its word order is perfectly ordinary, its structure is very basic, or it's a simple factual statement with no extra comprehension difficulty. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, written in Chinese (like meaning_zh/translation_zh elsewhere) — it must explain the ACTUAL comprehension mechanism, never a generic label alone like "从句结构" or "反问句". Required depth, e.g. for "Trots att det inte var december än hade affärerna redan börjat julskylta.": "trots att引导让步从句；än表示'还、尚'；hade börjat是过去完成时，表示在故事当前时间点之前这件事已经开始" — not just "过去完成时".
 
-Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}`,
+4. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). The test: can the learner directly substitute their own words into this pattern and reuse it in a new spoken or written sentence? If not, don't extract it — e.g. "när + bisats", "subjekt + verb", or "adjektiv + substantiv" are all far too basic/broad to have real learning value as a "pattern", even though they're technically patterns. Give the pattern name, its meaning in Chinese, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
+
+Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}${vocabNote}`,
     userPrompt: cleanedText,
   });
   return {
@@ -916,7 +959,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   }
   ranked = scoredVocabulary.slice(0, vocabularyLimit);
 
-  const selectedVocabulary = ranked.map((c, index) => ({
+  const rawSelectedVocabulary = ranked.map((c) => ({
     word_id: c.word.id,
     swedish: c.word.swedish,
     // Rachel, 2026-08-10: the reading word list's collapsed card needs to
@@ -928,10 +971,9 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     chinese: c.word.chinese,
     occurrences: c.occurrences,
     worth_learning_score: c.worthLearningScore ?? null,
-    sort_order: index,
   }));
 
-  const { collocations, idioms, keySentences, languagePatterns, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary);
+  const { collocations, idioms, keySentences, languagePatterns, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary, rawSelectedVocabulary.map((v) => v.swedish));
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "key_expressions", model: MODEL, usage: exprUsage, cacheHit: false });
   const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, collocations, { objectType: "phrase", category: "common_collocation" });
   const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, idioms, { objectType: "expression", category: "everyday_expression" });
@@ -939,6 +981,18 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     ...resolvedCollocations.map((e) => ({ ...e, category: "collocation" })),
     ...resolvedIdioms.map((e) => ({ ...e, category: "idiom" })),
   ].map((e, index) => ({ ...e, sort_order: index }));
+
+  // V2.1 阅读AI提取规则 §六/§十七 (2026-08-11): "完整表达优先于孤立单词" — if a
+  // word selected above turns up as a component of a collocation/idiom
+  // extractKeyExpressions just returned, drop the isolated word in favor of
+  // the complete expression rather than showing both for the same point.
+  const phraseWordSet = new Set();
+  selectedExpressions.forEach((e) => {
+    (e.expression_text || "").match(/[a-zA-ZåäöÅÄÖ]+/g)?.forEach((w) => phraseWordSet.add(w.toLowerCase()));
+  });
+  const selectedVocabulary = rawSelectedVocabulary
+    .filter((v) => !phraseWordSet.has(v.swedish.toLowerCase()))
+    .map((v, index) => ({ ...v, sort_order: index }));
   const selectedSentences = keySentences.map((s, index) => ({ ...s, sort_order: index }));
   const selectedPatterns = languagePatterns.map((p, index) => ({ ...p, sort_order: index }));
 
