@@ -904,26 +904,6 @@ function normalizeBookNames(value) {
   );
 }
 
-function readLocalArray(key) {
-  return [];
-}
-
-function readBackedUpLocalArrays(key) {
-  return [];
-}
-
-function backupLocalStorageValue(key) {
-  return key;
-}
-
-function writeLocalJson(key, value) {
-  return value;
-}
-
-function writeLocalArray(key, value) {
-  return value;
-}
-
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -931,14 +911,6 @@ function readFileAsDataUrl(file) {
     reader.onerror = () => reject(reader.error || new Error("Kunde inte läsa ljudfilen."));
     reader.readAsDataURL(file);
   });
-}
-
-function readLocalObject(key, fallback = {}) {
-  return fallback;
-}
-
-function writeLocalObject(key, value) {
-  return value;
 }
 
 function setWordDialogOpen(isOpen) {
@@ -955,40 +927,12 @@ function mergeNotebookNames(...groups) {
   );
 }
 
-function migrateNotebookStorage() {
-  cleanupOfficialLocalData();
-}
-
-function migrateStorageSchema() {
-  cleanupOfficialLocalData();
-}
-
-function readLocalWords() {
-  return [];
-}
-
-function writeLocalWords(words) {
-  return words;
-}
-
 function isBuiltInWord(word) {
   return Boolean(word?.id) && builtInWordIds.has(clean(word.id));
 }
 
-function syncUserDataSnapshots(words = state.words, { preserveExisting = false } = {}) {
-  return words;
-}
-
 function favoriteKey(word) {
   return clean(word?.id) || [word?.notebook, word?.swedish, word?.pos].map(clean).join("::").toLowerCase();
-}
-
-function readFavoriteStates() {
-  return new Map();
-}
-
-function writeFavoriteStates(states) {
-  return states;
 }
 
 function readNotebookNames() {
@@ -1452,7 +1396,6 @@ function saveFavoriteState(word, favorite, category = getFavoriteCategory(word))
     favorite: Boolean(favorite),
     category: normalizeFavoriteCategory(category),
   });
-  writeFavoriteStates(state.favoriteStates);
 }
 
 function isWordSaved(word) {
@@ -2366,12 +2309,11 @@ async function loadData() {
     remoteLibrarySnapshotLoaded = true;
   }
   const history = remotePhase4Snapshot?.history || [];
-  state.favoriteStates = readFavoriteStates();
+  state.favoriteStates = new Map();
   state.words = words
     .map(normalizeWord)
     .map(applyFavoriteState)
     .sort((a, b) => b.updated_at - a.updated_at);
-  syncUserDataSnapshots(state.words, { preserveExisting: true });
   state.history = history.sort((a, b) => b.created_at - a.created_at);
   state.studyStats = readStudyStats();
   state.dailyStudy = applyRemoteStudyState(ensureDailyStudyPlan(state.studyScope), remotePhase4Snapshot);
