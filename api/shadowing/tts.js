@@ -229,6 +229,17 @@ export default async function handler(req, res) {
       sendJson(res, 400, { error: "Svensk text saknas." });
       return;
     }
+    // 2026-08-29 audit fix (SprakLab-Audit-Report.md §3.2): no cap existed
+    // at all before. This endpoint is not auth-required — speakSwedish()
+    // in app.js (the "Lyssna" pronunciation button on every word card,
+    // used by anonymous and logged-in users alike) calls it without a
+    // token by design, so a hard 401 here would break that core feature.
+    // Same length ceiling as reading analysis (server-reading.mjs) — a
+    // single word/sentence never comes close to it, only abuse would.
+    if (swedishText.length > 20000) {
+      sendJson(res, 400, { error: "Texten är för lång (max 20 000 tecken)." });
+      return;
+    }
     if (!voice) {
       sendJson(res, 400, { error: "ElevenLabs voiceId saknas." });
       return;

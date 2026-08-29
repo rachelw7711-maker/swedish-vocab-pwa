@@ -1,6 +1,6 @@
 import * as remoteDb from "./src/lib/db.js?v=139";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
-import { getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
+import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
 import { documentWordPacks } from "./document-vocab-data.js";
 
@@ -8522,9 +8522,13 @@ async function fetchGeneratedWord(source) {
     throw new Error("AI-komplettering är inte aktiv i den statiska PWA-versionen.");
   }
   const word = typeof source === "string" ? source : source?.swedish;
+  const token = await getAccessToken().catch(() => "");
   const response = await fetch("/api/generate-word", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
     body: JSON.stringify({ word, source: typeof source === "string" ? undefined : source }),
   });
   const data = await response.json().catch(() => ({}));

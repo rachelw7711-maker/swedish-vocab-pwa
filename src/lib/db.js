@@ -552,9 +552,13 @@ export async function loadWordOrPhraseById(id) {
 // personal-word sync path. See server.mjs for the future-launch note
 // about adding an admin/curator check there before opening signups.
 export async function promoteCollocationToPhrase({ sourceWordId, phrase, meaning, exampleSv, cefrLevel }) {
+  const token = await getAccessToken().catch(() => "");
   const response = await fetch("/api/promote-collocation", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-type": "application/json",
+    },
     body: JSON.stringify({ sourceWordId, phrase, meaning, exampleSv, cefrLevel }),
   });
   const payload = await response.json().catch(() => null);

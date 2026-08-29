@@ -328,6 +328,15 @@ async function generateShadowingTts(req) {
     error.status = 400;
     throw error;
   }
+  // 2026-08-29 audit fix (SprakLab-Audit-Report.md §3.2), mirrors
+  // api/shadowing/tts.js — same reasoning, not auth-required by design
+  // (speakSwedish's "Lyssna" pronunciation button calls this with no
+  // token), so only a length cap is added, not a hard auth requirement.
+  if (swedishText.length > 20000) {
+    const error = new Error("Texten är för lång (max 20 000 tecken).");
+    error.status = 400;
+    throw error;
+  }
   if (!voice) {
     const error = new Error("ElevenLabs voiceId saknas.");
     error.status = 400;
@@ -440,10 +449,10 @@ async function generateShadowingTts(req) {
 // shared public catalog content, not a user-private row, so it can't go
 // through the same client-side path as personal word edits.
 //
-// NOTE for future multi-user launch: no auth/role check here yet since
-// the only caller today is the founder testing locally. Before opening
-// signups, add an admin/curator check here so arbitrary users can't
-// write into the shared catalog (see spraklab_future_readiness memory).
+// 2026-08-29: now requires login (readAuthenticatedUser below), closing
+// the gap this comment used to flag — see SprakLab-Audit-Report.md §3.3.
+// Still no separate admin/curator role (none exists in the codebase yet);
+// revisit before opening signups if promotion should be curator-only.
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
@@ -481,6 +490,9 @@ async function serveStatic(req, res) {
 createServer(async (req, res) => {
   try {
     if (req.method === "POST" && req.url === "/api/generate-word") {
+      // 2026-08-29 audit fix (SprakLab-Audit-Report.md §3.1): was ungated,
+      // matching the real production api/generate-word.js fix.
+      await readAuthenticatedUser(req);
       const { word, source } = await readBody(req);
       if (!word || typeof word !== "string") {
         sendJson(res, 400, { error: "Skriv ett svenskt ord." });
@@ -594,6 +606,9 @@ createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/api/promote-collocation") {
+      // 2026-08-29 audit fix (SprakLab-Audit-Report.md §3.3): was ungated,
+      // matching the real production api/promote-collocation.js fix.
+      await readAuthenticatedUser(req);
       const { sourceWordId, phrase, meaning, exampleSv, cefrLevel } = await readBody(req);
       const entry = await promoteCollocationToPhrase({ supabaseAdmin, sourceWordId, phrase, meaning, exampleSv, cefrLevel });
       sendJson(res, 200, { entry });
