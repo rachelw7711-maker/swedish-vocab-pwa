@@ -4374,6 +4374,8 @@ const AI_FEATURE_LABELS = {
   translate_full: "Översättning (hela texten)",
   missing_word_batch: "Nya ord (bakgrund)",
   key_expressions: "Uttryck (bakgrund)",
+  reading_fast_layer: "Snabböversikt",
+  vocab_worth_learning: "Ordurval (bakgrund)",
 };
 
 // Rough per-call minutes-saved estimate for "Tid sparad" (文稿① §6 —
@@ -4386,6 +4388,8 @@ const AI_TIME_SAVED_MINUTES = {
   ocr: 3,
   missing_word_batch: 2,
   key_expressions: 2,
+  reading_fast_layer: 1,
+  vocab_worth_learning: 1,
 };
 
 // 规范§14/§21 — shows real usage/cost, not a hard limit (limits aren't
