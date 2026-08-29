@@ -39,7 +39,7 @@ const checks = [
       'href="/icons/favicon.ico?v=22"',
       'href="/icons/apple-touch-icon.png?v=22"',
       'src="/icons/app-icon.png?v=22"',
-      'src="/app.js?v=191"',
+      'src="/app.js?v=192"',
       'rel="shortcut icon"',
       'rel="apple-touch-icon"',
       'type="image/png"',

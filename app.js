@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=140";
+import * as remoteDb from "./src/lib/db.js?v=141";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";

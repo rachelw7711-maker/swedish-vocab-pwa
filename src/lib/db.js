@@ -1951,11 +1951,20 @@ export async function loadStudySessionsSummary() {
 // backend (see markWordsReviewed below).
 const REVIEW_QUEUE_PAGE_SIZE = 50;
 
+// 2026-08-29 audit fix (SprakLab-Audit-Report.md Phase 4 / AI-Content-
+// Quality-Review.md): was ordered alphabetically, so review effort went
+// wherever the alphabet happened to point rather than where it mattered.
+// Reuses cefr_level/frequency_rank (already-populated columns, no schema
+// change) to put the words a learner actually encounters first — lower
+// CEFR level and lower frequency_rank (more frequent) sort first; rows
+// missing either value sort last within their group rather than first.
 export async function loadReviewQueuePage(offset = 0, limit = REVIEW_QUEUE_PAGE_SIZE) {
   const { data, error, count } = await supabase
     .from(TABLES.words)
     .select("id, swedish, chinese, part_of_speech, object_type", { count: "exact" })
     .eq("status", "ai_generated")
+    .order("cefr_level", { ascending: true, nullsFirst: false })
+    .order("frequency_rank", { ascending: true, nullsFirst: false })
     .order("swedish", { ascending: true })
     .range(offset, offset + limit - 1);
   if (error) throw error;
