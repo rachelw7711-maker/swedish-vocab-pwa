@@ -125,6 +125,14 @@ function readUserWordMetadata(userRow = {}) {
   }
 }
 
+// Progress fields below (review_count, review_stage, last_rating, etc.)
+// are the same set app.js's PROGRESS_FIELD_NAMES tracks — kept manually in
+// sync rather than shared, since this function's per-field fallback chains
+// (userRow ?? userMetadata ?? row, dateToMillis, etc.) are genuinely
+// different in kind from app.js's simple whitelist copy, not just a
+// duplicate of the same logic (SprakLab-Audit-Report.md §4.3). Adding a
+// new progress field: update it here, in app.js's PROGRESS_FIELD_NAMES,
+// and in app.js's normalizeWord/progressSnapshotForWord.
 function normalizeWord(row, userRow = null, translationRow = null) {
   const wordId = clean(row.id || row.word_id);
   const userMetadata = readUserWordMetadata(userRow);

@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=139";
+import * as remoteDb from "./src/lib/db.js?v=140";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -829,6 +829,47 @@ function createId() {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Single source of truth for which fields track a word's personal-study
+// progress (as opposed to its dictionary content) — normalizeWord below
+// and progressSnapshotForWord (further down this file) each need to know
+// this same set, and previously kept two independently-hand-maintained
+// lists with no way to notice if one fell out of sync with the other
+// (SprakLab-Audit-Report.md §4.3: "add a new progress field, forget one of
+// the spots, it silently vanishes there"). assertProgressFieldsInSync,
+// called once at startup, turns that into a loud console.error instead of
+// silent data loss. Deliberately NOT wired to src/lib/db.js's own
+// normalizeWord — that function transforms raw Supabase rows with
+// per-field fallback chains genuinely different in kind (userRow ?? row,
+// dateToMillis, etc.), not a simple word-shape whitelist, so force-merging
+// it here would risk the fallback behavior rather than just list-checking it.
+const PROGRESS_FIELD_NAMES = [
+  "learned",
+  "status",
+  "review_count",
+  "review_stage",
+  "last_rating",
+  "lapse_count",
+  "wrong_count",
+  "spelling_correct_count",
+  "first_studied_at",
+  "last_studied_at",
+  "last_reviewed",
+  "last_study_date",
+  "last_review_date",
+  "mastered_at",
+  "next_review_at",
+];
+
+function assertProgressFieldsInSync() {
+  const fullWordShape = normalizeWord({});
+  const snapshotShape = progressSnapshotForWord({ id: "fixture-word", ...fullWordShape });
+  const missingFromNormalizeWord = PROGRESS_FIELD_NAMES.filter((field) => !(field in fullWordShape));
+  const missingFromSnapshot = PROGRESS_FIELD_NAMES.filter((field) => !(field in snapshotShape));
+  if (missingFromNormalizeWord.length || missingFromSnapshot.length) {
+    console.error("[Min Ordbok] Progress field lists have drifted out of sync.", { missingFromNormalizeWord, missingFromSnapshot });
+  }
+}
+
 function normalizeWord(word) {
   const now = Date.now();
   const tags = wordTags(word);
@@ -1095,6 +1136,8 @@ function writeLocalWordProgressMap(progressMap) {
   }
 }
 
+// Fields here must match PROGRESS_FIELD_NAMES (see comment near
+// normalizeWord above) — assertProgressFieldsInSync checks this at startup.
 function progressSnapshotForWord(word) {
   if (!word?.id) return null;
   return {
@@ -11776,6 +11819,7 @@ function setupLayoutDiagnostics(force = false) {
 }
 
 async function bootstrapApp() {
+  assertProgressFieldsInSync();
   const authCallbackLaunch = isSupabaseAuthCallbackLocation();
   closeRestoredDialogsImmediately();
   try {
