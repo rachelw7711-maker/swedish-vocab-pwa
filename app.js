@@ -445,6 +445,7 @@ const shadowingStageLabels = {
 
 const els = {
   totalCount: document.querySelector("#totalCount"),
+  libraryOrdbokMeta: document.querySelector("#libraryOrdbokMeta"),
   learnedCount: document.querySelector("#learnedCount"),
   dueCount: document.querySelector("#dueCount"),
   searchInput: document.querySelector("#searchInput"),
@@ -505,6 +506,7 @@ const els = {
   profileGoalNew: document.querySelector("#profileGoalNew"),
   profileGoalReview: document.querySelector("#profileGoalReview"),
   profileGoalShadowing: document.querySelector("#profileGoalShadowing"),
+  profileGoalReading: document.querySelector("#profileGoalReading"),
   profileWordCount: document.querySelector("#profileWordCount"),
   profileMasteredCount: document.querySelector("#profileMasteredCount"),
   profileTodayActivity: document.querySelector("#profileTodayActivity"),
@@ -3927,6 +3929,11 @@ function renderStats() {
   els.totalCount.textContent = words.length;
   els.learnedCount.textContent = words.filter((word) => word.learned).length;
   els.dueCount.textContent = words.filter(isDue).length;
+  // 2026-08-29 audit fix (SprakLab-Audit-Report.md §2.3): the Bibliotek
+  // Ordbok card used to hardcode this count as static HTML text, which
+  // drifted from the real corpus size. Reuses the same words.length this
+  // function already computes, so it can never drift again.
+  if (els.libraryOrdbokMeta) els.libraryOrdbokMeta.textContent = `Ordlista · Studier · ${words.length} ord`;
 }
 
 // 2026-07-30 homepage redesign (Rachel's decision): the separate "Fortsätt
@@ -3979,7 +3986,14 @@ function openReadingShadowingEntry() {
 function renderStudyStats() {
   renderReadingShadowingEntryCard();
   state.dailyStudy = ensureDailyStudyPlan();
-  if (!state.dailyStudy) return;
+  // 2026-08-29 audit fix (SprakLab-Audit-Report.md §2.1): state.dailyProgress
+  // starts as null until refreshDailyProgress's remote round-trip resolves.
+  // An early render pass used to fall through to `dailyProgress?.xyz || 0`,
+  // painting "0 ord idag" (and hiding the workload banner) for real users
+  // with real tasks, until the async data replaced it moments later. Bail
+  // out instead and leave the "…" placeholder from index.html in place —
+  // same early-return shape this function already used for dailyStudy.
+  if (!state.dailyStudy || !state.dailyProgress) return;
   const newSession = readDailySession("new", state.dailyStudy);
   const reviewSession = readDailySession("review", state.dailyStudy);
   const dailyTarget = Number(state.dailyNewWordTarget || 10) || 10;
@@ -4656,6 +4670,11 @@ function profileLearningSnapshot() {
   const todayShadowing = shadowingRecords.filter(
     (recording) => localDateKeyForTimestamp(recording.recorded_at || recording.created_at) === today,
   ).length;
+  // Same "text_resource_id present + updated/created today" definition of
+  // a completed reading already used by renderReadingShadowingEntryCard.
+  const todayReading = (state.readingItems || []).filter(
+    (item) => item.text_resource_id && localDateKeyForTimestamp(item.updatedAt || item.createdAt) === today,
+  ).length;
   const activeMinutes = Math.max(0, Math.floor(effectiveStudyTimeMs(today) / 60000));
   const progress = Math.min(100, (activeMinutes / PROFILE_DAILY_GOAL_MINUTES) * 100);
   return {
@@ -4669,6 +4688,7 @@ function profileLearningSnapshot() {
       newWords: todayNew >= DAILY_NEW_WORD_LIMIT,
       review: todayReview >= DAILY_NEW_WORD_LIMIT,
       shadowing: todayShadowing >= 1,
+      reading: todayReading >= 1,
     },
   };
 }
@@ -4691,6 +4711,7 @@ function renderProfileLearningCards() {
   setProfileGoalTask(els.profileGoalNew, snapshot.tasks.newWords);
   setProfileGoalTask(els.profileGoalReview, snapshot.tasks.review);
   setProfileGoalTask(els.profileGoalShadowing, snapshot.tasks.shadowing);
+  setProfileGoalTask(els.profileGoalReading, snapshot.tasks.reading);
   return snapshot;
 }
 

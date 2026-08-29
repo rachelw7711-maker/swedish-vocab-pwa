@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=179" />
+    <link rel="stylesheet" href="/styles.css?v=180" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -145,7 +145,7 @@
                   </div>
                   <h3>Repetera ord</h3>
                 </div>
-                <strong id="entryReviewCount">0 ord idag</strong>
+                <strong id="entryReviewCount">…</strong>
                 <span class="study-entry-detail" id="entryReviewDetail"></span>
                 <button class="primary-button" id="startReviewStudyBtn" type="button">Börja repetera</button>
               </article>
@@ -157,7 +157,7 @@
                   </div>
                   <h3>Lär dig nya ord</h3>
                 </div>
-                <strong id="entryNewCount">0 ord idag</strong>
+                <strong id="entryNewCount">…</strong>
                 <span class="study-entry-target-readonly" id="dailyNewWordTargetReadout">Mål/dag: 10</span>
                 <button class="secondary-button" id="startNewStudyBtn" type="button">Börja lära</button>
               </article>
@@ -219,7 +219,7 @@
               <span class="library-book-cover" aria-hidden="true">
                 <img src="/icons/library-covers/ordbok.svg" alt="" />
               </span>
-              <span class="library-book-meta"><strong>Ordbok</strong><span>Ordlista · Studier · 10 097 ord</span></span>
+              <span class="library-book-meta"><strong>Ordbok</strong><span id="libraryOrdbokMeta">Ordlista · Studier</span></span>
               <span class="library-book-action" aria-hidden="true">Öppna</span>
             </button>
 
@@ -519,7 +519,7 @@
                         <li id="profileGoalNew">Nya ord</li>
                         <li id="profileGoalReview">Repetition</li>
                         <li id="profileGoalShadowing">Shadowing</li>
-                        <li class="profile-goal-task-upcoming" aria-disabled="true" aria-label="Läsning, snart"><span>Läsning</span></li>
+                        <li id="profileGoalReading">Läsning</li>
                       </ul>
                     </div>
                   </article>
@@ -1362,6 +1362,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=188" type="module"></script>
+    <script src="/app.js?v=189" type="module"></script>
   </body>
 </html>
