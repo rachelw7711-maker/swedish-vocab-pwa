@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v121";
+const CACHE_NAME = "ordbok-v122";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",
@@ -96,7 +96,16 @@ self.addEventListener("fetch", (event) => {
   // useful to begin with.
   const isSupabaseApi =
     url.pathname.startsWith("/rest/v1/") || url.pathname.startsWith("/auth/v1/") || url.pathname.startsWith("/storage/v1/");
-  if (networkFirstAsset || isSupabaseApi) {
+  // 2026-08-29 fix (SprakLab-Audit-Report.md §4.4): the two fixes above
+  // only covered Supabase's own domain — this app's own same-origin
+  // GET /api/words (src/lib/db.js's loadWordsThroughServerFallback, used
+  // when the anon key hits a permission error) fell through to cacheFirst
+  // like a static asset, same staleness risk as the original bug: if that
+  // fallback ever fires, its stale response would then be served from
+  // cache indefinitely, even after the underlying permission issue is
+  // fixed, until the next deploy's cache-name bump.
+  const isOwnApi = url.pathname.startsWith("/api/");
+  if (networkFirstAsset || isSupabaseApi || isOwnApi) {
     event.respondWith(networkFirst(event.request));
     return;
   }
