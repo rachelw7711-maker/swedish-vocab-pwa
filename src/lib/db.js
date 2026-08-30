@@ -1028,21 +1028,6 @@ export async function ensureRemoteNotebookNames(names = []) {
   return { enabled: true, notebooks: rows.length };
 }
 
-export async function deleteRemoteWord(wordId) {
-  const id = clean(wordId);
-  if (!id) return { enabled: true };
-  const user = await readCurrentUser();
-  if (user?.id) {
-    const { error } = await supabase
-      .from(TABLES.userWords)
-      .delete()
-      .eq("user_id", user.id)
-      .eq("word_id", id);
-    if (error) throw error;
-  }
-  return { enabled: true };
-}
-
 export async function loadRemotePhase4Snapshot({ date = todayKey(), scope = "all" } = {}) {
   const user = await readCurrentUser();
   if (!user?.id) {

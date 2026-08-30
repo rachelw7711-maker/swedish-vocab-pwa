@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=142";
+import * as remoteDb from "./src/lib/db.js?v=143";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { initSyncStatusUI, setSyncRetryHandler, showToast } from "./src/lib/feedback.js";
@@ -207,6 +207,7 @@ const dictionaryWords = [];
 // module-level-cache pattern as dictionaryWords.
 const phraseObjects = [];
 let phraseObjectsLoaded = false;
+let phraseObjectsLoading = false;
 const allWordPacks = [...educationWordPacks, ...documentWordPacks];
 const builtInNotebookNames = new Set(allWordPacks.map((pack) => normalizeNotebookName(pack.notebook)));
 const legacyNotebookNames = new Set([
@@ -485,6 +486,7 @@ const els = {
   profileSignedInGrid: document.querySelector("#profileSignedInGrid"),
   profileMainPanel: document.querySelector("#profileMainPanel"),
   profileStudiesPanel: document.querySelector("#profileStudiesPanel"),
+  profileHistoryPanel: document.querySelector("#profileHistoryPanel"),
   profileReviewPanel: document.querySelector("#profileReviewPanel"),
   profileSettingsPanel: document.querySelector("#profileSettingsPanel"),
   reviewQueueTotal: document.querySelector("#reviewQueueTotal"),
@@ -620,6 +622,8 @@ const els = {
   shadowingExportPanel: document.querySelector("#shadowingExportPanel"),
   shadowingMoreBtn: document.querySelector("#shadowingMoreBtn"),
   shadowingMoreMenu: document.querySelector("#shadowingMoreMenu"),
+  shadowingMoreControlsBtn: document.querySelector("#shadowingMoreControlsBtn"),
+  shadowingSecondaryControls: document.querySelector("#shadowingSecondaryControls"),
   shadowingGenerating: document.querySelector("#shadowingGenerating"),
   shadowingTitleInput: document.querySelector("#shadowingTitleInput"),
   shadowingSwedishInput: document.querySelector("#shadowingSwedishInput"),
@@ -2650,14 +2654,39 @@ function renderActiveView() {
 
 async function renderFraserView() {
   if (!phraseObjectsLoaded) {
-    phraseObjectsLoaded = true;
+    if (phraseObjectsLoading) return;
+    phraseObjectsLoading = true;
+    if (els.fraserList) {
+      els.fraserList.replaceChildren();
+      const loading = document.createElement("div");
+      loading.className = "empty-state";
+      loading.textContent = "Laddar Fraser & Uttryck…";
+      els.fraserList.append(loading);
+    }
     try {
       const rows = await remoteDb.loadPhraseObjects();
       phraseObjects.splice(0, phraseObjects.length, ...rows);
+      phraseObjectsLoaded = true;
+      phraseObjectsLoading = false;
+      if (state.activeView === "fraserView") renderFraserView();
     } catch (error) {
-      console.warn("[SpråkLab] Failed to load Fraser/Uttryck catalog.", error);
+      phraseObjectsLoading = false;
+      console.warn("[SprakLab] Failed to load Fraser/Uttryck catalog.", error);
+      showToast("Kunde inte ladda Fraser & Uttryck.", { type: "error" });
+      if (els.fraserList && state.activeView === "fraserView") {
+        els.fraserList.replaceChildren();
+        const errorState = document.createElement("div");
+        errorState.className = "empty-state";
+        errorState.textContent = "Kunde inte ladda Fraser & Uttryck.";
+        const retryButton = document.createElement("button");
+        retryButton.type = "button";
+        retryButton.className = "secondary-button";
+        retryButton.textContent = "Försök igen";
+        retryButton.addEventListener("click", () => renderFraserView());
+        errorState.append(document.createElement("br"), retryButton);
+        els.fraserList.append(errorState);
+      }
     }
-    if (state.activeView === "fraserView") renderFraserView();
     return;
   }
   const filtered =
@@ -4061,13 +4090,18 @@ function renderProfileView() {
 }
 
 function showProfilePage(page = "main") {
-  const target = ["studies", "review", "settings"].includes(page) ? page : "main";
+  const target = ["studies", "history", "review", "settings"].includes(page) ? page : "main";
   if (els.profileMainPanel) els.profileMainPanel.hidden = target !== "main";
   if (els.profileStudiesPanel) els.profileStudiesPanel.hidden = target !== "studies";
+  if (els.profileHistoryPanel) els.profileHistoryPanel.hidden = target !== "history";
   if (els.profileReviewPanel) els.profileReviewPanel.hidden = target !== "review";
   if (els.profileSettingsPanel) els.profileSettingsPanel.hidden = target !== "settings";
   if (els.profileSignedInGrid) els.profileSignedInGrid.dataset.profilePage = target;
   if (target === "studies") renderProfileStudiesBreakdown();
+  if (target === "history") {
+    resetListLimit("history");
+    renderHistory();
+  }
   if (target === "review") loadReviewQueuePage(0);
   if (state.activeView === "profileView") resetViewportScroll();
 }
@@ -5580,7 +5614,6 @@ function createWordCard(word, mode = "library") {
   const saveGeneratedButton = card.querySelector('[data-action="save-generated"]');
   const enrichButton = card.querySelector('[data-action="enrich"]');
   const editButton = card.querySelector('[data-action="edit"]');
-  const deleteButton = card.querySelector('[data-action="delete"]');
   const wordNeedsEnrichment = needsEnrichment(word);
   enrichButton.textContent = "Komplettera";
   enrichButton.hidden = !wordNeedsEnrichment;
@@ -5590,7 +5623,6 @@ function createWordCard(word, mode = "library") {
     addDictionaryButton.hidden = inLibrary;
     addDictionaryButton.textContent = "Lägg till";
     editButton.hidden = true;
-    if (deleteButton) deleteButton.hidden = true;
     meta.append(createPill(inLibrary ? "Finns i ordlistan" : "Inbyggd ordbok"));
   } else if (mode === "detail-generated") {
     card.querySelector(".star-button").hidden = true;
@@ -5598,10 +5630,8 @@ function createWordCard(word, mode = "library") {
     addDictionaryButton.hidden = true;
     saveGeneratedButton.hidden = isWordInLibrary(word.swedish);
     editButton.hidden = true;
-    if (deleteButton) deleteButton.hidden = true;
     meta.append(createPill(isWordInLibrary(word.swedish) ? "Finns i ordlistan" : "AI-genererad"));
   } else if (isRowMode) {
-    if (deleteButton) deleteButton.hidden = true;
     if (mode === "library") {
       enrichButton.remove();
       editButton.remove();
@@ -5611,7 +5641,6 @@ function createWordCard(word, mode = "library") {
     addDictionaryButton.hidden = true;
     saveGeneratedButton.hidden = true;
     editButton.hidden = true;
-    if (deleteButton) deleteButton.hidden = true;
     enrichButton.hidden = !wordNeedsEnrichment;
     setupDetailActionBar(card, word);
   } else {
@@ -5627,7 +5656,6 @@ function setupDetailActionBar(card, word) {
   actions.querySelector('[data-action="add-dictionary"]')?.remove();
   actions.querySelector('[data-action="save-generated"]')?.remove();
   actions.querySelector('[data-action="edit"]')?.remove();
-  actions.querySelector('[data-action="delete"]')?.remove();
   listenButton.textContent = "Lyssna";
   const saveButton = document.createElement("button");
   saveButton.type = "button";
@@ -8994,19 +9022,6 @@ function refreshOpenDetail(wordId) {
   if (updated) renderWordDetail(updated, els.detailDialog.dataset.sourceMode || "library");
 }
 
-async function deleteWord(id) {
-  const word = state.words.find((item) => item.id === id);
-  if (!word) return;
-  await replaceWords((await readWords()).filter((item) => item.id !== id));
-  appendLocalHistory("deleted", word);
-  await remoteDb.deleteRemoteWord(id);
-  await loadData();
-  if (els.detailDialog.open && els.detailDialog.dataset.wordId === id) {
-    closeDetailMoreMenu();
-    els.detailDialog.close();
-  }
-}
-
 function speakWithBrowserVoice(text) {
   if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
   const utterance = new SpeechSynthesisUtterance(text);
@@ -11082,6 +11097,12 @@ function bindEvents() {
   els.shadowingToggleContinuousBtn?.addEventListener("click", toggleShadowingContinuous);
   els.shadowingPlayPauseBtn?.addEventListener("click", playShadowingCurrentItem);
   els.shadowingPauseBtn?.addEventListener("click", pauseShadowingCurrentItem);
+  els.shadowingMoreControlsBtn?.addEventListener("click", () => {
+    if (!els.shadowingSecondaryControls) return;
+    const expanded = !els.shadowingSecondaryControls.hidden;
+    els.shadowingSecondaryControls.hidden = expanded;
+    els.shadowingMoreControlsBtn.setAttribute("aria-expanded", String(!expanded));
+  });
   els.shadowingStopBtn?.addEventListener("click", stopShadowingCurrentItem);
   els.shadowingSetABtn?.addEventListener("click", () => setShadowingLoopPoint("a"));
   els.shadowingSetBBtn?.addEventListener("click", () => setShadowingLoopPoint("b"));
@@ -11579,6 +11600,16 @@ function bindEvents() {
     openAuthDialog("signup");
   });
   els.profileReadingHistoryBtn?.addEventListener("click", () => activateView("readingView"));
+  els.historyPosFilter?.addEventListener("change", (event) => {
+    state.historyPos = event.target.value || "all";
+    resetListLimit("history");
+    renderHistory();
+  });
+  els.historyActionFilter?.addEventListener("change", (event) => {
+    state.historyAction = event.target.value || "all";
+    resetListLimit("history");
+    renderHistory();
+  });
   els.reviewQueueMarkPageBtn?.addEventListener("click", markCurrentReviewPageReviewed);
   els.reviewQueuePrevBtn?.addEventListener("click", () => {
     loadReviewQueuePage(Math.max(0, (state.reviewQueueOffset || 0) - REVIEW_QUEUE_PAGE_SIZE));

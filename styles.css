@@ -2315,6 +2315,35 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   grid-column: 1 / -1;
 }
 
+.shadowing-more-controls-toggle {
+  margin-top: var(--space-6);
+  width: 100%;
+}
+
+.shadowing-secondary-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.shadowing-secondary-controls button {
+  min-height: 44px;
+}
+
+.shadowing-secondary-controls button.active {
+  border-color: var(--accent-fill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.shadowing-secondary-controls #shadowingLoopRange {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+}
+
 .shadowing-progress {
   display: grid;
   gap: 7px;
@@ -5089,6 +5118,23 @@ h2 {
 .action-empty-state p {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.history-filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+}
+
+.history-filter-row select {
+  min-height: 44px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  padding: 0 var(--space-6);
+  font-size: var(--fs-input);
 }
 
 .history-list {
