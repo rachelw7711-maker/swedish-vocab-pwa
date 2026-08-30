@@ -19,6 +19,7 @@ const TABLES = {
   studySessions: "study_sessions",
   studySessionItems: "study_session_items",
   studyHistory: "study_history",
+  reviewEvents: "review_events",
   shadowingItems: "shadowing_items",
   shadowingRecordings: "shadowing_recordings",
   readingItems: "reading_items",
@@ -311,6 +312,7 @@ export async function flushPendingSync() {
       study_session_item: (payload) => writeStudySessionItem(user.id, payload),
       complete_study_session: (payload) => writeCompletedStudySession(user.id, payload),
       study_history: ({ entry }) => writeStudyHistoryEntry(entry),
+      review_event: ({ entry }) => writeReviewEvent(user.id, entry),
       shadowing_item: ({ item }) => writeShadowingItem(user.id, item),
       shadowing_recording: ({ recording }) => writeShadowingRecording(user.id, recording),
       shadowing_recording_audio: (payload) => writeShadowingRecordingWithAudio(user.id, payload),
@@ -1352,6 +1354,46 @@ export async function appendStudyHistory(action, word, context = {}) {
     userId: user.id,
     handler: ({ entry: queuedEntry }) => writeStudyHistoryEntry(queuedEntry),
   });
+}
+
+// Reviews/FSRS-评估文档.md §10: don't implement FSRS now, just start logging
+// real review history for future evaluation. This only observes the rating
+// deriveStudyRating() in app.js already computes for the existing
+// fixed-interval algorithm — it never feeds back into scheduling.
+async function writeReviewEvent(userId, entry) {
+  const row = {
+    id: entry.id,
+    user_id: userId,
+    word_id: entry.wordId,
+    study_session_id: entry.studySessionId || null,
+    mode: entry.mode,
+    rating: entry.rating,
+    is_correct: Boolean(entry.isCorrect),
+    attempts: Math.max(1, Number(entry.attempts || 1) || 1),
+    review_stage: entry.reviewStage ?? null,
+    interval_days: entry.intervalDays ?? null,
+    reviewed_at: new Date(entry.reviewedAt || Date.now()).toISOString(),
+  };
+  const { error } = await supabase.from(TABLES.reviewEvents).upsert(row, { onConflict: "id", ignoreDuplicates: true });
+  if (error) throw error;
+  return { enabled: true };
+}
+
+export async function recordReviewEvent(payload = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false };
+  const id = clean(payload.id) || createEventId();
+  const entry = { ...payload, id };
+  return runQueuedMutation("review_event", { entry }, {
+    id,
+    userId: user.id,
+    handler: ({ entry: queuedEntry }) => writeReviewEvent(user.id, queuedEntry),
+  });
+}
+
+function createEventId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `review-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 async function writeShadowingItem(userId, item = {}) {

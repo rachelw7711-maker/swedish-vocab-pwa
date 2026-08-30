@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=143";
+import * as remoteDb from "./src/lib/db.js?v=144";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { initSyncStatusUI, setSyncRetryHandler, showToast } from "./src/lib/feedback.js";
@@ -9920,6 +9920,20 @@ async function completeCurrentStudyWordFromSpelling() {
   await remoteDb.upsertUserWordProgress(updated).catch((error) => {
     console.warn("[SprakLab] Study progress sync before advance failed.", error);
   });
+  await remoteDb
+    .recordReviewEvent({
+      wordId: word.id,
+      mode: session.mode,
+      rating,
+      isCorrect,
+      attempts: spelling.attempts,
+      reviewStage: session.mode === "review" ? schedule.stage : null,
+      intervalDays: session.mode === "review" ? schedule.intervalDays : null,
+      reviewedAt: now,
+    })
+    .catch((error) => {
+      console.warn("[SprakLab] Failed to record review event.", error);
+    });
   if (session.mode === "new") {
     const todayNewWordIds = uniqueIds([...previousTodayNewWordIds, word.id]);
     const todayNewCount = Math.max(previousTodayNewCount + (previousTodayNewWordIds.includes(word.id) ? 0 : 1), todayNewWordIds.length);
