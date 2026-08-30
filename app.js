@@ -1,6 +1,7 @@
-import * as remoteDb from "./src/lib/db.js?v=141";
+import * as remoteDb from "./src/lib/db.js?v=142";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
+import { initSyncStatusUI, setSyncRetryHandler, showToast } from "./src/lib/feedback.js";
 import { educationWordPacks } from "./vocab-data.js";
 import { documentWordPacks } from "./document-vocab-data.js";
 
@@ -1640,7 +1641,11 @@ async function replaceWords(words) {
     previousWords,
     nextWords: normalizedWords,
     notebookNames: readNotebookNames(),
-  }).catch((error) => console.warn("[Min Ordbok] Remote word sync failed.", error));
+  }).catch(async (error) => {
+    console.warn("[SprakLab] Remote word sync failed.", error);
+    await remoteDb.retryWordSync({ previousWords, nextWords: normalizedWords }).catch(() => {});
+    showToast("Kunde inte synka ändringen. Vi försöker igen automatiskt.", { type: "error" });
+  });
   remoteLibrarySnapshot = {
     ...(remoteLibrarySnapshot || {}),
     words: normalizedWords,
@@ -4804,7 +4809,8 @@ async function syncPendingUserData({ reloadData = false } = {}) {
   } catch (error) {
     state.sync.status = "error";
     await refreshProfileSyncSummary();
-    console.warn("[Min Ordbok] Pending sync failed.", error);
+    console.warn("[SprakLab] Pending sync failed.", error);
+    showToast("Kunde inte slutföra synkroniseringen. Försöker igen automatiskt.", { type: "error" });
     return null;
   }
 }
@@ -11837,6 +11843,8 @@ async function bootstrapApp() {
   setupShadowingAudio();
   setupHomeGreeting();
   setupAuthUiSync();
+  initSyncStatusUI({ getUserId: () => state.auth.user?.id || null });
+  setSyncRetryHandler(() => void syncPendingUserData({ reloadData: true }));
   window.addEventListener("spraklab:sync-status", (event) => {
     const detail = event.detail || {};
     if (detail.userId && detail.userId !== state.auth.user?.id) return;

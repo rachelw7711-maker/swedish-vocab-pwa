@@ -1,5 +1,6 @@
 import { getAccessToken, getAuthState as getSharedAuthState, getCurrentUser as getSharedAuthUser, supabase, supabaseAnonKey, supabaseUrl } from "./supabase.js";
 import {
+  enqueueSyncOperation,
   flushSyncOperations,
   lastSuccessfulSync,
   markSuccessfulSync,
@@ -314,8 +315,20 @@ export async function flushPendingSync() {
       shadowing_recording: ({ recording }) => writeShadowingRecording(user.id, recording),
       shadowing_recording_audio: (payload) => writeShadowingRecordingWithAudio(user.id, payload),
       effective_study_time: (payload) => writeEffectiveStudyTime(payload),
+      word_sync: (payload) => syncRemoteWordChanges(payload),
     },
   });
+}
+
+// Word/notebook/favorite edits go through syncRemoteWordChanges directly
+// (see replaceWords() in app.js) since they need to diff against the
+// caller's in-memory previous/next word lists. If that direct call fails,
+// the caller queues the same payload here so it retries via the normal
+// outbox flow (flushPendingSync above) instead of being silently dropped.
+export async function retryWordSync(payload) {
+  const user = await readCurrentUser();
+  if (!user?.id) return;
+  await enqueueSyncOperation("word_sync", payload, { userId: user.id });
 }
 
 export async function ensureProfile() {

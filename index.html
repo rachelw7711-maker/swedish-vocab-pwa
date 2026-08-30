@@ -63,6 +63,11 @@
       </div>
     </div>
     <div id="root" class="app-shell">
+      <div id="syncStatusBanner" class="sync-status-banner" role="status" aria-live="polite" hidden>
+        <span class="sync-status-banner-text" id="syncStatusBannerText"></span>
+        <button type="button" class="sync-status-banner-retry" id="syncStatusBannerRetry" hidden>Försök igen</button>
+      </div>
+      <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
       <header class="topbar" aria-label="SpråkLab">
         <div class="brand-lockup">
           <div class="brand-system">
@@ -1362,6 +1367,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=192" type="module"></script>
+    <script src="/app.js?v=193" type="module"></script>
   </body>
 </html>
