@@ -25,7 +25,82 @@
   --tabbar-height: 50px;
   --app-max-width: 430px;
   --chinese-font: "圆体-简", "Yuanti SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* Typography scale (Reviews/Current-Design-System-Audit.md §7.2). Card
+     Title has two intentional levels (Option B): standard for ordinary
+     card headings, emphasized only for the word actively being studied. */
+  --fs-display: 2rem;
+  --fs-page-title: 1.5rem;
+  --fs-section-title: 1.125rem;
+  --fs-card-title: 1rem;
+  --fs-card-title-emphasized: 1.375rem;
+  --fs-body: 1rem;
+  --fs-body-supporting: 0.875rem;
+  --fs-label: 0.8125rem;
+  --fs-button: 0.9375rem;
+  --fs-input: 1rem; /* fixed at 16px to avoid iOS Safari focus-zoom */
+  --fs-caption: 0.75rem;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-heavy: 800;
+
+  /* Spacing scale */
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+  --space-11: 48px;
+
+  /* Radius scale */
+  --radius-none: 0;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+  --radius-circle: 50%;
+
+  /* Shadow scale (aliases keep the existing two values as the canonical sm/md) */
+  --shadow-none: none;
+  --shadow-sm: var(--soft-shadow);
+  --shadow-md: var(--shadow);
+  --shadow-focus: 0 0 0 3px rgba(111, 143, 128, 0.4);
+
+  /* Semantic color tokens layered over the primitives above — groundwork
+     for a future dark theme (not implemented now: only this layer would
+     need a second value set). */
+  --text-primary: var(--ink);
+  --text-secondary: var(--muted);
+  --surface-default: var(--bg);
+  --surface-raised: var(--surface-solid);
+  --border-default: var(--line);
+  --focus-ring: rgba(111, 143, 128, 0.45);
+  --state-success: var(--accent-strong);
+  --state-success-soft: var(--accent-soft);
+  --state-warning: var(--gold);
+  --state-warning-soft: #fff6d8;
+  --state-error: var(--danger);
+  --state-error-soft: var(--danger-soft);
+  --state-info: var(--muted-blue);
+  --state-offline: var(--gold);
+  --state-disabled-text: rgba(36, 40, 39, 0.35);
+  --state-disabled-bg: rgba(36, 40, 39, 0.06);
 }
+
+/* Responsive foundation: shared breakpoints (mobile-first). New/changed
+   responsive rules should use these two values instead of ad hoc widths.
+   Custom-property values aren't usable inside @media conditions in all
+   supported browsers yet, so this is a documented convention rather than
+   a literal var() — tablet: 768px, desktop: 1024px. */
 
 * {
   box-sizing: border-box;
@@ -1920,42 +1995,6 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   line-height: 1.45;
 }
 
-.shadowing-mode-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.shadowing-mode-tab {
-  display: grid;
-  place-items: center;
-  min-height: 36px;
-  border: 1px solid rgba(55, 65, 72, 0.1);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--ink);
-  font-size: 0.8rem;
-  font-weight: 780;
-  padding: 0 8px;
-}
-
-.shadowing-mode-tab.active {
-  border-color: rgba(111, 143, 128, 0.35);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
-.shadowing-mode-tab:disabled {
-  color: var(--muted);
-  opacity: 0.72;
-}
-
-.shadowing-mode-tab span {
-  display: block;
-  font-size: 0.64rem;
-  font-weight: 740;
-}
-
 /* 2026-08-01, 关于阅读模块的调整.pages: the original text shouldn't dominate
    the results page — collapsed to ~3 lines once there's an analysis to
    look at, with a "Visa allt" toggle. Only applied post-analysis; while
@@ -2575,15 +2614,10 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
 }
 
 @media (max-width: 620px) {
-  .shadowing-mode-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .shadowing-controls {
     grid-template-columns: 1fr;
   }
 
-  .shadowing-mode-tab,
   .shadowing-module-actions button,
   .shadowing-controls button,
   .shadowing-export-row button,
@@ -2906,29 +2940,6 @@ h2 {
   display: none;
 }
 
-.notebook-tabs {
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.notebook-tab {
-  min-height: 44px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--ink);
-  padding: 0 14px;
-  text-align: left;
-  font-weight: 730;
-}
-
-.notebook-tab.active {
-  border-color: var(--accent);
-  background: #eef5ff;
-  color: var(--accent-strong);
-}
-
 .chip,
 .primary-button,
 .secondary-button {
@@ -3110,8 +3121,8 @@ h2 {
 
 .study-complete h3 {
   color: #303735;
-  font-size: 1.16rem;
-  font-weight: 720;
+  font-size: var(--fs-card-title);
+  font-weight: var(--fw-semibold);
 }
 
 .study-complete p {
@@ -3201,8 +3212,8 @@ h2 {
 
 .study-entry-card h3 {
   color: #303735;
-  font-size: 1.08rem;
-  font-weight: 740;
+  font-size: var(--fs-card-title);
+  font-weight: var(--fw-semibold);
   /* "Läs/Lyssna/Härma" has no spaces, so without this the browser treats
      it as one unbreakable word and it overflows the card's fixed width. */
   overflow-wrap: anywhere;
@@ -4716,7 +4727,8 @@ h2 {
 
 .word-row h3 {
   flex: 0 1 auto;
-  font-size: 1rem;
+  font-size: var(--fs-card-title);
+  font-weight: var(--fw-semibold);
   line-height: 1.25;
 }
 
@@ -4760,9 +4772,9 @@ h2 {
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
-  font-size: 1.2rem;
+  font-size: var(--fs-card-title);
   line-height: 1.22;
-  font-weight: 720;
+  font-weight: var(--fw-semibold);
 }
 
 .title-row {
@@ -5436,7 +5448,8 @@ dialog:not([open]) {
 }
 
 .study-word-card h3 {
-  font-size: 1.8rem;
+  font-size: var(--fs-card-title-emphasized);
+  font-weight: var(--fw-bold);
   line-height: 1.08;
   white-space: normal;
   overflow-wrap: break-word;
@@ -6408,79 +6421,79 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 36px;
-  padding: 7px 16px;
-  padding-top: calc(7px + env(safe-area-inset-top));
+  gap: var(--space-5);
+  min-height: 44px;
+  padding: var(--space-4) var(--space-7);
+  padding-top: calc(var(--space-4) + env(safe-area-inset-top));
   text-align: center;
-  font-size: 0.82rem;
-  font-weight: 650;
-  color: #fff;
-  background: var(--muted);
+  font-size: var(--fs-body-supporting);
+  font-weight: var(--fw-semibold);
+  color: var(--text-on-accent);
+  background: var(--state-info);
 }
 
 .sync-status-banner[data-mode="error"] {
-  background: var(--danger);
+  background: var(--state-error);
 }
 
 .sync-status-banner[data-mode="offline"],
 .sync-status-banner[data-mode="pending"] {
-  background: var(--gold);
+  background: var(--state-warning);
 }
 
 .sync-status-banner[data-mode="syncing"] {
-  background: var(--accent-strong);
+  background: var(--state-success);
 }
 
 .sync-status-banner-retry {
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 44px;
+  padding: 0 var(--space-6);
   border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: transparent;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 700;
+  color: var(--text-on-accent);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
 }
 
 .toast-container {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(var(--tabbar-height) + 14px + env(safe-area-inset-bottom));
+  bottom: calc(var(--tabbar-height) + var(--space-6) + env(safe-area-inset-bottom));
   z-index: 70;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
+  gap: var(--space-4);
+  padding: 0 var(--space-7);
   pointer-events: none;
 }
 
 .toast {
   pointer-events: auto;
   max-width: min(92vw, var(--app-max-width));
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 0.88rem;
-  font-weight: 600;
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--radius-md);
+  background: var(--text-primary);
+  color: var(--text-on-accent);
+  font-size: var(--fs-body-supporting);
+  font-weight: var(--fw-semibold);
   line-height: 1.35;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-md);
   animation: toastIn 180ms ease;
 }
 
 .toast-success {
-  background: var(--accent-strong);
+  background: var(--state-success);
 }
 
 .toast-error {
-  background: var(--danger);
+  background: var(--state-error);
 }
 
 .toast-warning {
-  background: var(--gold);
+  background: var(--state-warning);
 }
 
 .toast-leaving {
