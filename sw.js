@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v122";
+const CACHE_NAME = "ordbok-v126";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",
@@ -21,6 +21,7 @@ const CORE_ASSETS = [
   "./src/lib/supabase.js",
   "./src/lib/supabase.ts",
   "./src/lib/sync-outbox.js",
+  "./src/lib/feedback.js",
   "./src/lib/shadowing-store.js",
   "./src/data/shadowingItems.json",
   "./manifest.webmanifest",

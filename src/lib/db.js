@@ -1,5 +1,6 @@
 import { getAccessToken, getAuthState as getSharedAuthState, getCurrentUser as getSharedAuthUser, supabase, supabaseAnonKey, supabaseUrl } from "./supabase.js";
 import {
+  enqueueSyncOperation,
   flushSyncOperations,
   lastSuccessfulSync,
   markSuccessfulSync,
@@ -18,6 +19,7 @@ const TABLES = {
   studySessions: "study_sessions",
   studySessionItems: "study_session_items",
   studyHistory: "study_history",
+  reviewEvents: "review_events",
   shadowingItems: "shadowing_items",
   shadowingRecordings: "shadowing_recordings",
   readingItems: "reading_items",
@@ -229,7 +231,7 @@ async function readCurrentUser() {
     if (authState?.user?.id) return authState.user;
     return await getSharedAuthUser({ refresh: true });
   } catch (error) {
-    console.warn("[Min Ordbok] Failed to read auth session. Continuing without user state.", error);
+    console.warn("[SprakLab] Failed to read auth session. Continuing without user state.", error);
     return null;
   }
 }
@@ -310,12 +312,25 @@ export async function flushPendingSync() {
       study_session_item: (payload) => writeStudySessionItem(user.id, payload),
       complete_study_session: (payload) => writeCompletedStudySession(user.id, payload),
       study_history: ({ entry }) => writeStudyHistoryEntry(entry),
+      review_event: ({ entry }) => writeReviewEvent(user.id, entry),
       shadowing_item: ({ item }) => writeShadowingItem(user.id, item),
       shadowing_recording: ({ recording }) => writeShadowingRecording(user.id, recording),
       shadowing_recording_audio: (payload) => writeShadowingRecordingWithAudio(user.id, payload),
       effective_study_time: (payload) => writeEffectiveStudyTime(payload),
+      word_sync: (payload) => syncRemoteWordChanges(payload),
     },
   });
+}
+
+// Word/notebook/favorite edits go through syncRemoteWordChanges directly
+// (see replaceWords() in app.js) since they need to diff against the
+// caller's in-memory previous/next word lists. If that direct call fails,
+// the caller queues the same payload here so it retries via the normal
+// outbox flow (flushPendingSync above) instead of being silently dropped.
+export async function retryWordSync(payload) {
+  const user = await readCurrentUser();
+  if (!user?.id) return;
+  await enqueueSyncOperation("word_sync", payload, { userId: user.id });
 }
 
 export async function ensureProfile() {
@@ -429,7 +444,7 @@ async function loadWordsThroughServerFallback() {
     headers: { accept: "application/json" },
   });
   const payload = await response.json().catch(() => null);
-  console.log("[Min Ordbok] public.words server fallback result", {
+  console.log("[SprakLab] public.words server fallback result", {
     ok: response.ok,
     status: response.status,
     error: payload?.error || null,
@@ -446,24 +461,24 @@ export async function loadRemoteLibrarySnapshot() {
   const user = await readCurrentUser();
   if (user?.id) {
     await ensureProfile().catch((error) => {
-      console.warn("[Min Ordbok] Failed to ensure profile. Continuing with public words.", error);
+      console.warn("[SprakLab] Failed to ensure profile. Continuing with public words.", error);
     });
   }
 
-  console.log("[Min Ordbok] public.words query config", {
+  console.log("[SprakLab] public.words query config", {
     hasSupabaseUrl: Boolean(supabaseUrl),
     hasSupabaseAnonKey: Boolean(supabaseAnonKey),
   });
   let wordRows = [];
   try {
     wordRows = await fetchAll(TABLES.words, (query) => query.eq("object_type", "word").order("swedish", { ascending: true }));
-    console.log("[Min Ordbok] public.words query result", {
+    console.log("[SprakLab] public.words query result", {
       error: null,
       count: wordRows.length,
       sample: wordRows.slice(0, 3),
     });
   } catch (error) {
-    console.log("[Min Ordbok] public.words query result", {
+    console.log("[SprakLab] public.words query result", {
       error,
       count: 0,
       sample: [],
@@ -473,7 +488,7 @@ export async function loadRemoteLibrarySnapshot() {
   }
   const userWordRows = user?.id
     ? await fetchAll(TABLES.userWords, (query) => query.eq("user_id", user.id)).catch((error) => {
-        console.warn("[Min Ordbok] Failed to read user word state. Continuing with public words.", error);
+        console.warn("[SprakLab] Failed to read user word state. Continuing with public words.", error);
         return [];
       })
     : [];
@@ -481,7 +496,7 @@ export async function loadRemoteLibrarySnapshot() {
   // real native-language preference exists — see DEFAULT_NATIVE_LANGUAGE).
   // Fetched as one bulk query rather than per-word to avoid N+1 requests.
   const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch((error) => {
-    console.warn("[Min Ordbok] Failed to read learning_object_translations. Falling back to legacy chinese column.", error);
+    console.warn("[SprakLab] Failed to read learning_object_translations. Falling back to legacy chinese column.", error);
     return [];
   });
   const sourceBookNames = sourceBookNamesForRows(wordRows);
@@ -489,7 +504,7 @@ export async function loadRemoteLibrarySnapshot() {
 
   if (user?.id && sourceBookNames.size > 0) {
     await cleanupSourceDerivedUserBooks(user.id, userWordRows, sanitizedUserWordRows).catch((error) => {
-      console.warn("[Min Ordbok] Failed to clean source-derived books. Continuing with sanitized UI state.", error);
+      console.warn("[SprakLab] Failed to clean source-derived books. Continuing with sanitized UI state.", error);
     });
   }
 
@@ -525,7 +540,7 @@ export async function loadPhraseObjects() {
   if (!rows.length) return [];
   const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch(
     (error) => {
-      console.warn("[Min Ordbok] Failed to read translations for phrase objects.", error);
+      console.warn("[SprakLab] Failed to read translations for phrase objects.", error);
       return [];
     },
   );
@@ -1015,21 +1030,6 @@ export async function ensureRemoteNotebookNames(names = []) {
   return { enabled: true, notebooks: rows.length };
 }
 
-export async function deleteRemoteWord(wordId) {
-  const id = clean(wordId);
-  if (!id) return { enabled: true };
-  const user = await readCurrentUser();
-  if (user?.id) {
-    const { error } = await supabase
-      .from(TABLES.userWords)
-      .delete()
-      .eq("user_id", user.id)
-      .eq("word_id", id);
-    if (error) throw error;
-  }
-  return { enabled: true };
-}
-
 export async function loadRemotePhase4Snapshot({ date = todayKey(), scope = "all" } = {}) {
   const user = await readCurrentUser();
   if (!user?.id) {
@@ -1047,7 +1047,7 @@ export async function loadRemotePhase4Snapshot({ date = todayKey(), scope = "all
   }
 
   await ensureProfile().catch((error) => {
-    console.warn("[Min Ordbok] Failed to ensure profile for Phase 4 snapshot.", error);
+    console.warn("[SprakLab] Failed to ensure profile for Phase 4 snapshot.", error);
   });
 
   const [
@@ -1354,6 +1354,46 @@ export async function appendStudyHistory(action, word, context = {}) {
     userId: user.id,
     handler: ({ entry: queuedEntry }) => writeStudyHistoryEntry(queuedEntry),
   });
+}
+
+// Reviews/FSRS-评估文档.md §10: don't implement FSRS now, just start logging
+// real review history for future evaluation. This only observes the rating
+// deriveStudyRating() in app.js already computes for the existing
+// fixed-interval algorithm — it never feeds back into scheduling.
+async function writeReviewEvent(userId, entry) {
+  const row = {
+    id: entry.id,
+    user_id: userId,
+    word_id: entry.wordId,
+    study_session_id: entry.studySessionId || null,
+    mode: entry.mode,
+    rating: entry.rating,
+    is_correct: Boolean(entry.isCorrect),
+    attempts: Math.max(1, Number(entry.attempts || 1) || 1),
+    review_stage: entry.reviewStage ?? null,
+    interval_days: entry.intervalDays ?? null,
+    reviewed_at: new Date(entry.reviewedAt || Date.now()).toISOString(),
+  };
+  const { error } = await supabase.from(TABLES.reviewEvents).upsert(row, { onConflict: "id", ignoreDuplicates: true });
+  if (error) throw error;
+  return { enabled: true };
+}
+
+export async function recordReviewEvent(payload = {}) {
+  const user = await readCurrentUser();
+  if (!user?.id) return { enabled: false };
+  const id = clean(payload.id) || createEventId();
+  const entry = { ...payload, id };
+  return runQueuedMutation("review_event", { entry }, {
+    id,
+    userId: user.id,
+    handler: ({ entry: queuedEntry }) => writeReviewEvent(user.id, queuedEntry),
+  });
+}
+
+function createEventId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `review-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 async function writeShadowingItem(userId, item = {}) {

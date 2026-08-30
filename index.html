@@ -63,6 +63,11 @@
       </div>
     </div>
     <div id="root" class="app-shell">
+      <div id="syncStatusBanner" class="sync-status-banner" role="status" aria-live="polite" hidden>
+        <span class="sync-status-banner-text" id="syncStatusBannerText"></span>
+        <button type="button" class="sync-status-banner-retry" id="syncStatusBannerRetry" hidden>Försök igen</button>
+      </div>
+      <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
       <header class="topbar" aria-label="SpråkLab">
         <div class="brand-lockup">
           <div class="brand-system">
@@ -561,6 +566,10 @@
                   <h2>Mina studier</h2>
                   <p>Din statistik, aktivitet och utveckling.</p>
                 </header>
+                <button class="profile-entry-card" type="button" data-profile-page="history">
+                  <span><strong>🕘 Studiehistorik</strong><small>Alla ord du lagt till, ändrat eller tagit bort</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
                 <section class="profile-detail-card">
                   <span>🌱 Uthållighet</span>
                   <div class="profile-overview-grid">
@@ -634,6 +643,35 @@
                   <small id="profileAiCostHint"></small>
                   <div id="profileAiFeatureBreakdown" class="profile-ai-feature-breakdown"></div>
                 </section>
+              </section>
+
+              <section id="profileHistoryPanel" class="profile-subpage profile-secondary-page" hidden>
+                <button class="profile-back-button" type="button" data-profile-back>‹ Profil</button>
+                <header class="profile-secondary-head">
+                  <p class="section-kicker">Mina studier</p>
+                  <h2>Studiehistorik</h2>
+                  <p>Alla ord du lagt till, ändrat eller tagit bort.</p>
+                </header>
+                <div class="history-filter-row">
+                  <select id="historyPosFilter" aria-label="Filtrera efter ordklass">
+                    <option value="all">Alla ordklasser</option>
+                    <option value="verb">Verb</option>
+                    <option value="noun">Substantiv</option>
+                    <option value="adjective">Adjektiv</option>
+                    <option value="adverb">Adverb</option>
+                    <option value="other-pos">Övrigt</option>
+                  </select>
+                  <select id="historyActionFilter" aria-label="Filtrera efter händelse">
+                    <option value="all">Alla händelser</option>
+                    <option value="created">Skapad</option>
+                    <option value="updated">Redigerad</option>
+                    <option value="reviewed">Repeterad</option>
+                    <option value="learned">Lärt mig</option>
+                    <option value="favorite">Sparad</option>
+                    <option value="deleted">Raderad</option>
+                  </select>
+                </div>
+                <div id="historyList" class="history-list"></div>
               </section>
 
               <section id="profileReviewPanel" class="profile-subpage profile-secondary-page" hidden>
@@ -836,14 +874,18 @@
                 <button class="secondary-button" id="shadowingRecordBtn" type="button">Spela in</button>
                 <button class="secondary-button" id="shadowingStopRecordBtn" type="button">Stoppa</button>
               </div>
-              <button class="secondary-button visually-hidden" id="shadowingStopBtn" type="button">Stoppa</button>
-              <button class="secondary-button visually-hidden" id="shadowingSetABtn" type="button">Set A</button>
-              <button class="secondary-button visually-hidden" id="shadowingSetBBtn" type="button">Set B</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleLoopBtn" type="button">A-B Loop</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleAutoPauseBtn" type="button">Auto paus</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleSubtitlesBtn" type="button">字幕</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleContinuousBtn" type="button">连续播放</button>
-              <button class="primary-button visually-hidden" id="shadowingCompareBtn" type="button">Compare</button>
+              <button class="secondary-button shadowing-more-controls-toggle" id="shadowingMoreControlsBtn" type="button" aria-expanded="false" aria-controls="shadowingSecondaryControls">Fler kontroller ▾</button>
+              <div class="shadowing-secondary-controls" id="shadowingSecondaryControls" hidden>
+                <button class="secondary-button" id="shadowingStopBtn" type="button">Stoppa</button>
+                <button class="secondary-button" id="shadowingSetABtn" type="button">Sätt A</button>
+                <button class="secondary-button" id="shadowingSetBBtn" type="button">Sätt B</button>
+                <button class="secondary-button" id="shadowingToggleLoopBtn" type="button">A-B-loop</button>
+                <button class="secondary-button" id="shadowingToggleAutoPauseBtn" type="button">Auto paus</button>
+                <button class="secondary-button" id="shadowingToggleSubtitlesBtn" type="button">Undertexter</button>
+                <button class="secondary-button" id="shadowingToggleContinuousBtn" type="button">Kontinuerlig uppspelning</button>
+                <button class="primary-button" id="shadowingCompareBtn" type="button">Jämför</button>
+                <span id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
+              </div>
               <div class="shadowing-progress">
                 <input id="shadowingAudioProgress" type="range" min="0" max="0" step="0.1" value="0" aria-label="Standardljudets position" />
                 <div class="shadowing-progress-meta">
@@ -858,7 +900,6 @@
                     </select>
                   </label>
                 </div>
-                <span class="visually-hidden" id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
               </div>
               <section class="shadowing-recording-panel" id="shadowingRecordingPanel" hidden>
                 <div class="toolbar">
@@ -1362,6 +1403,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=192" type="module"></script>
+    <script src="/app.js?v=196" type="module"></script>
   </body>
 </html>
