@@ -4,11 +4,11 @@ export const supabaseUrl = env.VITE_SUPABASE_URL || "";
 export const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || "";
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("[Min Ordbok] Missing Supabase config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+  throw new Error("[SprakLab] Missing Supabase config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
 }
 
 if (!globalThis.supabase?.createClient) {
-  throw new Error("[Min Ordbok] Supabase client library is not loaded.");
+  throw new Error("[SprakLab] Supabase client library is not loaded.");
 }
 
 const supabaseProjectRef = (() => {

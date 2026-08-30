@@ -230,7 +230,7 @@ async function readCurrentUser() {
     if (authState?.user?.id) return authState.user;
     return await getSharedAuthUser({ refresh: true });
   } catch (error) {
-    console.warn("[Min Ordbok] Failed to read auth session. Continuing without user state.", error);
+    console.warn("[SprakLab] Failed to read auth session. Continuing without user state.", error);
     return null;
   }
 }
@@ -442,7 +442,7 @@ async function loadWordsThroughServerFallback() {
     headers: { accept: "application/json" },
   });
   const payload = await response.json().catch(() => null);
-  console.log("[Min Ordbok] public.words server fallback result", {
+  console.log("[SprakLab] public.words server fallback result", {
     ok: response.ok,
     status: response.status,
     error: payload?.error || null,
@@ -459,24 +459,24 @@ export async function loadRemoteLibrarySnapshot() {
   const user = await readCurrentUser();
   if (user?.id) {
     await ensureProfile().catch((error) => {
-      console.warn("[Min Ordbok] Failed to ensure profile. Continuing with public words.", error);
+      console.warn("[SprakLab] Failed to ensure profile. Continuing with public words.", error);
     });
   }
 
-  console.log("[Min Ordbok] public.words query config", {
+  console.log("[SprakLab] public.words query config", {
     hasSupabaseUrl: Boolean(supabaseUrl),
     hasSupabaseAnonKey: Boolean(supabaseAnonKey),
   });
   let wordRows = [];
   try {
     wordRows = await fetchAll(TABLES.words, (query) => query.eq("object_type", "word").order("swedish", { ascending: true }));
-    console.log("[Min Ordbok] public.words query result", {
+    console.log("[SprakLab] public.words query result", {
       error: null,
       count: wordRows.length,
       sample: wordRows.slice(0, 3),
     });
   } catch (error) {
-    console.log("[Min Ordbok] public.words query result", {
+    console.log("[SprakLab] public.words query result", {
       error,
       count: 0,
       sample: [],
@@ -486,7 +486,7 @@ export async function loadRemoteLibrarySnapshot() {
   }
   const userWordRows = user?.id
     ? await fetchAll(TABLES.userWords, (query) => query.eq("user_id", user.id)).catch((error) => {
-        console.warn("[Min Ordbok] Failed to read user word state. Continuing with public words.", error);
+        console.warn("[SprakLab] Failed to read user word state. Continuing with public words.", error);
         return [];
       })
     : [];
@@ -494,7 +494,7 @@ export async function loadRemoteLibrarySnapshot() {
   // real native-language preference exists — see DEFAULT_NATIVE_LANGUAGE).
   // Fetched as one bulk query rather than per-word to avoid N+1 requests.
   const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch((error) => {
-    console.warn("[Min Ordbok] Failed to read learning_object_translations. Falling back to legacy chinese column.", error);
+    console.warn("[SprakLab] Failed to read learning_object_translations. Falling back to legacy chinese column.", error);
     return [];
   });
   const sourceBookNames = sourceBookNamesForRows(wordRows);
@@ -502,7 +502,7 @@ export async function loadRemoteLibrarySnapshot() {
 
   if (user?.id && sourceBookNames.size > 0) {
     await cleanupSourceDerivedUserBooks(user.id, userWordRows, sanitizedUserWordRows).catch((error) => {
-      console.warn("[Min Ordbok] Failed to clean source-derived books. Continuing with sanitized UI state.", error);
+      console.warn("[SprakLab] Failed to clean source-derived books. Continuing with sanitized UI state.", error);
     });
   }
 
@@ -538,7 +538,7 @@ export async function loadPhraseObjects() {
   if (!rows.length) return [];
   const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch(
     (error) => {
-      console.warn("[Min Ordbok] Failed to read translations for phrase objects.", error);
+      console.warn("[SprakLab] Failed to read translations for phrase objects.", error);
       return [];
     },
   );
@@ -1045,7 +1045,7 @@ export async function loadRemotePhase4Snapshot({ date = todayKey(), scope = "all
   }
 
   await ensureProfile().catch((error) => {
-    console.warn("[Min Ordbok] Failed to ensure profile for Phase 4 snapshot.", error);
+    console.warn("[SprakLab] Failed to ensure profile for Phase 4 snapshot.", error);
   });
 
   const [

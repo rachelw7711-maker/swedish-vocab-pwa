@@ -424,7 +424,7 @@ function localOriginForPort(port) {
 document.body.dataset.appReady = "loading";
 window.setTimeout(() => {
   if (document.body.dataset.appReady !== "ready") {
-    console.warn("[Min Ordbok] Startup fallback: showing app shell after a slow or blocked init.");
+    console.warn("[SprakLab] Startup fallback: showing app shell after a slow or blocked init.");
     document.body.dataset.appReady = "ready";
   }
 }, 2800);
@@ -820,7 +820,7 @@ async function ensureRemoteLibrarySnapshot() {
   if (!remoteLibrarySnapshotLoaded) {
     remoteLibrarySnapshot = await remoteDb.loadRemoteLibrarySnapshot();
     void remoteDb.ensureRemoteNotebookNames(DEFAULT_BOOKSHELF_CATEGORIES).catch((error) => {
-      console.warn("[Min Ordbok] Failed to ensure default bookshelf categories.", error);
+      console.warn("[SprakLab] Failed to ensure default bookshelf categories.", error);
     });
     remoteLibrarySnapshotLoaded = true;
   }
@@ -871,7 +871,7 @@ function assertProgressFieldsInSync() {
   const missingFromNormalizeWord = PROGRESS_FIELD_NAMES.filter((field) => !(field in fullWordShape));
   const missingFromSnapshot = PROGRESS_FIELD_NAMES.filter((field) => !(field in snapshotShape));
   if (missingFromNormalizeWord.length || missingFromSnapshot.length) {
-    console.error("[Min Ordbok] Progress field lists have drifted out of sync.", { missingFromNormalizeWord, missingFromSnapshot });
+    console.error("[SprakLab] Progress field lists have drifted out of sync.", { missingFromNormalizeWord, missingFromSnapshot });
   }
 }
 
@@ -1256,7 +1256,7 @@ function persistUserPreferences() {
       shadowingLoopEnabled: state.shadowingLoopEnabled,
       dailyNewWordTarget: state.dailyNewWordTarget,
     },
-  }).catch((error) => console.warn("[Min Ordbok] Remote preferences sync failed.", error));
+  }).catch((error) => console.warn("[SprakLab] Remote preferences sync failed.", error));
 }
 
 function remoteStudySessionState(snapshot = remotePhase4Snapshot) {
@@ -1297,7 +1297,7 @@ async function persistDailyStudyPlan(plan = state.dailyStudy || readDailyStudy()
     reviewWordIds: plan.reviewWordIds,
     status: plan.newSessionCompleted && plan.reviewSessionCompleted ? "completed" : "active",
   }).catch((error) => {
-    console.warn("[Min Ordbok] Remote study plan sync failed.", error);
+    console.warn("[SprakLab] Remote study plan sync failed.", error);
     return null;
   });
   if (result?.plan?.id) {
@@ -1366,7 +1366,7 @@ async function ensureRemoteDailyStudySessions(plan = state.dailyStudy || ensureD
       mode,
       wordIds,
     }).catch((error) => {
-      console.warn(`[Min Ordbok] Remote ${mode} session sync failed.`, error);
+      console.warn(`[SprakLab] Remote ${mode} session sync failed.`, error);
       return null;
     });
     if (result?.session?.id) {
@@ -1385,7 +1385,7 @@ async function ensureRemoteDailyStudySessions(plan = state.dailyStudy || ensureD
               isCorrect: spellingPassed.has(wordId) || null,
             }),
           ),
-      ).catch((error) => console.warn(`[Min Ordbok] Remote ${mode} completion repair failed.`, error));
+      ).catch((error) => console.warn(`[SprakLab] Remote ${mode} completion repair failed.`, error));
     }
   }
   writeDailyStudy({
@@ -1404,7 +1404,7 @@ async function ensureRemoteStudySession(mode) {
     mode,
     wordIds: getSessionIds(mode),
   }).catch((error) => {
-    console.warn("[Min Ordbok] Remote study session sync failed.", error);
+    console.warn("[SprakLab] Remote study session sync failed.", error);
     return null;
   });
   if (result?.session?.id) {
@@ -1765,7 +1765,7 @@ async function refreshDailyProgress(wordsForLocalProgress = state.words) {
   const remoteProgress = await remoteDb.loadDailyWordProgress({
     date: todayKey(),
   }).catch((error) => {
-    console.warn("[Min Ordbok] Daily Supabase progress load failed.", error);
+    console.warn("[SprakLab] Daily Supabase progress load failed.", error);
     return {
       enabled: false,
       date: todayKey(),
@@ -1805,7 +1805,7 @@ function appendLocalHistory(action, word, history = readLocalHistory()) {
     id: entry.id,
     created_at: entry.created_at,
     studySessionId: state.studySession?.remoteSessionId || null,
-  }).catch((error) => console.warn("[Min Ordbok] Remote history sync failed.", error));
+  }).catch((error) => console.warn("[SprakLab] Remote history sync failed.", error));
   return history;
 }
 
@@ -2321,7 +2321,7 @@ async function loadData() {
     date: todayKey(),
     scope: state.studyScope || STUDY_SCOPE_ALL,
   }).catch((error) => {
-    console.warn("[Min Ordbok] Phase 4 remote snapshot failed. Official data remains Supabase-only.", error);
+    console.warn("[SprakLab] Phase 4 remote snapshot failed. Official data remains Supabase-only.", error);
     return null;
   });
   if (remotePhase4Snapshot?.preferences) {
@@ -2373,7 +2373,7 @@ async function loadData() {
   state.shadowingRecordings = remotePhase4Snapshot?.shadowingRecordings || [];
   state.shadowing = mergeShadowingItemsForApp(remotePhase4Snapshot?.shadowingItems || []);
   await refreshEffectiveStudyTimeCloud(todayKey());
-  console.info("[Min Ordbok] Data init", {
+  console.info("[SprakLab] Data init", {
     wordsLength: state.words.length,
     booksLength: getNotebooks().length,
     remoteReadOk: lastWordLoadDebug.remoteReadOk,
@@ -3144,7 +3144,7 @@ async function analyzeCurrentReadingItem() {
   } catch (error) {
     console.warn("[SpråkLab] Reading analysis failed.", error);
     closeReadingResults();
-    alert(error.message || "Kunde inte analysera texten just nu.");
+    showToast(error.message || "Kunde inte analysera texten just nu.", { type: "error" });
     els.analyzeReadingBtn.disabled = false;
     els.analyzeReadingBtn.textContent = "Analysera";
   }
@@ -3627,7 +3627,7 @@ async function classifyReadingPhrase(button) {
     });
   } catch (error) {
     console.warn("[SpråkLab] Failed to classify reading phrase.", error);
-    alert(error.message || "Kunde inte spara frasen just nu.");
+    showToast(error.message || "Kunde inte spara frasen just nu.", { type: "error" });
   } finally {
     actions?.querySelectorAll("button").forEach((btn) => { btn.disabled = false; });
   }
@@ -3653,7 +3653,7 @@ async function generateSummaryForCurrentReadingItem() {
     }
   } catch (error) {
     console.warn("[SpråkLab] Failed to generate reading summary.", error);
-    alert(error.message || "Kunde inte generera sammanfattning just nu.");
+    showToast(error.message || "Kunde inte generera sammanfattning just nu.", { type: "error" });
   } finally {
     els.generateReadingSummaryBtn.disabled = false;
     els.generateReadingSummaryBtn.textContent = "Generera sammanfattning";
@@ -4176,7 +4176,7 @@ function renderReviewQueue() {
         if (word) word.status = "human_reviewed";
       } catch (error) {
         console.warn("[SpråkLab] Failed to mark word reviewed.", error);
-        alert(error.message || "Kunde inte markera som granskat.");
+        showToast(error.message || "Kunde inte markera som granskat.", { type: "error" });
         markBtn.disabled = false;
       }
     });
@@ -4199,7 +4199,7 @@ async function markCurrentReviewPageReviewed() {
     await loadReviewQueuePage(state.reviewQueueOffset);
   } catch (error) {
     console.warn("[SpråkLab] Failed to mark page reviewed.", error);
-    alert(error.message || "Kunde inte markera sidan som granskad.");
+    showToast(error.message || "Kunde inte markera sidan som granskad.", { type: "error" });
   } finally {
     els.reviewQueueMarkPageBtn.textContent = "Markera alla på denna sida som granskade";
     els.reviewQueueMarkPageBtn.disabled = false;
@@ -4932,7 +4932,7 @@ function renderAuthState() {
 
 async function refreshAuthState({ reloadData = false } = {}) {
   const authState = await syncAuthState().catch((error) => {
-    console.warn("[Min Ordbok] Failed to read auth state.", error);
+    console.warn("[SprakLab] Failed to read auth state.", error);
     return { user: null };
   });
   const nextUser = authState?.user || (await getCurrentUser().catch(() => null));
@@ -6853,7 +6853,7 @@ async function addSelectedShadowingWordsToVocabulary() {
   appendLocalHistory("created", wordsToAdd[0]);
   await loadData();
   renderShadowingFlow();
-  alert(`${wordsToAdd.length} ord lades till i ordlistan.`);
+  showToast(`${wordsToAdd.length} ord lades till i ordlistan.`, { type: "success" });
 }
 
 function formatShadowingTime(seconds) {
@@ -7172,7 +7172,10 @@ async function guideShadowingLogin() {
     },
   });
   if (error) throw error;
-  alert("Vi har skickat en inloggningslänk till din e-post. Öppna länken och försök sedan generera standardljud igen.");
+  showToast("Vi har skickat en inloggningslänk till din e-post. Öppna länken och försök sedan generera standardljud igen.", {
+    type: "success",
+    duration: 6500,
+  });
   return "";
 }
 
@@ -7307,7 +7310,7 @@ async function runShadowingTtsGeneration(item, text, token) {
       updateShadowingAudioHint("Läser upp med webbläsarens röst. Standardljud kunde inte genereras ännu.");
     } else {
       updateShadowingAudioHint(message);
-      alert(message);
+      showToast(message, { type: "error" });
     }
   }
 }
@@ -7347,7 +7350,7 @@ async function generateStandardShadowingAudio() {
     await runShadowingTtsGeneration(item, text, token);
   } catch (error) {
     console.error("[Shadowing] Failed to prepare standard audio generation", error);
-    alert(shadowingTtsErrorMessage(error));
+    showToast(shadowingTtsErrorMessage(error), { type: "error" });
   } finally {
     if (els.generateShadowingAudioBtn) {
       els.generateShadowingAudioBtn.disabled = false;
@@ -7371,7 +7374,7 @@ async function downloadStorageAudio(descriptor, filename) {
     path: descriptor.path,
   });
   if (!blob) {
-    alert("Kunde inte ladda ner ljudfilen.");
+    showToast("Kunde inte ladda ner ljudfilen.", { type: "error" });
     return;
   }
   const url = URL.createObjectURL(blob);
@@ -7500,7 +7503,7 @@ async function playShadowingCurrentItem() {
     updateShadowingPlaybackUI();
   } catch (error) {
     console.warn("[Shadowing] Playback failed", error);
-    alert("Kunde inte spela upp ljudfilen.");
+    showToast("Kunde inte spela upp ljudfilen.", { type: "error" });
   }
 }
 
@@ -7883,7 +7886,7 @@ function autofillWordFormFromPaste() {
   const note = [...parsed.notes, parsed.fields.note].map(clean).filter(Boolean).join("\n");
   setIfPresent(els.noteInput, note);
   autoResizeWordFormTextareas();
-  alert("已自动填充，请检查后保存。");
+  showToast("Automatiskt ifyllt. Kontrollera innan du sparar.", { type: "info" });
 }
 
 function parsePastedWordInfo(text) {
@@ -8142,11 +8145,11 @@ function parsePosField(value) {
 }
 
 async function importEducationWords() {
-  alert("Utbildningsorden läses nu från Supabase.");
+  showToast("Utbildningsorden läses nu från Supabase.", { type: "info" });
 }
 
 async function importDocumentWords() {
-  alert("Dokumentorden läses nu från Supabase.");
+  showToast("Dokumentorden läses nu från Supabase.", { type: "info" });
 }
 
 async function importWordPacks(packs, label) {
@@ -8187,7 +8190,7 @@ async function importWordPacks(packs, label) {
     chip.classList.toggle("active", chip.dataset.filter === "all");
   });
   await loadData();
-  alert(`${wordsToImport.length} ord importerades till ${label}.`);
+  showToast(`${wordsToImport.length} ord importerades till ${label}.`, { type: "success" });
 }
 
 async function importWordsFrom4173() {
@@ -8241,10 +8244,10 @@ async function importWordsFrom4173() {
       }, {
         id: entry.id,
         created_at: entry.created_at,
-      }).catch((error) => console.warn("[Min Ordbok] Remote transferred history sync failed.", error));
+      }).catch((error) => console.warn("[SprakLab] Remote transferred history sync failed.", error));
     });
     await loadData();
-    alert(`Flytt från 4173 klar: ${added} nya ord. Totalt ${mergedWords.length} ord.`);
+    showToast(`Flytt från 4173 klar: ${added} nya ord. Totalt ${mergedWords.length} ord.`, { type: "success" });
   } catch (error) {
     alert(`${error.message}\n\nKontrollera att http://localhost:4173/ körs och att båda sidorna har laddats om hårt.`);
   } finally {
@@ -8301,7 +8304,7 @@ async function addDictionaryWordToLibrary(swedish) {
   await replaceWords([word, ...currentWords]);
   appendLocalHistory("created", word);
   await loadData();
-  alert(`Tillagt i ordlistan: ${word.swedish}`);
+  showToast(`Tillagt i ordlistan: ${word.swedish}`, { type: "success" });
 }
 
 // Shows the structured word_forms input group matching the given part of
@@ -8608,7 +8611,7 @@ async function saveGeneratedWordToLibrary() {
   appendLocalHistory("created", word);
   state.generatedWord = null;
   await loadData();
-  alert(`Sparat i ordlistan: ${word.swedish}`);
+  showToast(`Sparat i ordlistan: ${word.swedish}`, { type: "success" });
 }
 
 async function enrichWordCard(word, mode) {
@@ -8697,7 +8700,7 @@ async function enrichCurrentSearchResults() {
     }
     await replaceWords(currentWords);
     await loadData();
-    alert(`${candidates.length} ord har kompletterats.`);
+    showToast(`${candidates.length} ord har kompletterats.`, { type: "success" });
   } catch (error) {
     alert(`${error.message}\n\nI den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`);
   } finally {
@@ -8755,7 +8758,9 @@ async function enrichSelectedNotebook({ skipConfirm = false } = {}) {
       setBatchEnrichLoading(true, completed, candidates.length);
     }
     await loadData();
-    alert(state.stopBatchEnrich ? `Stoppat. ${completed} ord har kompletterats.` : `Klart. ${completed} ord har kompletterats.`);
+    showToast(state.stopBatchEnrich ? `Stoppat. ${completed} ord har kompletterats.` : `Klart. ${completed} ord har kompletterats.`, {
+      type: "success",
+    });
   } catch (error) {
     await loadData();
     alert(`${error.message}\n\n${completed} lyckade ord har sparats. I den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`);
@@ -8810,7 +8815,7 @@ async function deleteDuplicateWords() {
 
   await replaceWords(deduped);
   await loadData();
-  alert(`${duplicateCount} dubbletter har tagits bort. ${deduped.length} ord finns kvar.`);
+  showToast(`${duplicateCount} dubbletter har tagits bort. ${deduped.length} ord finns kvar.`, { type: "success" });
 }
 
 function wordCompletenessScore(word) {
@@ -8946,7 +8951,7 @@ function saveStudyWordProgressInBackground(word, action = "updated") {
   if (!word?.id) return;
   writeLocalWordProgress(word);
   void remoteDb.upsertUserWordProgress(word).catch((error) => {
-    console.warn("[Min Ordbok] Background study progress sync failed.", error);
+    console.warn("[SprakLab] Background study progress sync failed.", error);
   });
   if (action === "learned") updateStudyStatsForToday();
 }
@@ -9057,7 +9062,7 @@ async function speakSwedish(text) {
     wordSpeechAudio.src = audioUrl;
     await wordSpeechAudio.play();
   } catch (error) {
-    console.warn("[Min Ordbok] ElevenLabs word speech failed. Falling back to browser voice.", error);
+    console.warn("[SprakLab] ElevenLabs word speech failed. Falling back to browser voice.", error);
     speakWithBrowserVoice(swedishText);
   }
 }
@@ -9778,7 +9783,7 @@ function showStudySessionComplete(mode) {
   setDailySessionCompleted(mode);
   const remoteSessionId = state.studySession?.remoteSessionId || state.dailyStudy?.remoteSessionIds?.[mode];
   if (remoteSessionId) {
-    void remoteDb.completeStudySession(remoteSessionId).catch((error) => console.warn("[Min Ordbok] Remote study session completion failed.", error));
+    void remoteDb.completeStudySession(remoteSessionId).catch((error) => console.warn("[SprakLab] Remote study session completion failed.", error));
   }
   if (state.studySession) {
     state.studySession.stage = "complete";
@@ -9913,7 +9918,7 @@ async function completeCurrentStudyWordFromSpelling() {
   }
   await markDailyCompleted(word.id);
   await remoteDb.upsertUserWordProgress(updated).catch((error) => {
-    console.warn("[Min Ordbok] Study progress sync before advance failed.", error);
+    console.warn("[SprakLab] Study progress sync before advance failed.", error);
   });
   if (session.mode === "new") {
     const todayNewWordIds = uniqueIds([...previousTodayNewWordIds, word.id]);
@@ -9991,7 +9996,7 @@ async function markCurrentStudyWordLearned() {
     await markWordLearned(word);
     await markDailyCompleted(word.id);
   } catch (error) {
-    console.error("[Min Ordbok] Failed to mark word learned", error);
+    console.error("[SprakLab] Failed to mark word learned", error);
     renderStudySession();
     els.studySessionFeedback.textContent = "Kunde inte spara till Supabase. Försök igen.";
     return;
@@ -10116,7 +10121,7 @@ async function markDailyCompleted(wordId) {
       isCorrect: state.spellingPassed,
       answer: els.sessionWordInput?.value || els.spellingInput?.value || "",
       collocationAnswer: els.sessionCollocationInput?.value || "",
-    }).catch((error) => console.warn("[Min Ordbok] Remote study item sync failed.", error));
+    }).catch((error) => console.warn("[SprakLab] Remote study item sync failed.", error));
   }
 }
 
@@ -10191,7 +10196,7 @@ function createNotebookByName(name) {
   renderNotebookOptions();
   renderExportNotebookOptions();
   renderNotebook();
-  alert(`Ordbok skapad: ${notebook}`);
+  showToast(`Ordbok skapad: ${notebook}`, { type: "success" });
 }
 
 function printNotebook() {
@@ -10252,7 +10257,7 @@ async function shareExportPreview() {
   }
   if (navigator.clipboard && text) {
     await navigator.clipboard.writeText(text);
-    alert("Exportinnehållet har kopierats.");
+    showToast("Exportinnehållet har kopierats.", { type: "success" });
     return;
   }
   alert("Delning stöds inte i den här webbläsaren.");
@@ -10946,7 +10951,7 @@ function bindEvents() {
   els.printHistoryBtn?.addEventListener("click", printHistory);
   els.shareExportPreviewBtn.addEventListener("click", () => {
     shareExportPreview().catch((error) => {
-      if (error?.name !== "AbortError") alert(error.message || "Kunde inte dela.");
+      if (error?.name !== "AbortError") showToast(error.message || "Kunde inte dela.", { type: "error" });
     });
   });
   els.printExportPreviewBtn.addEventListener("click", printExportPreview);
@@ -10993,19 +10998,19 @@ function bindEvents() {
   els.shadowingContinueBtn?.addEventListener("click", () => {
     continueShadowingFlow().catch((error) => {
       console.error("[Shadowing] Continue flow failed", error);
-      alert(error.message || "Kunde inte fortsätta flödet.");
+      showToast(error.message || "Kunde inte fortsätta flödet.", { type: "error" });
     });
   });
   els.shadowingAddUnknownBtn?.addEventListener("click", () => {
     addSelectedShadowingWordsToVocabulary().catch((error) => {
       console.error("[Shadowing] Add unknown words failed", error);
-      alert(error.message || "Kunde inte lägga till orden.");
+      showToast(error.message || "Kunde inte lägga till orden.", { type: "error" });
     });
   });
   els.generateShadowingAudioBtn?.addEventListener("click", () => {
     generateStandardShadowingAudio().catch((error) => {
       console.error("[Shadowing] Generate standard audio failed", error);
-      alert(error.message || "Kunde inte generera standardljud.");
+      showToast(error.message || "Kunde inte generera standardljud.", { type: "error" });
     });
   });
   els.shadowingAudioProgress?.addEventListener("input", (event) => {
@@ -11043,13 +11048,13 @@ function bindEvents() {
   els.downloadShadowingStandardBtn?.addEventListener("click", () => {
     downloadStandardShadowingAudio().catch((error) => {
       console.error("[Shadowing] Standard audio download failed", error);
-      alert(error.message || "Kunde inte ladda ner standardljud.");
+      showToast(error.message || "Kunde inte ladda ner standardljud.", { type: "error" });
     });
   });
   els.downloadShadowingRecordingBtn?.addEventListener("click", () => {
     downloadShadowingRecording().catch((error) => {
       console.error("[Shadowing] Recording download failed", error);
-      alert(error.message || "Kunde inte ladda ner inspelningen.");
+      showToast(error.message || "Kunde inte ladda ner inspelningen.", { type: "error" });
     });
   });
   els.shadowingAudioFileInput?.addEventListener("change", async (event) => {
@@ -11111,7 +11116,7 @@ function bindEvents() {
       await startShadowingRecording();
     } catch (error) {
       console.error("[Shadowing] Recording failed", error);
-      alert(error.message || "Kunde inte starta inspelning.");
+      showToast(error.message || "Kunde inte starta inspelning.", { type: "error" });
     }
   });
   els.shadowingStopRecordBtn?.addEventListener("click", stopShadowingRecording);
@@ -11380,14 +11385,14 @@ function bindEvents() {
 
   els.startNewStudyBtn.addEventListener("click", () => {
     startStudySession("new").catch((error) => {
-      console.error("[Min Ordbok] Failed to start new study session", error);
-      alert(error.message || "Kunde inte starta övningen.");
+      console.error("[SprakLab] Failed to start new study session", error);
+      showToast(error.message || "Kunde inte starta övningen.", { type: "error" });
     });
   });
   els.startReviewStudyBtn.addEventListener("click", () => {
     startStudySession("review").catch((error) => {
-      console.error("[Min Ordbok] Failed to start review session", error);
-      alert(error.message || "Kunde inte starta repetition.");
+      console.error("[SprakLab] Failed to start review session", error);
+      showToast(error.message || "Kunde inte starta repetition.", { type: "error" });
     });
   });
   els.startQuizBtn.addEventListener("click", () => {
@@ -11436,7 +11441,7 @@ function bindEvents() {
   els.closeSessionCompleteBtn.addEventListener("click", closeStudySession);
   els.startReviewFromCompleteBtn?.addEventListener("click", () => {
     closeStudySession();
-    startStudySession("review").catch((error) => console.error("[Min Ordbok] Failed to start review from completion", error));
+    startStudySession("review").catch((error) => console.error("[SprakLab] Failed to start review from completion", error));
   });
   els.studySessionDialog.addEventListener("cancel", (event) => {
     event.preventDefault();
@@ -11553,7 +11558,7 @@ function bindEvents() {
   });
   els.profileLoginButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {
-      console.error("[Min Ordbok] Auth action failed", error);
+      console.error("[SprakLab] Auth action failed", error);
       setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
     });
   });
@@ -11578,7 +11583,7 @@ function bindEvents() {
     const provider = event.target.closest("[data-auth-provider]")?.dataset.authProvider;
     if (!provider) return;
     signInWithAuthProvider(provider).catch((error) => {
-      console.error("[Min Ordbok] OAuth action failed", error);
+      console.error("[SprakLab] OAuth action failed", error);
       state.auth.busy = false;
       renderAuthState();
       setAuthMessage(error.message || "Kunde inte starta inloggningen.");
@@ -11619,13 +11624,13 @@ function bindEvents() {
   });
   els.profileLogoutButton?.addEventListener("click", () => {
     handleAuthButtonClick().catch((error) => {
-      console.error("[Min Ordbok] Auth action failed", error);
+      console.error("[SprakLab] Auth action failed", error);
       setAuthMessage(error.message || "Kunde inte slutföra inloggningen.");
     });
   });
   els.authForm?.addEventListener("submit", (event) => {
     submitAuthForm(event).catch((error) => {
-      console.error("[Min Ordbok] Auth submit failed", error);
+      console.error("[SprakLab] Auth submit failed", error);
       state.auth.busy = false;
       renderAuthState();
       setAuthMessage(error.message || "Kunde inte skicka inloggningslänken.");
@@ -11733,7 +11738,7 @@ async function resetAppData() {
   await restoreBuiltInWordPacks();
   await applyManualRelatedWordExamples();
   await loadData();
-  console.info("[Min Ordbok] Återställ data", {
+  console.info("[SprakLab] Återställ data", {
     wordsLength: state.words.length,
     booksLength: getNotebooks().length,
     fromDefaultLibrary: true,
@@ -11913,7 +11918,7 @@ async function bootstrapApp() {
     if (state.words.length > 0) return;
     if (lastWordLoadDebug.remoteReadOk && lastWordLoadDebug.remoteLength > 0) return;
     startupLoadingTimedOut = true;
-    console.warn("[Min Ordbok] Vocabulary startup is still loading; keeping the current view open.");
+    console.warn("[SprakLab] Vocabulary startup is still loading; keeping the current view open.");
   }, STARTUP_LOADING_TIMEOUT_MS);
 
   try {
@@ -11924,8 +11929,8 @@ async function bootstrapApp() {
     await syncPendingUserData({ reloadData: true });
     await waitForImageReady(els.homeHeroImage);
   } catch (error) {
-    console.error("[Min Ordbok] Startup failed", error);
-    alert(error.message || "Kunde inte ladda Supabase-data.");
+    console.error("[SprakLab] Startup failed", error);
+    showToast(error.message || "Kunde inte ladda dina data. Kontrollera din internetanslutning.", { type: "error", duration: 8000 });
     state.words = [];
     state.history = [];
     state.favoriteStates = new Map();
