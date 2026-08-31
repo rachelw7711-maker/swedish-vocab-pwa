@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=142";
+import * as remoteDb from "./src/lib/db.js?v=143";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -550,6 +550,13 @@ const els = {
   topbarSyncStatusCount: document.querySelector("#topbarSyncStatusCount"),
   topbarAuthButton: document.querySelector("#topbarAuthButton"),
   toastContainer: document.querySelector("#toastContainer"),
+  wordGlossPopover: document.querySelector("#wordGlossPopover"),
+  wordGlossSwedish: document.querySelector("#wordGlossSwedish"),
+  wordGlossPos: document.querySelector("#wordGlossPos"),
+  wordGlossChinese: document.querySelector("#wordGlossChinese"),
+  wordGlossExample: document.querySelector("#wordGlossExample"),
+  wordGlossMoreBtn: document.querySelector("#wordGlossMoreBtn"),
+  closeWordGlossBtn: document.querySelector("#closeWordGlossBtn"),
   profileLoginButton: document.querySelector("#profileLoginButton"),
   profileSignupButton: document.querySelector("#profileSignupButton"),
   profileLogoutButton: document.querySelector("#profileLogoutButton"),
@@ -2369,6 +2376,16 @@ async function loadData() {
     .map(normalizeWord)
     .map(applyFavoriteState)
     .sort((a, b) => b.updated_at - a.updated_at);
+  // Real, pre-existing bug found while building click-to-gloss (2026-08-31):
+  // buildDictionaryWords()'s only caller, seedIfNeeded(), is itself never
+  // called anywhere (a leftover from the pre-Supabase local-storage seeding
+  // era) — so dictionaryWords, the full-corpus cache several existing
+  // features already rely on (duplicate-word detection, the generated-word
+  // dialog, etc. — see the .find(dictionaryWords) call sites throughout
+  // this file), has been silently empty this whole time. Calling it here,
+  // in the real active data-load path, is the minimal fix — not touching
+  // the legacy seedIfNeeded() function itself, that's a separate cleanup.
+  buildDictionaryWords();
   state.history = history.sort((a, b) => b.created_at - a.created_at);
   state.studyStats = readStudyStats();
   state.dailyStudy = applyRemoteStudyState(ensureDailyStudyPlan(state.studyScope), remotePhase4Snapshot);
@@ -3746,6 +3763,28 @@ function splitReadingSentences(text) {
 
 const READING_ANNOTATE_COLLAPSED_COUNT = 4;
 
+// Click-to-gloss (2026-08-31, Reviews/边读边点词查释义-...): splits a
+// sentence into alternating word/non-word chunks and wraps each real word
+// in its own clickable span, nested inside the existing sentence span so
+// sentence-level highlight/notes (toggleReadingSentenceHighlight) keep
+// working unchanged — the click handler distinguishes a word-span click
+// from a plain sentence click before deciding which behavior applies.
+function appendSentenceWithClickableWords(container, text) {
+  const tokenPattern = /[a-zA-ZåäöÅÄÖ]+/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = tokenPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) container.append(document.createTextNode(text.slice(lastIndex, match.index)));
+    const wordSpan = document.createElement("span");
+    wordSpan.className = "reading-annotate-word";
+    wordSpan.textContent = match[0];
+    wordSpan.dataset.readingWord = match[0];
+    container.append(wordSpan);
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) container.append(document.createTextNode(text.slice(lastIndex)));
+}
+
 function renderReadingAnnotateSection(item) {
   if (!els.readingAnnotateSection || !els.readingAnnotateText) return;
   if (!item?.id || !clean(item.source_text)) {
@@ -3777,8 +3816,8 @@ function renderReadingAnnotateSection(item) {
     wrap.className = "reading-annotate-sentence-wrap";
     const span = document.createElement("span");
     span.className = "reading-annotate-sentence";
-    span.textContent = `${sentence} `;
     span.dataset.sentenceIndex = index;
+    appendSentenceWithClickableWords(span, `${sentence} `);
     const noteEntry = notesByIndex.get(index);
     if (noteEntry) {
       span.classList.add("highlighted");
@@ -3810,6 +3849,58 @@ async function persistReadingNotes(updatedNotes) {
   } catch (error) {
     console.warn("[SpråkLab] Failed to save reading note.", error);
   }
+}
+
+// Click-to-gloss lookup: exact match against the already-loaded full
+// corpus first (dictionaryWords, same pattern used at app.js:6476/8516/9064
+// elsewhere) — instant, zero network, zero AI cost for the common case.
+// Falls back to a single word_forms lookup for inflected forms
+// ("hundar" → "hund"); if that also misses, tells the user rather than
+// silently doing nothing or auto-spending on generation.
+async function lookupAndOpenReadingWord(token) {
+  const clean_ = clean(token).toLowerCase();
+  if (!clean_) return;
+  const exact = dictionaryWords.find((word) => clean(word.swedish).toLowerCase() === clean_);
+  if (exact) {
+    showWordGlossPopover(exact);
+    return;
+  }
+  try {
+    const baseWordId = await remoteDb.lookupBaseWordIdForForm(clean_);
+    if (baseWordId) {
+      const baseWord = dictionaryWords.find((word) => word.id === baseWordId) || (await remoteDb.loadWordOrPhraseById(baseWordId).catch(() => null));
+      if (baseWord) {
+        showWordGlossPopover(baseWord);
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn("[SpråkLab] Click-to-gloss lookup failed.", error);
+  }
+  showToast(`"${token}" hittades inte i ordboken — du kan lägga till det manuellt i Ordbok.`, { type: "warning", duration: 5000 });
+}
+
+// Option B (Rachel's 2026-08-31 decision): a lightweight popover instead
+// of the full detailDialog modal — doesn't cover the reading text, closes
+// on its own or via "Visa mer" (which hands off to the existing full word
+// card for anyone who wants the complete detail view rather than
+// reinventing that content here).
+function showWordGlossPopover(word) {
+  if (!els.wordGlossPopover || !word) return;
+  els.wordGlossPopover.dataset.wordId = word.id;
+  if (els.wordGlossSwedish) els.wordGlossSwedish.textContent = word.swedish || "";
+  if (els.wordGlossPos) els.wordGlossPos.textContent = posLabels[word.pos] || "Övrigt";
+  if (els.wordGlossChinese) els.wordGlossChinese.textContent = word.chinese || "";
+  if (els.wordGlossExample) {
+    const example = clean(word.example_sv);
+    els.wordGlossExample.textContent = example;
+    els.wordGlossExample.hidden = !example;
+  }
+  els.wordGlossPopover.hidden = false;
+}
+
+function hideWordGlossPopover() {
+  if (els.wordGlossPopover) els.wordGlossPopover.hidden = true;
 }
 
 function toggleReadingSentenceHighlight(sentenceIndex) {
@@ -11067,6 +11158,12 @@ function bindEvents() {
     renderReadingAnnotateSection(item);
   });
   els.readingAnnotateText?.addEventListener("click", (event) => {
+    const wordSpan = event.target.closest(".reading-annotate-word");
+    if (wordSpan) {
+      event.stopPropagation();
+      void lookupAndOpenReadingWord(wordSpan.dataset.readingWord);
+      return;
+    }
     const span = event.target.closest(".reading-annotate-sentence");
     if (!span) return;
     toggleReadingSentenceHighlight(Number(span.dataset.sentenceIndex));
@@ -11167,6 +11264,18 @@ function bindEvents() {
     els.reportProblemDialog.close();
   });
   els.submitReportProblemBtn?.addEventListener("click", submitReportProblem);
+  els.closeWordGlossBtn?.addEventListener("click", hideWordGlossPopover);
+  els.wordGlossMoreBtn?.addEventListener("click", () => {
+    const wordId = els.wordGlossPopover?.dataset.wordId;
+    const word = dictionaryWords.find((item) => item.id === wordId);
+    hideWordGlossPopover();
+    if (word) openWordDetail(word, "library");
+  });
+  document.addEventListener("click", (event) => {
+    if (els.wordGlossPopover?.hidden) return;
+    if (event.target.closest("#wordGlossPopover") || event.target.closest(".reading-annotate-word")) return;
+    hideWordGlossPopover();
+  });
   els.closeSaveSheetBtn.addEventListener("click", closeSaveSheet);
   els.saveSheetDialog.addEventListener("cancel", (event) => {
     event.preventDefault();

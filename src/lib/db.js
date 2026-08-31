@@ -745,6 +745,20 @@ export async function loadWordForms(learningObjectId) {
   return data || [];
 }
 
+// Click-to-gloss (2026-08-31, Reviews/边读边点词查释义-...): resolves an
+// inflected form (e.g. "hundar") back to its dictionary lemma id — same
+// two-step exact-then-word_forms matching server-reading.mjs's
+// matchAgainstCorpus() already does for vocabulary extraction, just for a
+// single clicked token instead of a batch. Both tables are public-read, so
+// this runs client-side with no new backend endpoint.
+export async function lookupBaseWordIdForForm(formValue) {
+  const value = clean(formValue).toLowerCase();
+  if (!value) return null;
+  const { data, error } = await supabase.from(TABLES.wordForms).select("learning_object_id").ilike("form_value", value).limit(1).maybeSingle();
+  if (error) throw error;
+  return data?.learning_object_id || null;
+}
+
 // Extra example sentences beyond the primary learning_objects.example_sv
 // (sort_order 0 is reserved for that primary example conceptually; rows
 // here are the 2nd+ examples, e.g. from the bundled enrichment pass that

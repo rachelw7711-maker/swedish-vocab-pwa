@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=184" />
+    <link rel="stylesheet" href="/styles.css?v=185" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -1406,6 +1406,17 @@
 
     <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
+    <div id="wordGlossPopover" class="word-gloss-popover" hidden aria-live="polite">
+      <button class="icon-button word-gloss-close" id="closeWordGlossBtn" type="button" title="Stäng">×</button>
+      <div class="word-gloss-head">
+        <strong id="wordGlossSwedish"></strong>
+        <span class="pos-badge" id="wordGlossPos"></span>
+      </div>
+      <p id="wordGlossChinese"></p>
+      <p class="word-gloss-example" id="wordGlossExample" hidden></p>
+      <button class="secondary-button" id="wordGlossMoreBtn" type="button">Visa mer</button>
+    </div>
+
     <template id="wordCardTemplate">
       <article class="word-card">
         <div class="word-card-main">
@@ -1433,6 +1444,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=198" type="module"></script>
+    <script src="/app.js?v=199" type="module"></script>
   </body>
 </html>

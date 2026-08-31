@@ -583,6 +583,76 @@ body[data-active-view="profileView"] .topbar-auth-button {
   }
 }
 
+/* Click-to-gloss popover (2026-08-31) — deliberately anchored to the
+   bottom of the viewport rather than positioned near the clicked word:
+   a word can be tapped anywhere, including near a screen edge, and a
+   fixed bottom placement is far more robust on a 430px-capped mobile
+   shell than tracking an arbitrary click coordinate. Sits above the
+   toast container in the stacking order since a lookup failure's toast
+   should still be visible even if a popover happens to be open. */
+.word-gloss-popover {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--tabbar-height, 50px) + env(safe-area-inset-bottom) + var(--space-6));
+  z-index: 950;
+  width: min(100% - 32px, 400px);
+  padding: var(--space-7);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
+  animation: word-gloss-in 0.18s ease;
+}
+
+@keyframes word-gloss-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .word-gloss-popover {
+    animation: none;
+  }
+}
+
+.word-gloss-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.word-gloss-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+  padding-right: var(--space-10);
+}
+
+.word-gloss-head strong {
+  font: var(--font-section-title);
+}
+
+.word-gloss-popover p {
+  margin: var(--space-4) 0 0;
+  color: var(--text-primary);
+  font: var(--font-body);
+}
+
+.word-gloss-example {
+  color: var(--text-secondary) !important;
+  font: var(--font-supporting-body) !important;
+  font-style: italic;
+}
+
+.word-gloss-popover .secondary-button {
+  margin-top: var(--space-6);
+  width: 100%;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;
@@ -4821,6 +4891,20 @@ h2 {
 .reading-annotate-sentence.highlighted {
   background: var(--gold-soft, #fbf1e0);
   box-shadow: 0 0 0 1px rgba(167, 111, 0, 0.25);
+}
+
+/* Click-to-gloss (2026-08-31): underline rather than a background — a
+   background would visually compete with the sentence-level hover/
+   highlight it's nested inside. */
+.reading-annotate-word {
+  cursor: pointer;
+  text-underline-offset: 2px;
+  text-decoration: underline dotted rgba(81, 111, 100, 0.4);
+}
+
+.reading-annotate-word:hover {
+  text-decoration-style: solid;
+  color: var(--accent-strong);
 }
 
 .reading-annotate-note {
