@@ -2423,6 +2423,44 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   margin-top: 0;
 }
 
+/* PLE-006: AB-loop/compare/continuous/auto-pause/subtitle-toggle/level all
+   had complete, working JS behind them but no reachable control — restored
+   here rather than rebuilt. Level stays visible (a primary practice-mode
+   setting); the rest live in the "Fler kontroller" collapsible below so the
+   default view isn't crowded with 8 buttons at once. */
+.shadowing-level-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.shadowing-level-badge {
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font: var(--font-metadata);
+  padding: var(--space-2) var(--space-6);
+}
+
+.shadowing-more-controls {
+  margin-top: 0;
+}
+
+.shadowing-more-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+}
+
+.shadowing-more-controls-grid button.active {
+  border-color: rgba(111, 143, 128, 0.35);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 .shadowing-player {
   position: relative;
   z-index: 4;

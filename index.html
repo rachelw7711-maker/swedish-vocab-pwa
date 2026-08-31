@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=182" />
+    <link rel="stylesheet" href="/styles.css?v=183" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -565,6 +565,10 @@
                   <h2>Mina studier</h2>
                   <p>Din statistik, aktivitet och utveckling.</p>
                 </header>
+                <button class="profile-entry-card" type="button" data-profile-page="history">
+                  <span><strong>📜 Studiehistorik</strong><small>Se varje ord du skapat, redigerat, repeterat eller sparat</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
                 <section class="profile-detail-card">
                   <span>🌱 Uthållighet</span>
                   <div class="profile-overview-grid">
@@ -662,6 +666,27 @@
                   <span id="reviewQueuePageLabel"></span>
                   <button class="secondary-button" id="reviewQueueNextBtn" type="button">Nästa ›</button>
                 </div>
+              </section>
+
+              <section id="profileHistoryPanel" class="profile-subpage profile-secondary-page" hidden>
+                <button class="profile-back-button" type="button" data-profile-back="studies">‹ Mina studier</button>
+                <header class="profile-secondary-head">
+                  <p class="section-kicker">Mina studier</p>
+                  <h2>Studiehistorik</h2>
+                  <p>Varje ord du skapat, redigerat, repeterat, lärt dig, sparat eller tagit bort.</p>
+                </header>
+                <div class="export-controls">
+                  <label class="field-label">
+                    Ordklass
+                    <select id="historyPosFilter"></select>
+                  </label>
+                  <label class="field-label">
+                    Händelse
+                    <select id="historyActionFilter"></select>
+                  </label>
+                  <button class="secondary-button" id="printHistoryBtn" type="button">Exportera PDF</button>
+                </div>
+                <div id="historyList" class="history-list"></div>
               </section>
 
               <section id="profileSettingsPanel" class="profile-subpage profile-secondary-page" hidden>
@@ -822,8 +847,8 @@
               <div class="toolbar">
                 <div>
                   <p class="section-kicker">Shadowing</p>
-                  <h2>Practice</h2>
-                  <span class="visually-hidden" id="shadowingTitle">Practice</span>
+                  <h2>Öva</h2>
+                  <span class="visually-hidden" id="shadowingTitle">Öva</span>
                 </div>
                 <div class="reading-more-menu-wrap">
                   <button class="icon-button reading-more-btn" id="shadowingMoreBtn" type="button" title="Mer">⋯</button>
@@ -834,20 +859,29 @@
                 </div>
               </div>
               <section class="shadowing-subtitle" id="shadowingSubtitle"></section>
+              <div class="shadowing-level-row">
+                <span class="shadowing-level-badge" id="shadowingLevelBadge">Nivå 1</span>
+                <div class="filter-row" id="shadowingLevelButtons" role="tablist" aria-label="Shadowing-nivå"></div>
+              </div>
               <div class="shadowing-controls">
                 <button class="primary-button" id="shadowingPlayPauseBtn" type="button">Spela</button>
                 <button class="secondary-button" id="shadowingPauseBtn" type="button">Pausa</button>
                 <button class="secondary-button" id="shadowingRecordBtn" type="button">Spela in</button>
                 <button class="secondary-button" id="shadowingStopRecordBtn" type="button">Stoppa</button>
               </div>
-              <button class="secondary-button visually-hidden" id="shadowingStopBtn" type="button">Stoppa</button>
-              <button class="secondary-button visually-hidden" id="shadowingSetABtn" type="button">Set A</button>
-              <button class="secondary-button visually-hidden" id="shadowingSetBBtn" type="button">Set B</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleLoopBtn" type="button">A-B Loop</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleAutoPauseBtn" type="button">Auto paus</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleSubtitlesBtn" type="button">字幕</button>
-              <button class="secondary-button visually-hidden" id="shadowingToggleContinuousBtn" type="button">连续播放</button>
-              <button class="primary-button visually-hidden" id="shadowingCompareBtn" type="button">Compare</button>
+              <details class="detail-layer-group-collapsible shadowing-more-controls">
+                <summary class="detail-layer-label">Fler kontroller</summary>
+                <div class="shadowing-more-controls-grid">
+                  <button class="secondary-button" id="shadowingStopBtn" type="button">Stoppa uppspelning</button>
+                  <button class="secondary-button" id="shadowingSetABtn" type="button">Sätt A</button>
+                  <button class="secondary-button" id="shadowingSetBBtn" type="button">Sätt B</button>
+                  <button class="secondary-button" id="shadowingToggleLoopBtn" type="button">A-B-loop</button>
+                  <button class="secondary-button" id="shadowingToggleAutoPauseBtn" type="button">Auto-paus</button>
+                  <button class="secondary-button" id="shadowingToggleSubtitlesBtn" type="button">Dölj undertexter</button>
+                  <button class="secondary-button" id="shadowingToggleContinuousBtn" type="button">Spela nästa automatiskt</button>
+                  <button class="primary-button" id="shadowingCompareBtn" type="button">Jämför med inspelning</button>
+                </div>
+              </details>
               <div class="shadowing-progress">
                 <input id="shadowingAudioProgress" type="range" min="0" max="0" step="0.1" value="0" aria-label="Standardljudets position" />
                 <div class="shadowing-progress-meta">
@@ -883,7 +917,7 @@
               <div class="toolbar">
                 <div>
                   <p class="section-kicker">Shadowing</p>
-                  <h2>Export</h2>
+                  <h2>Exportera</h2>
                 </div>
               </div>
               <div class="shadowing-export-grid">
@@ -892,7 +926,7 @@
                     <div class="shadowing-export-title-row">
                       <strong>Standardljud</strong>
                     </div>
-                    <span id="shadowingAudioHint">AI voice is under development</span>
+                    <span id="shadowingAudioHint">AI-röst genereras här.</span>
                   </div>
                   <div class="practice-actions">
                     <button class="secondary-button" id="shadowingExportStandardPlayBtn" type="button">▶</button>
@@ -902,7 +936,7 @@
                 <article class="shadowing-export-row">
                   <div>
                     <strong>Min inspelning</strong>
-                    <span>Record, listen and download your own voice</span>
+                    <span>Spela in, lyssna på och ladda ner din egen röst.</span>
                   </div>
                   <div class="practice-actions">
                     <button class="secondary-button" id="shadowingExportRecordingPlayBtn" type="button">▶</button>
@@ -1368,6 +1402,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=194" type="module"></script>
+    <script src="/app.js?v=195" type="module"></script>
   </body>
 </html>

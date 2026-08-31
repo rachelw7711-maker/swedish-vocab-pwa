@@ -436,11 +436,11 @@ const shadowingRecordingAudio = new Audio();
 const wordSpeechAudio = new Audio();
 const wordSpeechUrlCache = new Map();
 const shadowingStageLabels = {
-  1: "Level 1 Listen",
-  2: "Level 2 Repeat",
-  3: "Level 3 Assisted Shadowing",
-  4: "Level 4 Real Shadowing",
-  5: "Level 5 Blind Shadowing",
+  1: "Nivå 1: Lyssna",
+  2: "Nivå 2: Upprepa",
+  3: "Nivå 3: Assisterad shadowing",
+  4: "Nivå 4: Shadowing",
+  5: "Nivå 5: Blind shadowing",
 };
 
 const els = {
@@ -691,6 +691,7 @@ const els = {
   notebookSelect: document.querySelector("#notebookSelect"),
   historyPosFilter: document.querySelector("#historyPosFilter"),
   historyActionFilter: document.querySelector("#historyActionFilter"),
+  profileHistoryPanel: document.querySelector("#profileHistoryPanel"),
   dialog: document.querySelector("#wordDialog"),
   discardWordDialog: document.querySelector("#discardWordDialog"),
   closeWordDialogBtn: document.querySelector("#closeWordDialogBtn"),
@@ -2649,6 +2650,13 @@ function renderActiveView() {
 async function renderFraserView() {
   if (!phraseObjectsLoaded) {
     phraseObjectsLoaded = true;
+    if (els.fraserList) {
+      els.fraserList.replaceChildren();
+      const loading = document.createElement("span");
+      loading.className = "empty-state";
+      loading.textContent = "Laddar…";
+      els.fraserList.append(loading);
+    }
     try {
       const rows = await remoteDb.loadPhraseObjects();
       phraseObjects.splice(0, phraseObjects.length, ...rows);
@@ -4059,15 +4067,54 @@ function renderProfileView() {
 }
 
 function showProfilePage(page = "main") {
-  const target = ["studies", "review", "settings"].includes(page) ? page : "main";
+  const target = ["studies", "review", "settings", "history"].includes(page) ? page : "main";
   if (els.profileMainPanel) els.profileMainPanel.hidden = target !== "main";
   if (els.profileStudiesPanel) els.profileStudiesPanel.hidden = target !== "studies";
   if (els.profileReviewPanel) els.profileReviewPanel.hidden = target !== "review";
   if (els.profileSettingsPanel) els.profileSettingsPanel.hidden = target !== "settings";
+  if (els.profileHistoryPanel) els.profileHistoryPanel.hidden = target !== "history";
   if (els.profileSignedInGrid) els.profileSignedInGrid.dataset.profilePage = target;
   if (target === "studies") renderProfileStudiesBreakdown();
   if (target === "review") loadReviewQueuePage(0);
+  if (target === "history") {
+    populateHistoryFilterOptions();
+    resetListLimit("history");
+    renderHistory();
+  }
   if (state.activeView === "profileView") resetViewportScroll();
+}
+
+// PLE-008: word-action history was fully implemented (data collection,
+// filtering, rendering) but its markup was repurposed for Shadowing at some
+// point, leaving it permanently unreachable while study_history kept
+// silently accumulating real data. Restored as its own Profil → Mina
+// studier sub-page rather than folded into a single stat, reusing
+// getFilteredHistory()/renderHistory() as-is — only the filter <select>
+// population/wiring below is new, since even that had been stripped.
+function populateHistoryFilterOptions() {
+  if (els.historyPosFilter && !els.historyPosFilter.dataset.populated) {
+    const posOptions = [
+      { value: "all", label: "Alla ordklasser" },
+      ...primaryPos.map((pos) => ({ value: pos, label: posLabels[pos] || pos })),
+      { value: "other-pos", label: "Övriga ordklasser" },
+    ];
+    els.historyPosFilter.innerHTML = posOptions
+      .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+      .join("");
+    els.historyPosFilter.value = state.historyPos;
+    els.historyPosFilter.dataset.populated = "true";
+  }
+  if (els.historyActionFilter && !els.historyActionFilter.dataset.populated) {
+    const actionOptions = [
+      { value: "all", label: "Alla händelser" },
+      ...Object.entries(actionLabels).map(([value, label]) => ({ value, label })),
+    ];
+    els.historyActionFilter.innerHTML = actionOptions
+      .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+      .join("");
+    els.historyActionFilter.value = state.historyAction;
+    els.historyActionFilter.dataset.populated = "true";
+  }
 }
 
 // SPK-DIC-001 §11 review gate, flag-only (2026-07-30 decision) — this is
@@ -7041,7 +7088,7 @@ function renderShadowingPlayer() {
   const item = getSelectedShadowingItem();
   if (!item) {
     if (els.shadowingTitle) els.shadowingTitle.textContent = "Shadowing";
-    if (els.shadowingLevelBadge) els.shadowingLevelBadge.textContent = "Level 1";
+    if (els.shadowingLevelBadge) els.shadowingLevelBadge.textContent = "Nivå 1";
     if (els.shadowingSubtitle) {
       els.shadowingSubtitle.hidden = false;
       els.shadowingSubtitle.innerHTML = "<strong>Inget träningsinnehåll ännu.</strong><span>Klistra in text ovan och fortsätt för att skapa första träningskortet.</span>";
@@ -7520,6 +7567,12 @@ async function applyShadowingLevel(level, { persist = true } = {}) {
   }
   if (persist) {
     const nextItem = shadowingStore.normalizeShadowingItem({ ...item, level: normalized, updatedAt: Date.now() });
+    // Real bug found while restoring this control (PLE-006): this only ever
+    // wrote the new level to Supabase — state.shadowing (what
+    // getSelectedShadowingItem()/renderShadowingPlayer() actually read) was
+    // never updated, so the level chips visibly snapped back to the old
+    // value immediately after every click, even on a successful save.
+    state.shadowing = mergeShadowingItemsForApp([nextItem], state.shadowing);
     await remoteDb.upsertShadowingItem(nextItem).catch((error) => console.warn("[Shadowing] Remote level sync failed", error));
   }
   persistUserPreferences();
@@ -9092,19 +9145,6 @@ function refreshOpenDetail(wordId) {
   if (updated) renderWordDetail(updated, els.detailDialog.dataset.sourceMode || "library");
 }
 
-async function deleteWord(id) {
-  const word = state.words.find((item) => item.id === id);
-  if (!word) return;
-  await replaceWords((await readWords()).filter((item) => item.id !== id));
-  appendLocalHistory("deleted", word);
-  await remoteDb.deleteRemoteWord(id);
-  await loadData();
-  if (els.detailDialog.open && els.detailDialog.dataset.wordId === id) {
-    closeDetailMoreMenu();
-    els.detailDialog.close();
-  }
-}
-
 function speakWithBrowserVoice(text) {
   if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
   const utterance = new SpeechSynthesisUtterance(text);
@@ -9666,11 +9706,11 @@ function renderStudySession() {
     const actions = session.mode === "review"
       ? [
           { label: "Lyssna", action: "listen", kind: "secondary" },
-          { label: "Check", action: "check", kind: "secondary", disabled: Boolean(session.spelling?.locked || session.spelling?.correct) },
-          { label: "Next", action: "next", kind: "primary", disabled: !studySessionCanAdvance(session) },
+          { label: "Kontrollera", action: "check", kind: "secondary", disabled: Boolean(session.spelling?.locked || session.spelling?.correct) },
+          { label: "Nästa", action: "next", kind: "primary", disabled: !studySessionCanAdvance(session) },
         ]
       : [
-          { label: "Next", action: "next", kind: "primary" },
+          { label: "Nästa", action: "next", kind: "primary" },
         ];
     renderStudySessionActions(actions);
     window.setTimeout(() => els.sessionWordInput.focus(), 0);
@@ -9735,7 +9775,7 @@ function renderStudySessionSpelling(word) {
   panel.append(els.sessionWordInputWrap);
   const feedback = document.createElement("p");
   feedback.className = "session-spell-feedback";
-  feedback.textContent = spelling.feedback || `Attempts ${spelling.attempts}/${MAX_SPELLING_ATTEMPTS}`;
+  feedback.textContent = spelling.feedback || `Försök ${spelling.attempts}/${MAX_SPELLING_ATTEMPTS}`;
   panel.append(feedback);
   if (spelling.showAnswer) {
     const answer = document.createElement("p");
@@ -11702,12 +11742,35 @@ function bindEvents() {
   });
   els.profileGuestButton?.addEventListener("click", () => activateView("homeView"));
   els.profileSignedInGrid?.addEventListener("click", (event) => {
-    const page = event.target.closest("[data-profile-page]")?.dataset.profilePage;
-    if (page) {
-      showProfilePage(page);
+    // Real, pre-existing bug found while testing the new Study History back
+    // button (unrelated to this fix — reproduced on the untouched "review"
+    // panel's back button too): showProfilePage() sets data-profile-page on
+    // profileSignedInGrid ITSELF to track the active sub-page, so once any
+    // page had been shown, .closest("[data-profile-page]") from a click
+    // anywhere inside — including on the back button — always walked up and
+    // matched that container before ever reaching the back-button check
+    // below, re-showing the same page every time. No "‹ Profil" back button
+    // (review/settings/studies, and now history) actually worked. Checking
+    // the more specific data-profile-back target first fixes all of them.
+    const backTarget = event.target.closest("[data-profile-back]")?.dataset.profileBack;
+    if (backTarget !== undefined) {
+      showProfilePage(backTarget || "main");
       return;
     }
-    if (event.target.closest("[data-profile-back]")) showProfilePage("main");
+    const page = event.target.closest("[data-profile-page]")?.dataset.profilePage;
+    if (page && event.target.closest("[data-profile-page]") !== els.profileSignedInGrid) {
+      showProfilePage(page);
+    }
+  });
+  els.historyPosFilter?.addEventListener("change", () => {
+    state.historyPos = els.historyPosFilter.value || "all";
+    resetListLimit("history");
+    renderHistory();
+  });
+  els.historyActionFilter?.addEventListener("change", () => {
+    state.historyAction = els.historyActionFilter.value || "all";
+    resetListLimit("history");
+    renderHistory();
   });
   els.profileStartCard?.addEventListener("click", () => {
     openAuthDialog("signup");
