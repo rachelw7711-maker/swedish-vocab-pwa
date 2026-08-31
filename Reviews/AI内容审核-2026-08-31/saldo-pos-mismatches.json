@@ -1,0 +1,1447 @@
+{
+  "generatedAt": "2026-08-31T16:23:55.571Z",
+  "summary": {
+    "total": 10096,
+    "notInSaldo": 1171,
+    "skippedAmbiguousPos": 95,
+    "checked": 8830,
+    "confirmed": 8721,
+    "mismatches": 109
+  },
+  "mismatches": [
+    {
+      "id": "0601d040-f260-4228-8a7f-670b7491ae3c",
+      "swedish": "åtta",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "0a9cad8b-ebfd-4a89-bc41-cfe4a08a0ddd",
+      "swedish": "fjärran",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av",
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip",
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "0bf46ab4-c10d-47ee-bc3d-e9613ce02b74",
+      "swedish": "tillbakahållen",
+      "spraklab_pos": "other",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "0c25e1de-6549-497f-9038-6384403f58dd",
+      "swedish": "stor",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "0e3e6127-22a5-458a-824a-948fb2fdb9b5",
+      "swedish": "överens",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "117ca0cf-3278-4b14-a51f-d5e77ae55acd",
+      "swedish": "försvinnande",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "14178bb7-b2e0-41f0-a7e9-f00ad5a49007",
+      "swedish": "högst",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "150913c6-f73b-4a22-b408-713b03074557",
+      "swedish": "miljontals",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "nl"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "numeral"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "223fc1f0-bc49-404f-987b-31c876c038ca",
+      "swedish": "som",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "sn",
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "conjunction",
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "22ec79eb-1f7b-4ed4-86ed-792c14fd1598",
+      "swedish": "vitamin",
+      "spraklab_pos": "other",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "249e305d-0d46-4c90-956e-9918d2c1c722",
+      "swedish": "åttonde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "251c9395-9196-42fa-a8d3-c17e172b66dc",
+      "swedish": "sjätte",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "25b62e48-0fac-400f-81e0-a06a235f2b8e",
+      "swedish": "gjord",
+      "spraklab_pos": "verb",
+      "saldo_pos_tags": [
+        "nn",
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun",
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "25d61feb-50ee-40bd-baf3-7b6754262218",
+      "swedish": "samtlig",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "pn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "pronoun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "26d94d75-599d-4571-a3e8-907888648d2d",
+      "swedish": "minus",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "pp",
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "preposition",
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "284c839a-cca7-44d8-b107-55fa6279b025",
+      "swedish": "övrig",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "pn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "pronoun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "28dd9087-b6d4-4b5d-85c4-5373b22df076",
+      "swedish": "still",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "3144ceb2-1b4f-4890-8276-44f74653426a",
+      "swedish": "tionde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "nn",
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun",
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "31963bcf-a141-4b8b-b057-88f07b3b2d7d",
+      "swedish": "rykte",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "332406e2-904c-4726-bed2-6260b8928d7d",
+      "swedish": "hundra",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "34394eaa-4482-4f46-a67a-c5a084b94290",
+      "swedish": "sommarmånad",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "347dae15-2009-4aad-b597-11d8bd3db7aa",
+      "swedish": "min",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "34f9623a-70d2-49de-b95f-ee9fec45d3ef",
+      "swedish": "kvitt",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av",
+        "in"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip",
+        "interjection"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "353c494a-b8f8-4b11-b18c-794781497100",
+      "swedish": "inneboende",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "383e7eb6-1185-4010-8354-5ae24251fb9a",
+      "swedish": "mot",
+      "spraklab_pos": "preposition",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "3aea968c-8385-4111-a9d8-011362c5169c",
+      "swedish": "konsekvent",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "4083e4a7-ff4a-44cf-a9ca-0dc36b58199f",
+      "swedish": "glatt",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "41db55f8-10c9-4bda-ae2f-37ce14eefd5b",
+      "swedish": "svullna",
+      "spraklab_pos": "perfekt_particip",
+      "saldo_pos_tags": [
+        "vb"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "verb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "458b56b2-2471-41eb-b432-32ad83e52d05",
+      "swedish": "nöt",
+      "spraklab_pos": "verb",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "47e5becf-4325-4771-8743-48614897677e",
+      "swedish": "sjunde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "484d2688-5531-4daa-91cc-327e3dce8c0d",
+      "swedish": "skrap",
+      "spraklab_pos": "verb",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "492c4407-e475-4a6f-898a-1fe272917832",
+      "swedish": "anställd",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "4afe21f5-f339-4bed-8b55-1f61e3823c07",
+      "swedish": "detsamma",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "in"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "interjection"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "4c24a9a2-248a-4b47-a683-4e6040482a79",
+      "swedish": "tredje",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "4f6868fa-eddf-4f14-8c08-8e53550849b7",
+      "swedish": "förebyggande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "4f6c7ddc-c8a0-446a-b5e0-b4ec087ac3df",
+      "swedish": "en",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "al",
+        "nl",
+        "nn",
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "numeral",
+        "noun",
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "5209a2ea-9dd5-4ace-8572-7117a6dc1083",
+      "swedish": "såväl",
+      "spraklab_pos": "conjunction",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "52b0743c-93b0-4f31-a1df-109330ae9815",
+      "swedish": "förbluffande",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av",
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip",
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "5a65ca20-3e48-478f-9830-76a20bf7222b",
+      "swedish": "sist",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "5ad42495-ff6d-4770-ac5b-ef93c73d1b07",
+      "swedish": "smått",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "5b9a827b-8c28-453e-8668-d673c3d13c0f",
+      "swedish": "lagstiftande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "622bceac-f37d-4fa5-962a-fa3388fb441d",
+      "swedish": "två",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "vb"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "verb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "6686bfef-46c9-49a1-b4f3-edd6c20d6a5c",
+      "swedish": "sned",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "6854ec0d-6d71-4691-bad3-cfe44c108106",
+      "swedish": "brant",
+      "spraklab_pos": "verb",
+      "saldo_pos_tags": [
+        "av",
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip",
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "6db20f07-01ce-4a33-9231-adc254d78008",
+      "swedish": "ficka",
+      "spraklab_pos": "verb",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "6ef64058-18ac-4b56-9152-3d14ceadc780",
+      "swedish": "tjugonde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "6f3fa011-5f2c-407f-a8d3-854d9c91fd70",
+      "swedish": "utanför",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "pp"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "preposition"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "7159be6b-0c0e-42e9-885c-b5a10a4046ff",
+      "swedish": "stökig",
+      "spraklab_pos": "other",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "751cbd7a-773e-4128-8587-ba4421b753f2",
+      "swedish": "välkomna",
+      "spraklab_pos": "perfekt_particip",
+      "saldo_pos_tags": [
+        "vb"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "verb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "767719ac-0e5e-4f36-94e3-88a0d6e6c4e8",
+      "swedish": "charmerande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "775400bb-4556-474b-bb6d-159977f95e55",
+      "swedish": "respektive",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "kn",
+        "av",
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "conjunction",
+        "adjective",
+        "presens_particip",
+        "perfekt_particip",
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "779d06d7-4ce9-4ab2-bc23-5d9f67111d59",
+      "swedish": "nittionde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "7dc808cf-a7ee-496c-9031-f68fa1b66a08",
+      "swedish": "återstående",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "805a95b7-c22b-4fd3-b3fb-334ae835d161",
+      "swedish": "fortsatt",
+      "spraklab_pos": "other",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "839ca32f-a069-44cd-94f6-cd4ab7072421",
+      "swedish": "stigande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "86e6f9cd-d826-4f61-8bab-ea2c15e819e7",
+      "swedish": "var",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "ab",
+        "nn",
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb",
+        "noun",
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "8c9e1715-8d45-4d31-98f0-60aed7eb7d8b",
+      "swedish": "växande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "8ec12b46-3aeb-4950-a919-b1c5b62e4fe4",
+      "swedish": "bete",
+      "spraklab_pos": "verb",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "934c8d69-326b-43fe-9382-e6a07ffdf6fd",
+      "swedish": "femtionde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "949061b9-dd73-4f20-bb43-625d4bf53408",
+      "swedish": "flytande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "95da0672-75e9-4b41-9357-663f84870a1e",
+      "swedish": "efter",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "pp",
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "preposition",
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "9ae00a99-af34-4a5c-9fc1-7978afde7a2b",
+      "swedish": "si",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "in"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "interjection"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "9cbd7946-4503-4d0a-b8e9-d855d48b96d8",
+      "swedish": "minst",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "9dc44a5b-3bf3-4b06-8c9a-16c4bfada5e6",
+      "swedish": "förlåt",
+      "spraklab_pos": "interjection",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "9e67f47b-2bf3-4cd1-9385-094f0fee1222",
+      "swedish": "först",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "9ea1369c-9d47-432d-96d5-f3dafc19cb26",
+      "swedish": "åtskillig",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "pn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "pronoun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "9f35eb81-0fd0-4eb8-b9ab-b82654f38dec",
+      "swedish": "extrem",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "a14b86e1-787c-4a48-971a-c6c859a2e792",
+      "swedish": "ett",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "a32237e4-5a00-4fb4-be81-57e2be56415d",
+      "swedish": "oavsett",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "pp"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "preposition"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "a4c7b14f-605c-4970-b0a9-45641946a26f",
+      "swedish": "sextionde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "a6e8549d-c1e5-4a21-b26b-5c4dbaefadb5",
+      "swedish": "sammanhängande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "a73c4fc4-3e24-4fcb-8acb-c7ef89d32260",
+      "swedish": "svullen",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "a7ec199f-45d2-4030-bfd0-580a67b8193a",
+      "swedish": "mycket",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "a85c00a9-a987-49af-84c1-553237e8a07a",
+      "swedish": "fyrtionde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "a9434344-99ca-496f-bb63-6b677536de16",
+      "swedish": "sinne",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "b0802114-c306-4885-a4e6-5f71bb95fc96",
+      "swedish": "linjär",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "b5a31160-181b-45b8-993a-caacc9ceddc0",
+      "swedish": "fascinerande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "bb4febc4-5576-48ce-8531-d9970b1a04a1",
+      "swedish": "motsägande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "bc4ba056-5f2d-478b-b26d-476ab89c5618",
+      "swedish": "resande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "c39e7424-dc7f-480f-902a-ac168bf51d97",
+      "swedish": "straffarbete",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "c54e5920-4323-415b-b078-07dd8ba64c5b",
+      "swedish": "samma",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "pn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "pronoun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "c9a65825-c4d6-4634-9848-17b9f2c5720d",
+      "swedish": "tillgodokvitto",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "c9cfc622-8c57-4fa3-a270-84c5a636d7aa",
+      "swedish": "ett",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "caa85f83-6190-4095-8848-5df977e6037e",
+      "swedish": "elfte",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "cb867b6f-8b63-4804-a4ba-e61a27f00e0f",
+      "swedish": "ju",
+      "spraklab_pos": "conjunction",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "cc5ae471-48ca-408c-9c38-a05f26083605",
+      "swedish": "vuxen",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ccb59164-40c0-4f23-89d6-a003413b5b68",
+      "swedish": "funktionshindrad",
+      "spraklab_pos": "other",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ccd13a55-1064-497f-9a3e-fdc683f3ec8a",
+      "swedish": "både",
+      "spraklab_pos": "conjunction",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "cf10daab-4a7e-4ac8-9a9a-dadcec12a79c",
+      "swedish": "från",
+      "spraklab_pos": "preposition",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "cf3c3bfc-89dd-4f0c-8cb1-96834d957ef7",
+      "swedish": "ifrån",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "pp"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "preposition"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "d062fbad-e645-480b-bec5-fd65da0aa3fb",
+      "swedish": "bankanställd",
+      "spraklab_pos": "noun",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "d2743278-8368-42df-9bd2-f2a0287ae458",
+      "swedish": "Kina",
+      "spraklab_pos": "other",
+      "saldo_pos_tags": [
+        "pm",
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "d2ed8b70-07da-47ae-b607-d04f74ccd39a",
+      "swedish": "trettionde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "d561525c-5d6f-450d-a012-9a6607bc5fc4",
+      "swedish": "ny",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "d9960737-8a22-4600-b55e-2abb6722069f",
+      "swedish": "andra",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "vb",
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "verb",
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "db268150-011c-462b-903d-e04774b9bbcd",
+      "swedish": "längst",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "dddd3087-9c98-44c3-9159-c264b1df77db",
+      "swedish": "förhållandevis",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "dfaa6981-ff5e-4ebe-b54d-e49783634d4b",
+      "swedish": "markant",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "e1a26553-fdc4-4c06-8c73-8f3f780d015c",
+      "swedish": "mittemot",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "pp"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "preposition"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "e1ea7249-bed8-486a-9b57-d2e77663872c",
+      "swedish": "vår",
+      "spraklab_pos": "pronoun",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "e234d2a7-aced-45ab-9cb9-66ddab4c2757",
+      "swedish": "mycket",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "ab"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adverb"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "e594a5b5-5391-4ea7-85b1-0e5553c18f17",
+      "swedish": "värt",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "e69245cb-f45e-47aa-8915-fa9df3188e57",
+      "swedish": "ont",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "nn",
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun",
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "ed75ba12-9c2c-4cd5-889d-1bd569f4d399",
+      "swedish": "explicit",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "f26577c9-d2bf-45f3-8419-dd8628f6cebc",
+      "swedish": "bråttom",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "f5a49204-1ce4-468d-8b76-3f307fb81586",
+      "swedish": "bak",
+      "spraklab_pos": "adverb",
+      "saldo_pos_tags": [
+        "pp",
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "preposition",
+        "noun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "f7686b1c-8f66-4cbc-8011-ee95e419d124",
+      "swedish": "dylik",
+      "spraklab_pos": "adjective",
+      "saldo_pos_tags": [
+        "pn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "pronoun"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "f89778ff-aae3-4816-a8a0-713f3fb0174c",
+      "swedish": "nionde",
+      "spraklab_pos": "numeral",
+      "saldo_pos_tags": [
+        "av"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "adjective",
+        "presens_particip",
+        "perfekt_particip"
+      ],
+      "status": "ai_generated"
+    },
+    {
+      "id": "fb61e188-39c9-430f-9031-cbdef7419d4c",
+      "swedish": "efterföljande",
+      "spraklab_pos": "presens_particip",
+      "saldo_pos_tags": [
+        "nn"
+      ],
+      "saldo_expected_spraklab_pos": [
+        "noun"
+      ],
+      "status": "ai_generated"
+    }
+  ]
+}

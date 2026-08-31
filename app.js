@@ -489,6 +489,8 @@ const els = {
   reviewQueueTotal: document.querySelector("#reviewQueueTotal"),
   reviewQueueMarkPageBtn: document.querySelector("#reviewQueueMarkPageBtn"),
   reviewQueueList: document.querySelector("#reviewQueueList"),
+  contentReportsList: document.querySelector("#contentReportsList"),
+  contentReportsEmpty: document.querySelector("#contentReportsEmpty"),
   reviewQueuePrevBtn: document.querySelector("#reviewQueuePrevBtn"),
   reviewQueuePageLabel: document.querySelector("#reviewQueuePageLabel"),
   reviewQueueNextBtn: document.querySelector("#reviewQueueNextBtn"),
@@ -702,6 +704,12 @@ const els = {
   detailEditBtn: document.querySelector("#detailEditBtn"),
   detailMoreBtn: document.querySelector("#detailMoreBtn"),
   detailMoreMenu: document.querySelector("#detailMoreMenu"),
+  reportProblemDialog: document.querySelector("#reportProblemDialog"),
+  reportProblemWord: document.querySelector("#reportProblemWord"),
+  reportProblemCategoryRow: document.querySelector("#reportProblemCategoryRow"),
+  reportProblemNote: document.querySelector("#reportProblemNote"),
+  closeReportProblemBtn: document.querySelector("#closeReportProblemBtn"),
+  submitReportProblemBtn: document.querySelector("#submitReportProblemBtn"),
   detailContent: document.querySelector("#detailContent"),
   detailActionBar: document.querySelector("#detailActionBar"),
   closeDetailBtn: document.querySelector("#closeDetailBtn"),
@@ -4076,7 +4084,10 @@ function showProfilePage(page = "main") {
   if (els.profileHistoryPanel) els.profileHistoryPanel.hidden = target !== "history";
   if (els.profileSignedInGrid) els.profileSignedInGrid.dataset.profilePage = target;
   if (target === "studies") renderProfileStudiesBreakdown();
-  if (target === "review") loadReviewQueuePage(0);
+  if (target === "review") {
+    loadReviewQueuePage(0);
+    loadContentReportsPanel();
+  }
   if (target === "history") {
     populateHistoryFilterOptions();
     resetListLimit("history");
@@ -4195,6 +4206,57 @@ function renderReviewQueue() {
     row.append(label, markBtn);
     els.reviewQueueList.append(row);
   });
+}
+
+const REPORT_CATEGORY_LABELS = {
+  translation: "Fel översättning",
+  grammar: "Fel grammatik",
+  example: "Fel exempel",
+  pos: "Fel ordklass",
+  other: "Annat",
+};
+
+async function loadContentReportsPanel() {
+  if (!els.contentReportsList) return;
+  els.contentReportsList.replaceChildren();
+  if (els.contentReportsEmpty) els.contentReportsEmpty.hidden = true;
+  try {
+    const { items } = await remoteDb.loadOpenContentReports();
+    if (!items.length) {
+      if (els.contentReportsEmpty) els.contentReportsEmpty.hidden = false;
+      return;
+    }
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "reading-sentence-row review-queue-row";
+      const label = document.createElement("p");
+      const categoryLabel = REPORT_CATEGORY_LABELS[item.category] || item.category;
+      label.textContent = `${item.swedish} — ${categoryLabel}${item.note ? `: ${item.note}` : ""}`;
+      const resolveBtn = document.createElement("button");
+      resolveBtn.type = "button";
+      resolveBtn.className = "secondary-button";
+      resolveBtn.textContent = "Markera som åtgärdat";
+      resolveBtn.addEventListener("click", async () => {
+        resolveBtn.disabled = true;
+        try {
+          await remoteDb.resolveContentReport(item.id);
+          await loadContentReportsPanel();
+        } catch (error) {
+          console.warn("[SpråkLab] Failed to resolve content report.", error);
+          showToast(error.message || "Kunde inte markera som åtgärdat.", { type: "error" });
+          resolveBtn.disabled = false;
+        }
+      });
+      row.append(label, resolveBtn);
+      els.contentReportsList.append(row);
+    });
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load content reports.", error);
+    const errorState = document.createElement("span");
+    errorState.className = "empty-state";
+    errorState.textContent = "Kunde inte ladda rapporter just nu.";
+    els.contentReportsList.append(errorState);
+  }
 }
 
 async function markCurrentReviewPageReviewed() {
@@ -6181,6 +6243,39 @@ function getOpenDetailWord() {
 
 function closeDetailMoreMenu() {
   if (els.detailMoreMenu) els.detailMoreMenu.hidden = true;
+}
+
+// In-product "report a problem" entry point (2026-08-31) — the permanent
+// feedback loop alongside the one-time AI content-review pass. Deliberately
+// minimal: a handful of category chips + optional free text, not a full
+// form, since the whole point is a near-zero-friction way to flag
+// something in the moment of noticing it.
+function openReportProblemDialog(word) {
+  if (!els.reportProblemDialog) return;
+  els.reportProblemDialog.dataset.wordId = word.id;
+  els.reportProblemDialog.dataset.wordSwedish = word.swedish || "";
+  if (els.reportProblemWord) els.reportProblemWord.textContent = word.swedish || "";
+  if (els.reportProblemNote) els.reportProblemNote.value = "";
+  els.reportProblemCategoryRow?.querySelectorAll(".chip").forEach((c, index) => c.classList.toggle("active", index === 0));
+  if (!els.reportProblemDialog.open) els.reportProblemDialog.showModal();
+}
+
+async function submitReportProblem() {
+  const wordId = els.reportProblemDialog?.dataset.wordId;
+  const swedish = els.reportProblemDialog?.dataset.wordSwedish || "";
+  if (!wordId) return;
+  const category = els.reportProblemCategoryRow?.querySelector(".chip.active")?.dataset.reportCategory || "other";
+  const note = clean(els.reportProblemNote?.value || "");
+  els.submitReportProblemBtn.disabled = true;
+  try {
+    await remoteDb.submitContentReport({ wordId, swedish, category, note });
+    els.reportProblemDialog?.close();
+    showToast("Tack! Rapporten är skickad.", { type: "success" });
+  } catch (error) {
+    showToast(error.message || "Kunde inte skicka rapporten just nu.", { type: "error" });
+  } finally {
+    els.submitReportProblemBtn.disabled = false;
+  }
 }
 
 function moveDetailActionsToBar(card) {
@@ -11059,7 +11154,19 @@ function bindEvents() {
     const word = getOpenDetailWord();
     closeDetailMoreMenu();
     if (!word) return;
+    if (action === "report") openReportProblemDialog(word);
   });
+  els.reportProblemCategoryRow?.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-report-category]");
+    if (!chip) return;
+    els.reportProblemCategoryRow.querySelectorAll(".chip").forEach((c) => c.classList.toggle("active", c === chip));
+  });
+  els.closeReportProblemBtn?.addEventListener("click", () => els.reportProblemDialog?.close());
+  els.reportProblemDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    els.reportProblemDialog.close();
+  });
+  els.submitReportProblemBtn?.addEventListener("click", submitReportProblem);
   els.closeSaveSheetBtn.addEventListener("click", closeSaveSheet);
   els.saveSheetDialog.addEventListener("cancel", (event) => {
     event.preventDefault();

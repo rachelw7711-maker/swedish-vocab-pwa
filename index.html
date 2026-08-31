@@ -666,6 +666,13 @@
                   <span id="reviewQueuePageLabel"></span>
                   <button class="secondary-button" id="reviewQueueNextBtn" type="button">Nästa ›</button>
                 </div>
+                <header class="profile-secondary-head">
+                  <p class="section-kicker">Feedback</p>
+                  <h2>Rapporterade problem</h2>
+                  <p>Ord som du (eller framtida användare) har rapporterat direkt i appen.</p>
+                </header>
+                <div id="contentReportsList" class="reading-chip-list"></div>
+                <div id="contentReportsEmpty" class="empty-state" hidden>Inga öppna rapporter just nu.</div>
               </section>
 
               <section id="profileHistoryPanel" class="profile-subpage profile-secondary-page" hidden>
@@ -1254,11 +1261,35 @@
             <button class="secondary-button detail-edit-button" id="detailEditBtn" type="button">Redigera</button>
             <button class="icon-button" id="detailMoreBtn" type="button" title="Mer">⋯</button>
             <button class="icon-button" id="closeDetailBtn" type="button" title="Stäng">×</button>
-            <div id="detailMoreMenu" class="detail-more-menu" hidden></div>
+            <div id="detailMoreMenu" class="detail-more-menu" hidden>
+              <button type="button" data-detail-menu-action="report">🚩 Rapportera problem</button>
+            </div>
           </div>
         </header>
         <section id="detailContent"></section>
         <footer id="detailActionBar" class="detail-action-bar" hidden></footer>
+      </dialog>
+
+      <dialog id="reportProblemDialog" class="discard-word-dialog">
+        <header class="detail-dialog-header">
+          <div>
+            <p class="section-kicker">Rapportera</p>
+            <h2>Vad är fel med <span id="reportProblemWord"></span>?</h2>
+          </div>
+          <button class="icon-button" id="closeReportProblemBtn" type="button" title="Stäng">×</button>
+        </header>
+        <div class="filter-row" id="reportProblemCategoryRow" role="tablist" aria-label="Typ av problem">
+          <button type="button" class="chip active" data-report-category="translation">Fel översättning</button>
+          <button type="button" class="chip" data-report-category="grammar">Fel grammatik</button>
+          <button type="button" class="chip" data-report-category="example">Fel exempel</button>
+          <button type="button" class="chip" data-report-category="pos">Fel ordklass</button>
+          <button type="button" class="chip" data-report-category="other">Annat</button>
+        </div>
+        <label class="field-label">
+          Beskriv gärna (valfritt)
+          <textarea id="reportProblemNote" rows="3" placeholder="Vad ser fel ut?"></textarea>
+        </label>
+        <button class="primary-button" id="submitReportProblemBtn" type="button">Skicka rapport</button>
       </dialog>
 
       <dialog id="saveSheetDialog" class="save-sheet-dialog">
@@ -1402,6 +1433,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=197" type="module"></script>
+    <script src="/app.js?v=198" type="module"></script>
   </body>
 </html>

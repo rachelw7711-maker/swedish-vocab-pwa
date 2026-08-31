@@ -25,6 +25,7 @@ const TABLES = {
   effectiveStudyTime: "effective_study_time",
   readingAnalysisItems: "reading_analysis_items",
   reviewEvents: "review_events",
+  contentReports: "content_reports",
 };
 
 const PAGE_SIZE = 1000;
@@ -2006,6 +2007,48 @@ export async function markWordsReviewed(ids) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte markera som granskat.");
   return { updated: payload.updated || 0 };
+}
+
+// In-product "report a problem" entry point (2026-08-31) — the permanent,
+// near-zero-cost feedback loop discussed alongside the one-time AI content
+// review: real dictionaries/language apps converge on accuracy over time
+// through continuous user-reported corrections, not a single review pass.
+// Plain RLS-gated reads/writes (no backend endpoint) — same "logged in is
+// the bar, no real role system" convention as promote-collocation/the
+// review queue elsewhere in this app.
+export async function submitContentReport({ wordId, swedish, category, note }) {
+  const user = await readCurrentUser();
+  if (!user?.id) throw new Error("Du behöver logga in för att rapportera ett problem.");
+  const cleanWordId = clean(wordId);
+  if (!cleanWordId) throw new Error("Inget ord vald.");
+  const { error } = await supabase.from(TABLES.contentReports).insert({
+    user_id: user.id,
+    word_id: cleanWordId,
+    swedish: clean(swedish),
+    category: clean(category) || "other",
+    note: clean(note),
+  });
+  if (error) throw error;
+  return { enabled: true };
+}
+
+export async function loadOpenContentReports(limit = 50) {
+  const { data, error, count } = await supabase
+    .from(TABLES.contentReports)
+    .select("id, word_id, swedish, category, note, created_at", { count: "exact" })
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return { items: data || [], total: count || 0 };
+}
+
+export async function resolveContentReport(id) {
+  const cleanId = clean(id);
+  if (!cleanId) return { enabled: false };
+  const { error } = await supabase.from(TABLES.contentReports).update({ status: "resolved", resolved_at: new Date().toISOString() }).eq("id", cleanId);
+  if (error) throw error;
+  return { enabled: true };
 }
 
 // 缺口2 (2026-07-30) — reopening a previously-analyzed reading item needs
