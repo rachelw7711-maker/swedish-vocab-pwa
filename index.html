@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=183" />
+    <link rel="stylesheet" href="/styles.css?v=184" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -808,14 +808,14 @@
                 <button class="primary-button" id="generateShadowingAudioBtn" type="button">▶️ Shadowing</button>
               </div>
               <button class="primary-button visually-hidden" id="saveShadowingBtn" type="button">Spara</button>
-              <section class="shadowing-preview-panel visually-hidden" id="shadowingPreviewPanel" hidden>
+              <section class="shadowing-preview-panel" id="shadowingPreviewPanel" hidden>
                 <div class="shadowing-preview-metrics">
                   <article>
-                    <span>Word count</span>
+                    <span>Antal ord</span>
                     <strong id="shadowingPreviewWordCount">0</strong>
                   </article>
                   <article>
-                    <span>Estimated reading time</span>
+                    <span>Uppskattad lästid</span>
                     <strong id="shadowingPreviewReadTime">0 min</strong>
                   </article>
                 </div>
@@ -896,7 +896,7 @@
                     </select>
                   </label>
                 </div>
-                <span class="visually-hidden" id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
+                <span class="shadowing-loop-range" id="shadowingLoopRange">A-B: 0:00 - 0:00</span>
               </div>
               <section class="shadowing-recording-panel" id="shadowingRecordingPanel" hidden>
                 <div class="toolbar">
@@ -1402,6 +1402,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=195" type="module"></script>
+    <script src="/app.js?v=196" type="module"></script>
   </body>
 </html>

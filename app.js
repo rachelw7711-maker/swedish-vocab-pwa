@@ -3085,14 +3085,15 @@ async function analyzeCurrentReadingItem() {
     const textarea = els.readingTextInput;
     const selection = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd).trim();
     if (!selection) {
-      alert(
+      showToast(
         `Texten är för lång (${fullWordCount} ord) för att analysera i sin helhet. Markera det stycke du vill analysera i textrutan ovan och klicka på Analysera igen.`,
+        { type: "warning", duration: 6000 },
       );
       return;
     }
     const selectionWordCount = readingWordCount(selection);
     if (selectionWordCount > MAX_AUTO_ANALYSIS_WORDS) {
-      alert(`Det markerade stycket är fortfarande för långt (${selectionWordCount} ord). Markera ett kortare stycke.`);
+      showToast(`Det markerade stycket är fortfarande för långt (${selectionWordCount} ord). Markera ett kortare stycke.`, { type: "warning" });
       return;
     }
     textToAnalyze = selection;
@@ -3121,7 +3122,7 @@ async function analyzeCurrentReadingItem() {
   } catch (error) {
     console.warn("[SpråkLab] Reading analysis failed.", error);
     closeReadingResults();
-    alert(error.message || "Kunde inte analysera texten just nu.");
+    showToast(error.message || "Kunde inte analysera texten just nu.", { type: "error" });
     els.analyzeReadingBtn.disabled = false;
     els.analyzeReadingBtn.textContent = "Analysera";
   }
@@ -3604,7 +3605,7 @@ async function classifyReadingPhrase(button) {
     });
   } catch (error) {
     console.warn("[SpråkLab] Failed to classify reading phrase.", error);
-    alert(error.message || "Kunde inte spara frasen just nu.");
+    showToast(error.message || "Kunde inte spara frasen just nu.", { type: "error" });
   } finally {
     actions?.querySelectorAll("button").forEach((btn) => { btn.disabled = false; });
   }
@@ -3630,7 +3631,7 @@ async function generateSummaryForCurrentReadingItem() {
     }
   } catch (error) {
     console.warn("[SpråkLab] Failed to generate reading summary.", error);
-    alert(error.message || "Kunde inte generera sammanfattning just nu.");
+    showToast(error.message || "Kunde inte generera sammanfattning just nu.", { type: "error" });
   } finally {
     els.generateReadingSummaryBtn.disabled = false;
     els.generateReadingSummaryBtn.textContent = "Generera sammanfattning";
@@ -4187,7 +4188,7 @@ function renderReviewQueue() {
         if (word) word.status = "human_reviewed";
       } catch (error) {
         console.warn("[SpråkLab] Failed to mark word reviewed.", error);
-        alert(error.message || "Kunde inte markera som granskat.");
+        showToast(error.message || "Kunde inte markera som granskat.", { type: "error" });
         markBtn.disabled = false;
       }
     });
@@ -4210,7 +4211,7 @@ async function markCurrentReviewPageReviewed() {
     await loadReviewQueuePage(state.reviewQueueOffset);
   } catch (error) {
     console.warn("[SpråkLab] Failed to mark page reviewed.", error);
-    alert(error.message || "Kunde inte markera sidan som granskad.");
+    showToast(error.message || "Kunde inte markera sidan som granskad.", { type: "error" });
   } finally {
     els.reviewQueueMarkPageBtn.textContent = "Markera alla på denna sida som granskade";
     els.reviewQueueMarkPageBtn.disabled = false;
@@ -6920,7 +6921,7 @@ function renderShadowingFlow() {
 async function continueShadowingFlow() {
   const text = normalizeShadowingFlowText(els.shadowingSwedishInput?.value || "");
   if (!text) {
-    alert("Klistra in svensk text innan du fortsätter.");
+    showToast("Klistra in svensk text innan du fortsätter.", { type: "warning" });
     return;
   }
   if (els.shadowingSwedishInput) els.shadowingSwedishInput.value = text;
@@ -6963,14 +6964,14 @@ async function addSelectedShadowingWordsToVocabulary() {
       }),
     );
   if (wordsToAdd.length === 0) {
-    alert("De valda orden finns redan i ordlistan.");
+    showToast("De valda orden finns redan i ordlistan.", { type: "warning" });
     return;
   }
   await replaceWords([...wordsToAdd, ...currentWords]);
   appendLocalHistory("created", wordsToAdd[0]);
   await loadData();
   renderShadowingFlow();
-  alert(`${wordsToAdd.length} ord lades till i ordlistan.`);
+  showToast(`${wordsToAdd.length} ord lades till i ordlistan.`, { type: "success" });
 }
 
 function formatShadowingTime(seconds) {
@@ -7215,7 +7216,7 @@ async function saveShadowingItemFromForm() {
   const chinese = clean(els.shadowingChineseInput?.value);
   const category = clean(els.shadowingCategoryInput?.value) || "Ungrouped";
   if (!swedish) {
-    alert("Skriv svensk text innan du sparar.");
+    showToast("Skriv svensk text innan du sparar.", { type: "warning" });
     return null;
   }
   const items = getShadowingItems();
@@ -7279,7 +7280,7 @@ async function saveShadowingItemFromForm() {
 async function guideShadowingLogin() {
   const email = clean(prompt("Logga in för att generera standardljud. Ange din e-post så skickar vi en inloggningslänk."));
   if (!email) {
-    alert("Du behöver logga in för att generera standardljud.");
+    showToast("Du behöver logga in för att generera standardljud.", { type: "warning" });
     return "";
   }
   const { error } = await supabase.auth.signInWithOtp({
@@ -7289,7 +7290,7 @@ async function guideShadowingLogin() {
     },
   });
   if (error) throw error;
-  alert("Vi har skickat en inloggningslänk till din e-post. Öppna länken och försök sedan generera standardljud igen.");
+  showToast("Vi har skickat en inloggningslänk till din e-post. Öppna länken och försök sedan generera standardljud igen.", { type: "success", duration: 6000 });
   return "";
 }
 
@@ -7310,7 +7311,7 @@ function shadowingTtsErrorMessage(error) {
 function speakShadowingText(text, { onEnd } = {}) {
   const input = normalizeShadowingFlowText(text);
   if (!input || !("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
-    alert("Din webbläsare kan inte läsa upp texten.");
+    showToast("Din webbläsare kan inte läsa upp texten.", { type: "error" });
     return false;
   }
   speechSynthesis.cancel();
@@ -7424,7 +7425,7 @@ async function runShadowingTtsGeneration(item, text, token) {
       updateShadowingAudioHint("Läser upp med webbläsarens röst. Standardljud kunde inte genereras ännu.");
     } else {
       updateShadowingAudioHint(message);
-      alert(message);
+      showToast(message, { type: "error" });
     }
   }
 }
@@ -7433,7 +7434,7 @@ async function generateStandardShadowingAudio() {
   let item = ensureSelectedShadowingItem();
   const text = normalizeShadowingFlowText(els.shadowingSwedishInput?.value || item?.swedish || "");
   if (!text) {
-    alert("Skriv svensk text innan du genererar ljud.");
+    showToast("Skriv svensk text innan du genererar ljud.", { type: "warning" });
     return;
   }
   if (els.generateShadowingAudioBtn) {
@@ -7464,7 +7465,7 @@ async function generateStandardShadowingAudio() {
     await runShadowingTtsGeneration(item, text, token);
   } catch (error) {
     console.error("[Shadowing] Failed to prepare standard audio generation", error);
-    alert(shadowingTtsErrorMessage(error));
+    showToast(shadowingTtsErrorMessage(error), { type: "error" });
   } finally {
     if (els.generateShadowingAudioBtn) {
       els.generateShadowingAudioBtn.disabled = false;
@@ -7480,7 +7481,7 @@ async function downloadStorageAudio(descriptor, filename) {
     return;
   }
   if (!descriptor?.bucket || !descriptor?.path) {
-    alert("Ingen Storage-ljudfil finns att ladda ner.");
+    showToast("Ingen Storage-ljudfil finns att ladda ner.", { type: "warning" });
     return;
   }
   const blob = await remoteDb.downloadShadowingAudioBlob({
@@ -7488,7 +7489,7 @@ async function downloadStorageAudio(descriptor, filename) {
     path: descriptor.path,
   });
   if (!blob) {
-    alert("Kunde inte ladda ner ljudfilen.");
+    showToast("Kunde inte ladda ner ljudfilen.", { type: "error" });
     return;
   }
   const url = URL.createObjectURL(blob);
@@ -7514,7 +7515,7 @@ function dataUrlToBlob(dataUrl) {
 
 function downloadBlob(blob, filename) {
   if (!blob) {
-    alert("Ingen ljudfil finns att ladda ner.");
+    showToast("Ingen ljudfil finns att ladda ner.", { type: "warning" });
     return;
   }
   const url = URL.createObjectURL(blob);
@@ -7623,7 +7624,7 @@ async function playShadowingCurrentItem() {
     updateShadowingPlaybackUI();
   } catch (error) {
     console.warn("[Shadowing] Playback failed", error);
-    alert("Kunde inte spela upp ljudfilen.");
+    showToast("Kunde inte spela upp ljudfilen.", { type: "error" });
   }
 }
 
@@ -7710,7 +7711,7 @@ async function compareShadowingPlayback() {
 
 async function startShadowingRecording() {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-    alert("Din webbläsare stöder inte inspelning.");
+    showToast("Din webbläsare stöder inte inspelning.", { type: "error" });
     return;
   }
   pauseShadowingCurrentItem();
@@ -8006,7 +8007,7 @@ function autofillWordFormFromPaste() {
   const note = [...parsed.notes, parsed.fields.note].map(clean).filter(Boolean).join("\n");
   setIfPresent(els.noteInput, note);
   autoResizeWordFormTextareas();
-  alert("已自动填充，请检查后保存。");
+  showToast("Automatiskt ifyllt, kontrollera innan du sparar.", { type: "warning" });
 }
 
 function parsePastedWordInfo(text) {
@@ -8265,11 +8266,11 @@ function parsePosField(value) {
 }
 
 async function importEducationWords() {
-  alert("Utbildningsorden läses nu från Supabase.");
+  showToast("Utbildningsorden läses nu från Supabase.");
 }
 
 async function importDocumentWords() {
-  alert("Dokumentorden läses nu från Supabase.");
+  showToast("Dokumentorden läses nu från Supabase.");
 }
 
 async function importWordPacks(packs, label) {
@@ -8295,7 +8296,7 @@ async function importWordPacks(packs, label) {
   });
 
   if (wordsToImport.length === 0) {
-    alert(`${label} finns redan i dina ordböcker. Inga nya ord lades till.`);
+    showToast(`${label} finns redan i dina ordböcker. Inga nya ord lades till.`, { type: "warning" });
     return;
   }
 
@@ -8310,9 +8311,14 @@ async function importWordPacks(packs, label) {
     chip.classList.toggle("active", chip.dataset.filter === "all");
   });
   await loadData();
-  alert(`${wordsToImport.length} ord importerades till ${label}.`);
+  showToast(`${wordsToImport.length} ord importerades till ${label}.`, { type: "success" });
 }
 
+// This whole cross-origin-transfer tool (importWordsFrom4173 and its
+// alert()s below) is gated behind isLocalDevelopmentOrigin() — it's a
+// developer-only migration helper Rachel uses locally, never reachable by
+// a real user in production, so it's left out of the alert()→showToast()
+// migration below rather than routed through user-facing feedback UI.
 async function importWordsFrom4173() {
   if (!isLocalDevelopmentOrigin()) {
     alert("Flytt från lokal utvecklingsport är bara tillgänglig i lokal utveckling.");
@@ -8417,14 +8423,14 @@ async function addDictionaryWordToLibrary(swedish) {
   const currentWords = await readWords();
   const exists = currentWords.some((word) => clean(word.swedish).toLowerCase() === clean(source.swedish).toLowerCase());
   if (exists) {
-    alert("Ordet finns redan i din ordlista.");
+    showToast("Ordet finns redan i din ordlista.", { type: "warning" });
     return;
   }
   const word = normalizeForSave({ ...source, notebook: state.selectedNotebook || source.notebook || DEFAULT_NOTEBOOK });
   await replaceWords([word, ...currentWords]);
   appendLocalHistory("created", word);
   await loadData();
-  alert(`Tillagt i ordlistan: ${word.swedish}`);
+  showToast(`Tillagt i ordlistan: ${word.swedish}`, { type: "success" });
 }
 
 // Shows the structured word_forms input group matching the given part of
@@ -8653,7 +8659,7 @@ function openGeneratedWordDialogFromSearch() {
 async function showGeneratedWordFromSearch() {
   const swedish = state.query.trim();
   if (!swedish) {
-    alert("Skriv först ett svenskt ord.");
+    showToast("Skriv först ett svenskt ord.", { type: "warning" });
     return;
   }
   setGenerateLoading(true);
@@ -8666,7 +8672,7 @@ async function showGeneratedWordFromSearch() {
       tags: ["ChatGPT"],
     });
   } catch (error) {
-    alert(`${error.message}\nOffline-utkast visas istället.`);
+    showToast(`${error.message} Offline-utkast visas istället.`, { type: "error" });
     state.generatedWord = normalizeWord({
       ...generateWordDraft(swedish),
       id: `generated-${Date.now()}`,
@@ -8717,7 +8723,7 @@ function setEnrichSearchLoading(isLoading, done = 0, total = 0) {
 async function saveGeneratedWordToLibrary() {
   if (!state.generatedWord) return;
   if (isWordInLibrary(state.generatedWord.swedish)) {
-    alert("Ordet finns redan i din ordlista.");
+    showToast("Ordet finns redan i din ordlista.", { type: "warning" });
     renderDictionary();
     return;
   }
@@ -8731,7 +8737,7 @@ async function saveGeneratedWordToLibrary() {
   appendLocalHistory("created", word);
   state.generatedWord = null;
   await loadData();
-  alert(`Sparat i ordlistan: ${word.swedish}`);
+  showToast(`Sparat i ordlistan: ${word.swedish}`, { type: "success" });
 }
 
 async function enrichWordCard(word, mode) {
@@ -8773,7 +8779,7 @@ async function enrichWordCard(word, mode) {
     }
     await loadData();
   } catch (error) {
-    alert(`${error.message}\n\nI den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`);
+    showToast(`${error.message} I den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`, { type: "error", duration: 6000 });
   } finally {
     setCardActionLoading(word.swedish, false);
   }
@@ -8783,11 +8789,11 @@ async function enrichCurrentSearchResults() {
   runSearch();
   const candidates = getVisibleWords().filter(needsEnrichment).slice(0, 10);
   if (!state.query) {
-    alert("Sök efter ett ord först.");
+    showToast("Sök efter ett ord först.", { type: "warning" });
     return;
   }
   if (candidates.length === 0) {
-    alert("Sökresultatet har redan betydelse, exempel och fraser.");
+    showToast("Sökresultatet har redan betydelse, exempel och fraser.", { type: "warning" });
     return;
   }
 
@@ -8820,9 +8826,9 @@ async function enrichCurrentSearchResults() {
     }
     await replaceWords(currentWords);
     await loadData();
-    alert(`${candidates.length} ord har kompletterats.`);
+    showToast(`${candidates.length} ord har kompletterats.`, { type: "success" });
   } catch (error) {
-    alert(`${error.message}\n\nI den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`);
+    showToast(`${error.message} I den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`, { type: "error", duration: 6000 });
   } finally {
     setEnrichSearchLoading(false);
   }
@@ -8839,7 +8845,7 @@ function setBatchEnrichLoading(isLoading, done = 0, total = 0) {
 async function enrichSelectedNotebook({ skipConfirm = false } = {}) {
   const candidates = getNotebookWords().filter(needsEnrichment);
   if (candidates.length === 0) {
-    alert("Den aktuella ordboken saknar inga betydelser, exempel eller fraser.");
+    showToast("Den aktuella ordboken saknar inga betydelser, exempel eller fraser.", { type: "warning" });
     return;
   }
   if (!skipConfirm) {
@@ -8878,10 +8884,10 @@ async function enrichSelectedNotebook({ skipConfirm = false } = {}) {
       setBatchEnrichLoading(true, completed, candidates.length);
     }
     await loadData();
-    alert(state.stopBatchEnrich ? `Stoppat. ${completed} ord har kompletterats.` : `Klart. ${completed} ord har kompletterats.`);
+    showToast(state.stopBatchEnrich ? `Stoppat. ${completed} ord har kompletterats.` : `Klart. ${completed} ord har kompletterats.`, { type: "success" });
   } catch (error) {
     await loadData();
-    alert(`${error.message}\n\n${completed} lyckade ord har sparats. I den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`);
+    showToast(`${error.message} ${completed} lyckade ord har sparats. I den statiska PWA-versionen kan du lägga till eller redigera ord manuellt.`, { type: "error", duration: 6000 });
   } finally {
     state.stopBatchEnrich = false;
     setBatchEnrichLoading(false);
@@ -8912,7 +8918,7 @@ async function deleteDuplicateWords() {
   const duplicateGroups = [...groups.values()].filter((items) => items.length > 1);
   const duplicateCount = duplicateGroups.reduce((sum, items) => sum + items.length - 1, 0);
   if (duplicateCount === 0) {
-    alert("Inga dubbletter hittades.");
+    showToast("Inga dubbletter hittades.");
     return;
   }
 
@@ -8933,7 +8939,7 @@ async function deleteDuplicateWords() {
 
   await replaceWords(deduped);
   await loadData();
-  alert(`${duplicateCount} dubbletter har tagits bort. ${deduped.length} ord finns kvar.`);
+  showToast(`${duplicateCount} dubbletter har tagits bort. ${deduped.length} ord finns kvar.`, { type: "success" });
 }
 
 function wordCompletenessScore(word) {
@@ -9555,7 +9561,7 @@ function getPrimaryCollocation(word) {
 
 async function startStudySession(mode) {
   if (!state.words.length) {
-    alert("Ordlistan laddas fortfarande. Försök igen om en stund.");
+    showToast("Ordlistan laddas fortfarande. Försök igen om en stund.", { type: "warning" });
     forceHomeView({ resetScroll: true });
     return;
   }
@@ -10305,7 +10311,7 @@ function createNotebookByName(name) {
   const notebook = normalizeNotebookName(name);
   if (!notebook) return;
   if (isFixedNotebook(notebook)) {
-    alert(`${notebook} finns redan som fast bok.`);
+    showToast(`${notebook} finns redan som fast bok.`, { type: "warning" });
     return;
   }
   rememberNotebookName(notebook);
@@ -10314,7 +10320,7 @@ function createNotebookByName(name) {
   renderNotebookOptions();
   renderExportNotebookOptions();
   renderNotebook();
-  alert(`Ordbok skapad: ${notebook}`);
+  showToast(`Ordbok skapad: ${notebook}`, { type: "success" });
 }
 
 function printNotebook() {
@@ -10375,10 +10381,10 @@ async function shareExportPreview() {
   }
   if (navigator.clipboard && text) {
     await navigator.clipboard.writeText(text);
-    alert("Exportinnehållet har kopierats.");
+    showToast("Exportinnehållet har kopierats.", { type: "success" });
     return;
   }
-  alert("Delning stöds inte i den här webbläsaren.");
+  showToast("Delning stöds inte i den här webbläsaren.", { type: "error" });
 }
 
 function printExportPreview() {
@@ -10406,13 +10412,13 @@ function openBookActionMenu(notebook, x = window.innerWidth / 2, y = window.inne
 
 async function renameNotebook(oldName) {
   if (isFixedNotebook(oldName)) {
-    alert("Fasta böcker kan inte byta namn.");
+    showToast("Fasta böcker kan inte byta namn.", { type: "warning" });
     return;
   }
   const name = normalizeNotebookName(prompt("Nytt namn", oldName));
   if (!name || sameCategory(name, oldName)) return;
   if (isFixedNotebook(name)) {
-    alert(`${name} finns redan som fast bok.`);
+    showToast(`${name} finns redan som fast bok.`, { type: "warning" });
     return;
   }
   const notebooks = readNotebookNames().map((item) => (sameCategory(item, oldName) ? name : item));
@@ -10428,7 +10434,7 @@ async function renameNotebook(oldName) {
 
 async function deleteNotebookByName(name) {
   if (isFixedNotebook(name)) {
-    alert("Fasta böcker kan inte tas bort.");
+    showToast("Fasta böcker kan inte tas bort.", { type: "warning" });
     return;
   }
   if (!confirm(`Ta bort boken "${name}"? Orden finns kvar i Ordlista.`)) return;
@@ -11100,7 +11106,7 @@ function bindEvents() {
   els.printHistoryBtn?.addEventListener("click", printHistory);
   els.shareExportPreviewBtn.addEventListener("click", () => {
     shareExportPreview().catch((error) => {
-      if (error?.name !== "AbortError") alert(error.message || "Kunde inte dela.");
+      if (error?.name !== "AbortError") showToast(error.message || "Kunde inte dela.", { type: "error" });
     });
   });
   els.printExportPreviewBtn.addEventListener("click", printExportPreview);
@@ -11147,19 +11153,19 @@ function bindEvents() {
   els.shadowingContinueBtn?.addEventListener("click", () => {
     continueShadowingFlow().catch((error) => {
       console.error("[Shadowing] Continue flow failed", error);
-      alert(error.message || "Kunde inte fortsätta flödet.");
+      showToast(error.message || "Kunde inte fortsätta flödet.", { type: "error" });
     });
   });
   els.shadowingAddUnknownBtn?.addEventListener("click", () => {
     addSelectedShadowingWordsToVocabulary().catch((error) => {
       console.error("[Shadowing] Add unknown words failed", error);
-      alert(error.message || "Kunde inte lägga till orden.");
+      showToast(error.message || "Kunde inte lägga till orden.", { type: "error" });
     });
   });
   els.generateShadowingAudioBtn?.addEventListener("click", () => {
     generateStandardShadowingAudio().catch((error) => {
       console.error("[Shadowing] Generate standard audio failed", error);
-      alert(error.message || "Kunde inte generera standardljud.");
+      showToast(error.message || "Kunde inte generera standardljud.", { type: "error" });
     });
   });
   els.shadowingAudioProgress?.addEventListener("input", (event) => {
@@ -11197,20 +11203,20 @@ function bindEvents() {
   els.downloadShadowingStandardBtn?.addEventListener("click", () => {
     downloadStandardShadowingAudio().catch((error) => {
       console.error("[Shadowing] Standard audio download failed", error);
-      alert(error.message || "Kunde inte ladda ner standardljud.");
+      showToast(error.message || "Kunde inte ladda ner standardljud.", { type: "error" });
     });
   });
   els.downloadShadowingRecordingBtn?.addEventListener("click", () => {
     downloadShadowingRecording().catch((error) => {
       console.error("[Shadowing] Recording download failed", error);
-      alert(error.message || "Kunde inte ladda ner inspelningen.");
+      showToast(error.message || "Kunde inte ladda ner inspelningen.", { type: "error" });
     });
   });
   els.shadowingAudioFileInput?.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 18 * 1024 * 1024) {
-      alert("Ljudfilen är för stor för lokal lagring.");
+      showToast("Ljudfilen är för stor för lokal lagring.", { type: "warning" });
       event.target.value = "";
       return;
     }
@@ -11259,7 +11265,7 @@ function bindEvents() {
       await startShadowingRecording();
     } catch (error) {
       console.error("[Shadowing] Recording failed", error);
-      alert(error.message || "Kunde inte starta inspelning.");
+      showToast(error.message || "Kunde inte starta inspelning.", { type: "error" });
     }
   });
   els.shadowingStopRecordBtn?.addEventListener("click", stopShadowingRecording);
@@ -11529,13 +11535,13 @@ function bindEvents() {
   els.startNewStudyBtn.addEventListener("click", () => {
     startStudySession("new").catch((error) => {
       console.error("[Min Ordbok] Failed to start new study session", error);
-      alert(error.message || "Kunde inte starta övningen.");
+      showToast(error.message || "Kunde inte starta övningen.", { type: "error" });
     });
   });
   els.startReviewStudyBtn.addEventListener("click", () => {
     startStudySession("review").catch((error) => {
       console.error("[Min Ordbok] Failed to start review session", error);
-      alert(error.message || "Kunde inte starta repetition.");
+      showToast(error.message || "Kunde inte starta repetition.", { type: "error" });
     });
   });
   els.startQuizBtn.addEventListener("click", () => {
@@ -12089,6 +12095,10 @@ async function bootstrapApp() {
     await waitForImageReady(els.homeHeroImage);
   } catch (error) {
     console.error("[Min Ordbok] Startup failed", error);
+    // Deliberately left as a blocking alert() rather than showToast() — the
+    // whole app failed to load, so there's no guarantee the toast
+    // container itself rendered correctly either; this is the one case
+    // that genuinely warrants an impossible-to-miss native interruption.
     alert(error.message || "Kunde inte ladda Supabase-data.");
     state.words = [];
     state.history = [];

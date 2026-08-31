@@ -2455,6 +2455,13 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   margin-top: var(--space-6);
 }
 
+.shadowing-loop-range {
+  display: block;
+  margin-top: var(--space-4);
+  color: var(--text-secondary);
+  font: var(--font-caption);
+}
+
 .shadowing-more-controls-grid button.active {
   border-color: rgba(111, 143, 128, 0.35);
   background: var(--accent-soft);
