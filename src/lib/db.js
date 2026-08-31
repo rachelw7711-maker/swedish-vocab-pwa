@@ -24,6 +24,7 @@ const TABLES = {
   userPreferences: "user_preferences",
   effectiveStudyTime: "effective_study_time",
   readingAnalysisItems: "reading_analysis_items",
+  reviewEvents: "review_events",
 };
 
 const PAGE_SIZE = 1000;
@@ -310,6 +311,7 @@ export async function flushPendingSync() {
       study_session_item: (payload) => writeStudySessionItem(user.id, payload),
       complete_study_session: (payload) => writeCompletedStudySession(user.id, payload),
       study_history: ({ entry }) => writeStudyHistoryEntry(entry),
+      review_event: ({ entry }) => writeReviewEvent(entry),
       shadowing_item: ({ item }) => writeShadowingItem(user.id, item),
       shadowing_recording: ({ recording }) => writeShadowingRecording(user.id, recording),
       shadowing_recording_audio: (payload) => writeShadowingRecordingWithAudio(user.id, payload),
@@ -1338,6 +1340,38 @@ export async function appendStudyHistory(action, word, context = {}) {
     id: entry.id,
     userId: user.id,
     handler: ({ entry: queuedEntry }) => writeStudyHistoryEntry(queuedEntry),
+  });
+}
+
+// Phase 5 (2026-08-31): begins collecting real per-review history for a
+// future FSRS evaluation — see Reviews/FSRS-评估文档.md. Purely additive:
+// does not read from or influence computeNextReview()/STAGE_INTERVAL_DAYS
+// in app.js in any way, so a failure here can never affect the actual
+// review flow a user experiences. Same queued-mutation/outbox pattern as
+// study_history, for the same offline-safety reason.
+async function writeReviewEvent(entry) {
+  const { error } = await supabase.from(TABLES.reviewEvents).upsert(entry, { onConflict: "id", ignoreDuplicates: true });
+  if (error) throw error;
+  return { enabled: true };
+}
+
+export async function appendReviewEvent({ wordId, rating, sessionMode, stageBefore, stageAfter } = {}) {
+  const user = await readCurrentUser();
+  const cleanWordId = clean(wordId);
+  if (!user?.id || !cleanWordId) return { enabled: false };
+  const entry = {
+    id: globalThis.crypto?.randomUUID?.() || `review-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    user_id: user.id,
+    word_id: cleanWordId,
+    rating: clean(rating),
+    session_mode: clean(sessionMode),
+    review_stage_before: Number(stageBefore || 0) || 0,
+    review_stage_after: Number(stageAfter || 0) || 0,
+  };
+  return runQueuedMutation("review_event", { entry }, {
+    id: entry.id,
+    userId: user.id,
+    handler: ({ entry: queuedEntry }) => writeReviewEvent(queuedEntry),
   });
 }
 

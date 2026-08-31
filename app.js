@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=141";
+import * as remoteDb from "./src/lib/db.js?v=142";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -10044,6 +10044,23 @@ async function completeCurrentStudyWordFromSpelling() {
   await remoteDb.upsertUserWordProgress(updated).catch((error) => {
     console.warn("[Min Ordbok] Study progress sync before advance failed.", error);
   });
+  // Phase 5: purely additive review-history logging for a future FSRS
+  // evaluation — does not read schedule/rating back, does not gate or
+  // delay anything above, so a failure here can never affect what the
+  // user just experienced. Logged for both "new" and "review" sessions
+  // (a card's first exposure is itself a meaningful review event); for
+  // "new" mode, stageAfter is always 0 because that's genuinely what the
+  // current algorithm does — this records real behavior, not a rating
+  // that would ever influence scheduling here.
+  void remoteDb
+    .appendReviewEvent({
+      wordId: word.id,
+      rating,
+      sessionMode: session.mode,
+      stageBefore: word.review_stage || 0,
+      stageAfter: schedule.stage,
+    })
+    .catch((error) => console.warn("[SpråkLab] Review event log failed.", error));
   if (session.mode === "new") {
     const todayNewWordIds = uniqueIds([...previousTodayNewWordIds, word.id]);
     const todayNewCount = Math.max(previousTodayNewCount + (previousTodayNewWordIds.includes(word.id) ? 0 : 1), todayNewWordIds.length);
