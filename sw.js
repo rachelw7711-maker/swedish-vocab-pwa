@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v122";
+const CACHE_NAME = "ordbok-v123";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",

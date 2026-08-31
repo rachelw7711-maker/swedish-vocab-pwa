@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=180" />
+    <link rel="stylesheet" href="/styles.css?v=181" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -73,6 +73,10 @@
           </div>
         </div>
         <button class="topbar-library-back" type="button" data-return-view="libraryView" hidden>Till Bibliotek</button>
+        <button class="topbar-sync-status" id="topbarSyncStatus" type="button" aria-label="Synkroniseringsstatus" hidden>
+          <span class="topbar-sync-status-dot" aria-hidden="true"></span>
+          <span class="topbar-sync-status-count" id="topbarSyncStatusCount" hidden></span>
+        </button>
         <button class="topbar-auth-button" id="topbarAuthButton" type="button" aria-label="Logga in">Logga in</button>
       </header>
       <main>
@@ -1335,6 +1339,8 @@
       </dialog>
     </div>
 
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+
     <template id="wordCardTemplate">
       <article class="word-card">
         <div class="word-card-main">
@@ -1362,6 +1368,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=192" type="module"></script>
+    <script src="/app.js?v=193" type="module"></script>
   </body>
 </html>

@@ -544,7 +544,10 @@ const els = {
   profileReadingHistoryBtn: document.querySelector("#profileReadingHistoryBtn"),
   profileGuestButton: document.querySelector("#profileGuestButton"),
   topbarLibraryBack: document.querySelector(".topbar-library-back"),
+  topbarSyncStatus: document.querySelector("#topbarSyncStatus"),
+  topbarSyncStatusCount: document.querySelector("#topbarSyncStatusCount"),
   topbarAuthButton: document.querySelector("#topbarAuthButton"),
+  toastContainer: document.querySelector("#toastContainer"),
   profileLoginButton: document.querySelector("#profileLoginButton"),
   profileSignupButton: document.querySelector("#profileSignupButton"),
   profileLogoutButton: document.querySelector("#profileLogoutButton"),
@@ -4770,15 +4773,113 @@ async function refreshProfileSyncSummary() {
   renderProfileSyncSummary();
 }
 
+// Minimal, non-blocking toast for routine success/failure feedback — see
+// Reviews/SpråkLab-Gap-Analysis-and-Design-Proposal.md §7.7. Reserved for
+// transient, no-action-required messages (or one with a single retry
+// action); a decision requiring the user to choose still belongs in a
+// styled <dialog>, not here.
+function showToast(message, { type = "info", duration = 3200, actionLabel = "", onAction = null } = {}) {
+  if (!els.toastContainer) return null;
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.dataset.toastType = type;
+  toast.setAttribute("role", type === "error" || type === "warning" ? "alert" : "status");
+  const messageEl = document.createElement("span");
+  messageEl.className = "toast-message";
+  messageEl.textContent = message;
+  toast.appendChild(messageEl);
+  let timeoutId = null;
+  const dismiss = () => {
+    if (timeoutId) window.clearTimeout(timeoutId);
+    toast.remove();
+  };
+  if (actionLabel && typeof onAction === "function") {
+    const actionBtn = document.createElement("button");
+    actionBtn.type = "button";
+    actionBtn.className = "toast-action";
+    actionBtn.textContent = actionLabel;
+    actionBtn.addEventListener("click", () => {
+      onAction();
+      dismiss();
+    });
+    toast.appendChild(actionBtn);
+  }
+  const dismissBtn = document.createElement("button");
+  dismissBtn.type = "button";
+  dismissBtn.className = "toast-dismiss";
+  dismissBtn.setAttribute("aria-label", "Stäng");
+  dismissBtn.textContent = "×";
+  dismissBtn.addEventListener("click", dismiss);
+  toast.appendChild(dismissBtn);
+  els.toastContainer.appendChild(toast);
+  if (duration > 0) timeoutId = window.setTimeout(dismiss, duration);
+  return { dismiss };
+}
+
 function renderProfileSyncSummary() {
-  if (!els.profileLastSyncValue) return;
-  els.profileLastSyncValue.textContent = navigator.onLine === false
-    ? "Offline"
-    : state.auth.loading || state.sync.status === "syncing"
+  if (els.profileLastSyncValue) {
+    els.profileLastSyncValue.textContent = navigator.onLine === false
+      ? "Offline"
+      : state.auth.loading || state.sync.status === "syncing"
+        ? "Synkroniserar..."
+        : state.sync.pending > 0
+          ? `${state.sync.pending} ändringar väntar`
+          : formatProfileSyncTime(state.sync.lastSyncedAt);
+  }
+  renderSyncStatusBadge();
+}
+
+// Promotes sync/offline status from a Profil-only detail (the only place it
+// was previously visible) to a small, always-reachable topbar indicator —
+// reuses the same state.sync fields renderProfileSyncSummary already tracks,
+// no separate status system. See PLE-011/FDB-002/FDB-004.
+function renderSyncStatusBadge() {
+  if (!els.topbarSyncStatus) return;
+  const signedIn = Boolean(state.auth.user?.id);
+  const offline = navigator.onLine === false;
+  const pending = Number(state.sync.pending || 0) || 0;
+  let syncState = "idle";
+  if (offline) syncState = "pending";
+  else if (state.sync.status === "syncing") syncState = "syncing";
+  else if (state.sync.status === "error") syncState = "error";
+  else if (pending > 0) syncState = "pending";
+  const visible = signedIn && syncState !== "idle";
+  els.topbarSyncStatus.hidden = !visible;
+  if (!visible) return;
+  els.topbarSyncStatus.dataset.syncState = syncState;
+  const label = offline
+    ? "Offline – ändringar sparas när du är online igen"
+    : syncState === "syncing"
       ? "Synkroniserar..."
-      : state.sync.pending > 0
-        ? `${state.sync.pending} ändringar väntar`
-        : formatProfileSyncTime(state.sync.lastSyncedAt);
+      : syncState === "error"
+        ? `${pending} ändringar kunde inte synkroniseras ännu`
+        : `${pending} ändringar väntar på synkronisering`;
+  els.topbarSyncStatus.setAttribute("aria-label", label);
+  els.topbarSyncStatus.title = label;
+  if (els.topbarSyncStatusCount) {
+    els.topbarSyncStatusCount.hidden = pending <= 0;
+    if (pending > 0) els.topbarSyncStatusCount.textContent = pending > 99 ? "99+" : String(pending);
+  }
+}
+
+let syncFailureWarned = false;
+
+// Background sync/mutation failures previously only ever reached
+// console.warn (FDB-002/PLE-011) — the underlying retry queue (sync-outbox.js)
+// was already sound, so this only adds the missing user-visible escalation
+// on top of it, once per failure episode rather than on every retry tick.
+function warnAboutSyncFailure() {
+  if (syncFailureWarned) return;
+  syncFailureWarned = true;
+  showToast(
+    "Vissa ändringar kunde inte sparas till molnet ännu. De finns kvar lokalt och synkas automatiskt igen.",
+    {
+      type: "warning",
+      duration: 7000,
+      actionLabel: "Försök igen",
+      onAction: () => void syncPendingUserData({ reloadData: true }),
+    },
+  );
 }
 
 async function syncPendingUserData({ reloadData = false } = {}) {
@@ -4800,11 +4901,14 @@ async function syncPendingUserData({ reloadData = false } = {}) {
     await refreshEffectiveStudyTimeCloud(todayKey());
     state.sync.status = result.failed > 0 ? "error" : "success";
     await refreshProfileSyncSummary();
+    if (result.failed > 0) warnAboutSyncFailure();
+    else syncFailureWarned = false;
     return result;
   } catch (error) {
     state.sync.status = "error";
     await refreshProfileSyncSummary();
     console.warn("[Min Ordbok] Pending sync failed.", error);
+    warnAboutSyncFailure();
     return null;
   }
 }
@@ -11537,6 +11641,11 @@ function bindEvents() {
       return;
     }
     openAuthDialog("login");
+  });
+  els.topbarSyncStatus?.addEventListener("click", () => {
+    if (state.sync.status === "error") void syncPendingUserData({ reloadData: true });
+    showProfilePage("main");
+    activateView("profileView");
   });
   els.authLoginTab?.addEventListener("click", () => {
     setAuthMode("login");
