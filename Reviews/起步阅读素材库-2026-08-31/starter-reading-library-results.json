@@ -1,0 +1,110 @@
+[
+  {
+    "level": "A1",
+    "genre": "dialogue",
+    "topic": "Two friends meet at a café and order coffee and pastries, talking about their day in very simple present tense.",
+    "title": "På kaféet",
+    "textResourceId": "f4156c0e-2f82-47d6-8039-8a2aff37859b",
+    "analysisId": "f537bbea-83f2-4b06-88f7-febdc8f02e0b",
+    "wordCount": 140
+  },
+  {
+    "level": "A1",
+    "genre": "practical",
+    "topic": "A short text message exchange between roommates about who buys milk, bread, and other everyday groceries this week.",
+    "title": "Mat hemma i veckan",
+    "textResourceId": "17428714-0cfe-4c10-b869-f069d061250e",
+    "analysisId": "d3de3bdd-1721-464c-8671-583b2d795fd9",
+    "wordCount": 91
+  },
+  {
+    "level": "A1",
+    "genre": "informational",
+    "topic": "A very simple description of the four seasons in Sweden and what the weather is like in each one.",
+    "title": "Årstider i Sverige",
+    "textResourceId": "0ddd5dc8-8851-4b37-a08b-a06947aea5e6",
+    "analysisId": "785b528c-df54-4e3d-ac35-81dca57fdc1e",
+    "wordCount": 102
+  },
+  {
+    "level": "A2",
+    "genre": "narrative",
+    "topic": "A short first-person story about someone's typical weekday: waking up, commuting to work or school, and a small pleasant surprise in the evening.",
+    "title": "Min vanliga vardag",
+    "textResourceId": "956f11f1-3459-48bc-a232-7eee750124fc",
+    "analysisId": "c2872426-7432-4337-93bb-409d235d44ea",
+    "wordCount": 187
+  },
+  {
+    "level": "A2",
+    "genre": "informational",
+    "topic": "A friendly explanation of common Swedish holidays and traditions across the year (midsommar, jul, påsk) and what people usually do to celebrate.",
+    "title": "Högtider i Sverige",
+    "textResourceId": "b5f81e14-93dd-4f63-800c-7c44929668c1",
+    "analysisId": "3aea01d6-b4aa-4c4d-8368-47178490668c",
+    "wordCount": 187
+  },
+  {
+    "level": "A2",
+    "genre": "practical",
+    "topic": "A simple email booking a doctor's appointment (vårdcentral) at a health center, explaining the symptoms and asking for an available time.",
+    "title": "Tid på vårdcentralen",
+    "textResourceId": "6cc0d6a9-94bb-4d1a-a13c-15e8f6187154",
+    "analysisId": "52e18ea8-7537-465c-ac2f-7c6967e208ad",
+    "wordCount": 125
+  },
+  {
+    "level": "B1",
+    "genre": "narrative",
+    "topic": "A short story about someone who just moved to a new city in Sweden for work, feeling a mix of loneliness and hope while settling in, with a small moment of connection with a neighbor.",
+    "title": "Första veckan där",
+    "textResourceId": "21b06963-fd29-45cb-97f0-38130be52ef5",
+    "analysisId": "401dd9b5-3bb5-41de-a308-42861cf44dda",
+    "wordCount": 372
+  },
+  {
+    "level": "B1",
+    "genre": "informational",
+    "topic": "A general, factual explanation of how Swedish democracy works day to day: elections every four years, the main levels of government (kommun, region, riksdag), and why voting matters. Keep it neutral and educational, not opinionated.",
+    "title": "Sveriges demokrati",
+    "textResourceId": "23926773-7113-404a-a125-908d30dd6faa",
+    "analysisId": "8165702a-7f89-4ad1-aa2f-8fb3c195cea0",
+    "wordCount": 290
+  },
+  {
+    "level": "B1",
+    "genre": "practical",
+    "topic": "Practical advice-style text about writing a Swedish CV (CV) and personal letter (personligt brev) when applying for a job, explaining what to include and common mistakes to avoid.",
+    "title": "Skriva CV och brev",
+    "textResourceId": "e4b5d69a-7784-4b11-bdf7-873699e27926",
+    "analysisId": "ddf5ae02-fbf1-4b67-bf76-3849eb33c77b",
+    "wordCount": 311
+  },
+  {
+    "level": "B2",
+    "genre": "narrative",
+    "topic": "A more literary short story about a person reflecting on balancing work and family life in Sweden, told with some emotional nuance and a few subordinate-clause-heavy sentences, similar in tone to a quiet slice-of-life piece.",
+    "title": "Mellan två tider",
+    "textResourceId": "75cd4d4f-06aa-45c6-98f7-7e10a2c33e16",
+    "analysisId": "7d2137fe-a736-4cc7-bced-5c239646fca1",
+    "wordCount": 551
+  },
+  {
+    "level": "B2",
+    "genre": "informational",
+    "topic": "A factual overview of the Swedish welfare model: how healthcare, parental leave (föräldraledighet), and unemployment support generally work, funded through taxes. Keep it neutral, educational, and clearly structured.",
+    "title": "Den svenska välfärdsmodellen",
+    "textResourceId": "40102284-8dec-422d-9cb7-0cb099b798bb",
+    "analysisId": "f6046249-db94-4c3a-8fa7-d0be20eaecaf",
+    "wordCount": 396
+  },
+  {
+    "level": "B2",
+    "genre": "opinion",
+    "topic": "A mild, balanced opinion piece weighing the pros and cons of remote work versus working in an office, written the way a thoughtful newspaper column might, presenting both sides fairly.",
+    "title": "Arbete på distans",
+    "textResourceId": "1823befa-a5f2-41d7-ab90-9156c9dea5b1",
+    "analysisId": "2b734aac-ee27-47a8-b303-0a125854458e",
+    "wordCount": 380
+  }
+]

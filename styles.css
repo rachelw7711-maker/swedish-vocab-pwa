@@ -4512,6 +4512,22 @@ h2 {
   margin-top: 2px;
 }
 
+.reading-starter-card {
+  cursor: default;
+}
+
+.reading-starter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reading-starter-card .secondary-button {
+  margin-top: 6px;
+  width: 100%;
+}
+
 .reading-editor {
   display: grid;
   gap: 14px;

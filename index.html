@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=185" />
+    <link rel="stylesheet" href="/styles.css?v=186" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -176,6 +176,17 @@
                 <span class="study-entry-detail" id="readingShadowingEntryDetail">Ta ett foto eller klistra in en text</span>
                 <button class="secondary-button" id="readingShadowingEntryBtn" type="button">Börja träna</button>
               </article>
+              <article class="study-entry-card" id="starterLibraryEntryCard">
+                <div class="study-entry-copy">
+                  <div class="study-entry-heading">
+                    <p class="section-kicker">STARTBIBLIOTEK</p>
+                    <span class="study-entry-icon" aria-hidden="true">📚</span>
+                  </div>
+                  <h3>Läs direkt</h3>
+                </div>
+                <span class="study-entry-detail">12 färdiga texter, A1–B2</span>
+                <button class="secondary-button" id="starterLibraryEntryBtn" type="button">Öppna biblioteket</button>
+              </article>
             </div>
             <p class="study-workload-message" id="studyWorkloadMessage" hidden></p>
             <div class="practice-actions" hidden>
@@ -280,8 +291,13 @@
               </div>
               <button class="primary-button" id="newReadingBtn" type="button">Ny text</button>
             </div>
+            <div class="filter-row" id="readingLibraryFilter" role="tablist" aria-label="Mina texter eller Startbibliotek">
+              <button type="button" class="chip active" data-reading-scope="mine" role="tab" aria-selected="true">Mina texter</button>
+              <button type="button" class="chip" data-reading-scope="starter" role="tab" aria-selected="false">📚 Startbibliotek</button>
+            </div>
           </section>
           <section class="word-list" id="readingList" aria-live="polite"></section>
+          <section class="word-list" id="readingStarterList" aria-live="polite" hidden></section>
 
           <section class="panel reading-editor" id="readingEditorPanel" hidden>
             <div class="toolbar">
@@ -1444,6 +1460,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=199" type="module"></script>
+    <script src="/app.js?v=200" type="module"></script>
   </body>
 </html>

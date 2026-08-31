@@ -2099,6 +2099,56 @@ export async function loadReadingListStats(textResourceIds) {
   return byResource;
 }
 
+// Starter reading library (Reviews/起步阅读素材库-评审与实施方案-2026-08-31.md):
+// a small set of admin-curated text_resources rows (is_starter_library=true,
+// service-role-only writes) that every user can browse without pasting
+// their own text first. Both tables are readable via the public RLS
+// policies added alongside is_starter_library/visibility — no server
+// endpoint needed, same "plain RLS-gated read" pattern as loadTextResource/
+// loadTextAnalysis below.
+export async function loadStarterLibrary() {
+  const [{ data: resources, error: resourceError }, { data: analyses, error: analysisError }] = await Promise.all([
+    supabase.from("text_resources").select("id, title, word_count").eq("is_starter_library", true),
+    supabase.from("text_analysis").select("text_resource_id, headline_zh, summary_zh, selected_vocabulary").eq("visibility", "public"),
+  ]);
+  if (resourceError) throw resourceError;
+  if (analysisError) throw analysisError;
+
+  const analysisByResource = {};
+  (analyses || []).forEach((row) => {
+    analysisByResource[row.text_resource_id] = row;
+  });
+
+  return (resources || [])
+    .map((row) => {
+      const analysis = analysisByResource[row.id] || {};
+      return {
+        id: row.id,
+        title: row.title || "",
+        wordCount: row.word_count || 0,
+        headlineZh: analysis.headline_zh || "",
+        summaryZh: analysis.summary_zh || "",
+        selectedVocabulary: analysis.selected_vocabulary || [],
+      };
+    })
+    .sort((a, b) => a.wordCount - b.wordCount);
+}
+
+// "Add to my reading" — creates the user's own reading_items row pointing
+// at the SAME shared text_resource_id (never a duplicate resource row, per
+// the approved design). The user's highlights/notes on this row are their
+// own from here on; the underlying text + analysis stay the single shared
+// copy every user reads. openReadingEditor's existing text_resource_id path
+// (loadTextResource/loadTextAnalysis) picks this up with no further changes.
+export async function addStarterTextToReading(textResourceId) {
+  const id = clean(textResourceId);
+  if (!id) return { enabled: false };
+  const { data: resource, error } = await supabase.from("text_resources").select("id, title, cleaned_text").eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!resource) throw new Error("Texten hittades inte.");
+  return upsertReadingItem({ title: resource.title || "", source_text: resource.cleaned_text, text_resource_id: resource.id });
+}
+
 export async function loadTextResource(textResourceId) {
   const id = clean(textResourceId);
   if (!id) return null;

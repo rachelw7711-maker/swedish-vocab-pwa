@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=143";
+import * as remoteDb from "./src/lib/db.js?v=144";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -315,6 +315,9 @@ const state = {
   readingItems: [],
   readingItemsLoaded: false,
   readingListStats: {},
+  readingLibraryScope: "mine",
+  starterLibrary: [],
+  starterLibraryLoaded: false,
   selectedReadingId: "",
   currentReadingAnalysis: null,
   // Set right before showing the editor panel — true only when reached via
@@ -786,6 +789,10 @@ const els = {
   readingShadowingEntryTitle: document.querySelector("#readingShadowingEntryTitle"),
   readingShadowingEntryDetail: document.querySelector("#readingShadowingEntryDetail"),
   readingShadowingEntryBtn: document.querySelector("#readingShadowingEntryBtn"),
+  starterLibraryEntryCard: document.querySelector("#starterLibraryEntryCard"),
+  starterLibraryEntryBtn: document.querySelector("#starterLibraryEntryBtn"),
+  readingLibraryFilter: document.querySelector("#readingLibraryFilter"),
+  readingStarterList: document.querySelector("#readingStarterList"),
   openInShadowingBtn: document.querySelector("#openInShadowingBtn"),
   dailyNewWordTargetSelect: document.querySelector("#dailyNewWordTargetSelect"),
   dailyNewWordTargetReadout: document.querySelector("#dailyNewWordTargetReadout"),
@@ -2759,6 +2766,108 @@ function renderReadingList() {
   enhanceReadingListWithStats();
 }
 
+// Starter reading library (Reviews/起步阅读素材库-评审与实施方案-2026-08-31.md):
+// a "Startbibliotek" chip alongside "Mina texter" on the Läsning list panel,
+// plus a homepage shortcut card (决策4). Lazy-loaded once, same pattern as
+// renderReadingView's own readingItemsLoaded guard.
+function setReadingLibraryScope(scope) {
+  state.readingLibraryScope = scope;
+  els.readingLibraryFilter?.querySelectorAll(".chip").forEach((chip) => {
+    const active = chip.dataset.readingScope === scope;
+    chip.classList.toggle("active", active);
+    chip.setAttribute("aria-selected", String(active));
+  });
+  if (els.readingList) els.readingList.hidden = scope !== "mine";
+  if (els.readingStarterList) els.readingStarterList.hidden = scope !== "starter";
+  if (scope === "starter") renderReadingStarterLibrary();
+}
+
+async function renderReadingStarterLibrary() {
+  if (!els.readingStarterList) return;
+  if (!state.starterLibraryLoaded) {
+    state.starterLibraryLoaded = true;
+    try {
+      state.starterLibrary = await remoteDb.loadStarterLibrary();
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to load starter reading library.", error);
+    }
+    // The homepage entry card reaches this one tap after boot — loadData()'s
+    // own word fetch runs concurrently and can still be in flight, and the
+    // CEFR badges below need state.words populated. Wait briefly (bounded,
+    // not indefinite) rather than rendering with no badges and nothing ever
+    // correcting them afterward.
+    for (let i = 0; i < 20 && !state.words.length; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    renderReadingStarterLibrary();
+    return;
+  }
+  els.readingStarterList.replaceChildren();
+  if (!state.starterLibrary.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "Startbiblioteket kunde inte laddas just nu.";
+    els.readingStarterList.append(empty);
+    return;
+  }
+  const alreadyAdded = new Set(state.readingItems.map((item) => item.text_resource_id).filter(Boolean));
+  const fragment = document.createDocumentFragment();
+  state.starterLibrary.forEach((entry) => {
+    const card = document.createElement("div");
+    card.className = "reading-item-card reading-starter-card";
+    const head = document.createElement("div");
+    head.className = "reading-starter-head";
+    const title = document.createElement("strong");
+    title.textContent = entry.title || "(Utan titel)";
+    head.append(title);
+    const cefr = estimateCefrRange(entry.selectedVocabulary);
+    if (cefr) {
+      const badge = document.createElement("span");
+      badge.className = "pos-badge";
+      badge.textContent = cefr;
+      head.append(badge);
+    }
+    const snippet = document.createElement("span");
+    snippet.className = "reading-item-snippet";
+    snippet.textContent = entry.headlineZh || entry.summaryZh || "";
+    const meta = document.createElement("span");
+    meta.className = "reading-item-meta";
+    meta.textContent = `${entry.wordCount} ord`;
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "secondary-button";
+    const added = alreadyAdded.has(entry.id);
+    action.textContent = added ? "Öppna" : "Lägg till";
+    action.addEventListener("click", () => addStarterTextAndOpen(entry));
+    card.append(head, snippet, meta, action);
+    fragment.append(card);
+  });
+  els.readingStarterList.append(fragment);
+}
+
+async function addStarterTextAndOpen(entry) {
+  const existing = state.readingItems.find((item) => item.text_resource_id === entry.id);
+  if (existing) {
+    openReadingEditor(existing);
+    return;
+  }
+  try {
+    const result = await remoteDb.addStarterTextToReading(entry.id);
+    if (!result?.item) return;
+    state.readingItems = [result.item, ...state.readingItems];
+    openReadingEditor(result.item);
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to add starter text to reading list.", error);
+    showToast("Kunde inte lägga till texten. Försök igen.", { type: "error" });
+  }
+}
+
+function openStarterLibraryEntry() {
+  activateView("readingView");
+  closeReadingEditor();
+  setReadingLibraryScope("starter");
+}
+
 function formatReadingItemDate(timestamp) {
   const value = Number(timestamp || 0) || 0;
   if (!value) return "";
@@ -3029,7 +3138,7 @@ function closeReadingEditor() {
   state.selectedReadingId = "";
   state.currentReadingAnalysis = null;
   els.readingListPanel.hidden = false;
-  els.readingList.hidden = false;
+  setReadingLibraryScope("mine");
   els.readingEditorPanel.hidden = true;
   els.readingAnalysisPanel.hidden = true;
   updateTopbarLibraryBack();
@@ -11123,6 +11232,13 @@ function bindEvents() {
     els.fraserTypeFilter.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("active", chip === button));
     renderFraserView();
   });
+
+  els.readingLibraryFilter?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-reading-scope]");
+    if (!button) return;
+    setReadingLibraryScope(button.dataset.readingScope);
+  });
+  els.starterLibraryEntryCard?.addEventListener("click", openStarterLibraryEntry);
 
   els.newReadingBtn?.addEventListener("click", () => openReadingEditor(null));
   els.closeReadingEditorBtn?.addEventListener("click", closeReadingEditor);
