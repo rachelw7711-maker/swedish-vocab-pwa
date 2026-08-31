@@ -23,6 +23,104 @@
   --tabbar-height: 50px;
   --app-max-width: 430px;
   --chinese-font: "圆体-简", "Yuanti SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* --- Design system foundation tokens (Phase 2) ---
+     See Reviews/SpråkLab-Gap-Analysis-and-Design-Proposal.md §7.2-§7.5/§7.8.
+     Established for new/newly-touched components going forward; deliberately
+     NOT a retroactive rewrite of the ~2000 existing declarations that predate
+     this scale (per the explicit "don't mechanically rewrite hundreds of
+     declarations" instruction) — incremental migration, not a one-time pass. */
+
+  /* Typography scale */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-heavy: 800;
+  --font-display: 700 2rem/1.15 inherit;
+  --font-page-title: 700 1.5rem/1.2 inherit;
+  --font-section-title: 700 1.125rem/1.25 inherit;
+  --font-card-title: 600 1rem/1.25 inherit;
+  --font-card-title-emphasized: 700 1.375rem/1.15 inherit;
+  --font-body: 400 1rem/1.5 inherit;
+  --font-supporting-body: 400 0.875rem/1.45 inherit;
+  --font-label: 600 0.8125rem/1.3 inherit;
+  --font-button: 600 0.9375rem/1 inherit;
+  /* 16px is a fixed minimum, not a preference — iOS Safari auto-zooms the
+     viewport when a focused input's font-size is below it. */
+  --font-input: 400 1rem/1.4 inherit;
+  --font-caption: 400 0.75rem/1.35 inherit;
+  --font-metadata: 500 0.75rem/1.3 inherit;
+  --font-feedback: 500 0.8125rem/1.4 inherit;
+
+  /* Spacing scale */
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+  --space-11: 48px;
+  --layout-page-margin: var(--space-7);
+  --layout-section-gap: var(--space-9);
+  --component-card-padding: var(--space-6);
+  --component-list-item-gap: var(--space-4);
+  --component-icon-gap: var(--space-3);
+  --component-form-field-gap: var(--space-6);
+  --component-dialog-padding: var(--space-7);
+
+  /* Radius / shadow / border scale */
+  --radius-none: 0;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+  --radius-circle: 50%;
+  --shadow-none: none;
+  --shadow-sm: var(--soft-shadow);
+  --shadow-md: var(--shadow);
+  --border-width-default: 1px;
+  --border-color-default: var(--line);
+  --border-color-strong: rgba(0, 0, 0, 0.16);
+
+  /* Semantic color tokens — components should consume these, not the
+     primitives above, directly. Structured so a future dark theme is a
+     primitive-value swap under a prefers-color-scheme/[data-theme="dark"]
+     block, not a rewrite of every component that consumes a semantic token
+     — no dark theme is implemented or exposed yet, this only prepares for
+     one per Rachel's explicit "don't build dark mode now" scoping. */
+  --text-primary: var(--ink);
+  --text-secondary: var(--muted);
+  --text-on-accent: #ffffff;
+  --surface-default: var(--surface);
+  --surface-raised: var(--surface-solid);
+  --border-default: var(--line);
+  --focus-ring: var(--accent-strong);
+  --state-success: var(--accent-strong);
+  --state-success-soft: var(--accent-soft);
+  --state-warning: var(--gold);
+  --state-warning-soft: #fbf1e0;
+  --state-error: var(--danger);
+  --state-error-soft: var(--danger-soft);
+  --state-info: var(--muted-blue);
+  --state-info-soft: #eef2f6;
+  --state-disabled-text: rgba(36, 40, 39, 0.35);
+  --state-disabled-bg: rgba(36, 40, 39, 0.06);
+  --state-offline: var(--gold);
+
+  /* Breakpoint scale (reference values — CSS custom properties can't appear
+     inside an @media condition, so @media rules use the literal px values
+     below; kept here so every breakpoint in the file traces back to one
+     documented 3-tier scale instead of five unrelated one-off values). */
+  --bp-compact-max: 599px;  /* phone — current default/only fully supported tier */
+  --bp-medium-min: 600px;   /* tablet portrait/landscape */
+  --bp-expanded-min: 1024px; /* desktop / large tablet landscape */
 }
 
 * {
@@ -177,6 +275,17 @@ button {
   cursor: pointer;
 }
 
+/* Baseline disabled state — only one component (.collocation-promote-button)
+   defined its own :disabled treatment before this; components with a more
+   specific selector still win over this on specificity, so this only fills
+   the gap rather than overriding anything that already worked. */
+button:disabled,
+input:disabled {
+  color: var(--state-disabled-text);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 button,
 input,
 textarea,
@@ -198,7 +307,10 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid rgba(0, 113, 227, 0.22);
+  /* Was an unrelated saturated blue (rgba(0, 113, 227, ...)) that visibly
+     clashed with the rest of the green-based palette — now derived from
+     --accent-strong instead, per --focus-ring. */
+  outline: 3px solid rgba(81, 111, 100, 0.4);
   outline-offset: 2px;
 }
 
@@ -335,21 +447,19 @@ body[data-active-view="profileView"] .topbar-auth-button {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   touch-action: manipulation;
 }
 
 .topbar-sync-status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--muted);
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: var(--radius-circle);
+  background: var(--text-secondary);
 }
 
 .topbar-sync-status[data-sync-state="syncing"] .topbar-sync-status-dot {
@@ -358,11 +468,11 @@ body[data-active-view="profileView"] .topbar-auth-button {
 }
 
 .topbar-sync-status[data-sync-state="pending"] .topbar-sync-status-dot {
-  background: var(--gold);
+  background: var(--state-warning);
 }
 
 .topbar-sync-status[data-sync-state="error"] .topbar-sync-status-dot {
-  background: var(--danger);
+  background: var(--state-error);
 }
 
 @keyframes sync-status-pulse {
@@ -383,57 +493,55 @@ body[data-active-view="profileView"] .topbar-auth-button {
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  border-radius: 999px;
-  background: var(--gold);
-  color: #fff;
-  font-size: 0.6rem;
-  font-weight: 700;
+  border-radius: var(--radius-full);
+  background: var(--state-warning);
+  color: var(--text-on-accent);
+  font: var(--font-metadata);
   line-height: 14px;
   text-align: center;
 }
 
 .topbar-sync-status[data-sync-state="error"] .topbar-sync-status-count {
-  background: var(--danger);
+  background: var(--state-error);
 }
 
 .toast-container {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(var(--tabbar-height, 50px) + env(safe-area-inset-bottom) + 12px);
+  bottom: calc(var(--tabbar-height, 50px) + env(safe-area-inset-bottom) + var(--space-6));
   z-index: 900;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
+  gap: var(--space-4);
+  padding: 0 var(--layout-page-margin);
   pointer-events: none;
 }
 
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
-  max-width: 430px;
+  gap: var(--space-5);
+  max-width: var(--app-max-width);
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: #242827;
-  color: #fff;
-  font-size: 0.86rem;
-  line-height: 1.35;
-  box-shadow: var(--shadow);
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--radius-lg);
+  background: var(--text-primary);
+  color: var(--text-on-accent);
+  font: var(--font-supporting-body);
+  box-shadow: var(--shadow-md);
   pointer-events: auto;
   animation: toast-in 0.18s ease;
 }
 
 .toast[data-toast-type="error"],
 .toast[data-toast-type="warning"] {
-  background: var(--danger);
+  background: var(--state-error);
 }
 
 .toast[data-toast-type="success"] {
-  background: var(--accent-strong);
+  background: var(--state-success);
 }
 
 .toast-message {
@@ -443,20 +551,19 @@ body[data-active-view="profileView"] .topbar-auth-button {
 .toast-action {
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: transparent;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 6px 12px;
+  color: var(--text-on-accent);
+  font: var(--font-label);
+  padding: var(--space-3) var(--space-6);
   min-height: 32px;
   touch-action: manipulation;
 }
 
 .toast-dismiss {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: var(--space-9);
+  height: var(--space-9);
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.8);
@@ -659,6 +766,12 @@ body[data-active-view="profileView"] .topbar-auth-button {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view.active {
+    animation: none;
   }
 }
 
@@ -1217,34 +1330,6 @@ body[data-active-view="profileView"] .topbar-auth-button {
 }
 
 .profile-brand p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.profile-auth-panel,
-.profile-card {
-  display: grid;
-  gap: 12px;
-  border-radius: 24px;
-}
-
-.profile-auth-panel {
-  padding: 18px;
-}
-
-.profile-card {
-  padding: 16px 18px;
-}
-
-.profile-card h2,
-.profile-auth-panel h2 {
-  margin: 0;
-  font-size: 1.06rem;
-}
-
-.profile-auth-panel p,
-.profile-card p {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
@@ -2063,42 +2148,6 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   line-height: 1.45;
 }
 
-.shadowing-mode-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.shadowing-mode-tab {
-  display: grid;
-  place-items: center;
-  min-height: 36px;
-  border: 1px solid rgba(55, 65, 72, 0.1);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--ink);
-  font-size: 0.8rem;
-  font-weight: 780;
-  padding: 0 8px;
-}
-
-.shadowing-mode-tab.active {
-  border-color: rgba(111, 143, 128, 0.35);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
-.shadowing-mode-tab:disabled {
-  color: var(--muted);
-  opacity: 0.72;
-}
-
-.shadowing-mode-tab span {
-  display: block;
-  font-size: 0.64rem;
-  font-weight: 740;
-}
-
 /* 2026-08-01, 关于阅读模块的调整.pages: the original text shouldn't dominate
    the results page — collapsed to ~3 lines once there's an analysis to
    look at, with a "Visa allt" toggle. Only applied post-analysis; while
@@ -2619,6 +2668,12 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
   animation: recordingPulse 1.1s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .shadowing-audio-tag.recording {
+    animation: none;
+  }
+}
+
 @keyframes recordingPulse {
   50% { opacity: 0.58; }
 }
@@ -2718,15 +2773,10 @@ body[data-active-view="profileView"] .profile-settings-toggle:not([hidden]) {
 }
 
 @media (max-width: 620px) {
-  .shadowing-mode-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .shadowing-controls {
     grid-template-columns: 1fr;
   }
 
-  .shadowing-mode-tab,
   .shadowing-module-actions button,
   .shadowing-controls button,
   .shadowing-export-row button,
@@ -2840,8 +2890,8 @@ h2 {
 
 .icon-button {
   display: inline-grid;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 999px;
@@ -3047,29 +3097,6 @@ h2 {
 
 .filter-row::-webkit-scrollbar {
   display: none;
-}
-
-.notebook-tabs {
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.notebook-tab {
-  min-height: 44px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--ink);
-  padding: 0 14px;
-  text-align: left;
-  font-weight: 730;
-}
-
-.notebook-tab.active {
-  border-color: var(--accent);
-  background: #eef5ff;
-  color: var(--accent-strong);
 }
 
 .chip,
@@ -3847,6 +3874,12 @@ h2 {
   padding: 18px;
   text-align: center;
   animation: studyCompleteIn 280ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-session-dialog .study-complete {
+    animation: none;
+  }
 }
 
 .study-session-dialog .study-complete h3 {
@@ -4891,7 +4924,7 @@ h2 {
 
 .word-card-main {
   display: grid;
-  grid-template-columns: 32px 1fr;
+  grid-template-columns: 40px 1fr;
   gap: 8px;
 }
 
@@ -5155,8 +5188,10 @@ h2 {
 }
 
 .star-button {
-  width: 32px;
-  height: 32px;
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
   border: 0;
   border-radius: 999px;
   background: rgba(245, 245, 247, 0.95);

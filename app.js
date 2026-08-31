@@ -10756,7 +10756,38 @@ function returnToLibraryView() {
   renderActiveView();
 }
 
+// Native <dialog> traps focus while open (a11y baseline item already met),
+// but does not restore it to the triggering element on close — confirmed by
+// reading every showModal()/close() call site, none of which did this.
+// Patching the prototype + listening for the native "close" event (fires on
+// .close(), Escape, and dialog-method form submission alike) covers all ~8
+// dialogs and every future one with one global fix, instead of touching the
+// ~20 existing open/close call sites individually.
+function setupDialogFocusReturn() {
+  if (typeof HTMLDialogElement === "undefined") return;
+  const focusReturnTargets = new WeakMap();
+  const originalShowModal = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function (...args) {
+    focusReturnTargets.set(this, document.activeElement);
+    return originalShowModal.apply(this, args);
+  };
+  document.addEventListener(
+    "close",
+    (event) => {
+      const dialog = event.target;
+      if (!(dialog instanceof HTMLDialogElement)) return;
+      const trigger = focusReturnTargets.get(dialog);
+      focusReturnTargets.delete(dialog);
+      if (trigger && typeof trigger.focus === "function" && document.contains(trigger)) {
+        trigger.focus();
+      }
+    },
+    true,
+  );
+}
+
 function bindEvents() {
+  setupDialogFocusReturn();
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       if (tab.dataset.view === "notebookView") {
