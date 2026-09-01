@@ -461,7 +461,7 @@ async function loadWordsThroughServerFallback() {
   return Array.isArray(payload?.words) ? payload.words : [];
 }
 
-export async function loadRemoteLibrarySnapshot() {
+export async function loadRemoteLibrarySnapshot(nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const user = await readCurrentUser();
   if (user?.id) {
     await ensureProfile().catch((error) => {
@@ -499,7 +499,7 @@ export async function loadRemoteLibrarySnapshot() {
   // Native-language content (Chinese meaning today; more languages once a
   // real native-language preference exists — see DEFAULT_NATIVE_LANGUAGE).
   // Fetched as one bulk query rather than per-word to avoid N+1 requests.
-  const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch((error) => {
+  const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", nativeLanguage)).catch((error) => {
     console.warn("[Min Ordbok] Failed to read learning_object_translations. Falling back to legacy chinese column.", error);
     return [];
   });
@@ -534,7 +534,7 @@ export async function loadRemoteLibrarySnapshot() {
 // search or home-page counts. normalizeWord() already carries object_type
 // and category through unchanged, so createWordCard can render these
 // exactly like a word card with no extra branching.
-export async function loadPhraseObjects() {
+export async function loadPhraseObjects(nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const rows = await fetchAll(TABLES.words, (query) =>
     query
       .in("object_type", ["phrase", "expression"])
@@ -542,7 +542,7 @@ export async function loadPhraseObjects() {
       .order("swedish", { ascending: true }),
   );
   if (!rows.length) return [];
-  const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", DEFAULT_NATIVE_LANGUAGE)).catch(
+  const translationRows = await fetchAll(TABLES.wordTranslations, (query) => query.eq("native_language", nativeLanguage)).catch(
     (error) => {
       console.warn("[Min Ordbok] Failed to read translations for phrase objects.", error);
       return [];
@@ -555,7 +555,7 @@ export async function loadPhraseObjects() {
 // Single-entry lookup by id, for the Läsning reading-page's "查看完整表达卡"
 // link (规范§9.4) — expressions aren't in the main word snapshot (state.words
 // only holds object_type "word"), so this fetches directly.
-export async function loadWordOrPhraseById(id) {
+export async function loadWordOrPhraseById(id, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const cleanId = clean(id);
   if (!cleanId) return null;
   const { data, error } = await supabase.from(TABLES.words).select("*").eq("id", cleanId).maybeSingle();
@@ -565,7 +565,7 @@ export async function loadWordOrPhraseById(id) {
     .from(TABLES.wordTranslations)
     .select("*")
     .eq("learning_object_id", cleanId)
-    .eq("native_language", DEFAULT_NATIVE_LANGUAGE)
+    .eq("native_language", nativeLanguage)
     .maybeSingle();
   return normalizeWord(data, null, translationRow);
 }
@@ -794,17 +794,27 @@ export async function lookupBaseWordIdForForm(formValue) {
 // (sort_order 0 is reserved for that primary example conceptually; rows
 // here are the 2nd+ examples, e.g. from the bundled enrichment pass that
 // prioritizes an idiomatic-usage example when the word has one). Lazy
-// per-word fetch, same pattern as loadWordForms.
-export async function loadWordExamples(learningObjectId) {
+// per-word fetch, same pattern as loadWordForms. 2026-09-01: example_chinese
+// was hardcoded-Chinese-only, same gap learning_objects had — translation
+// now comes from learning_object_example_translations (nativeLanguage-first,
+// falling back to the legacy example_chinese column for zh).
+export async function loadWordExamples(learningObjectId, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const id = clean(learningObjectId);
   if (!id) return [];
   const { data, error } = await supabase
     .from("learning_object_examples")
-    .select("example_swedish, example_chinese, sort_order")
+    .select("id, example_swedish, example_chinese, sort_order, learning_object_example_translations(translation, native_language)")
     .eq("learning_object_id", id)
     .order("sort_order", { ascending: true });
   if (error) throw error;
-  return data || [];
+  return (data || []).map((row) => {
+    const translationRow = (row.learning_object_example_translations || []).find((t) => t.native_language === nativeLanguage);
+    return {
+      example_swedish: row.example_swedish,
+      example_chinese: clean(translationRow?.translation) || clean(row.example_chinese),
+      sort_order: row.sort_order,
+    };
+  });
 }
 
 // Full learning_object_translations row for one word, for a language other
@@ -1143,6 +1153,20 @@ async function writeUserPreferences(userId, preferences = {}) {
     .single();
   if (error) throw error;
   return { enabled: true, preferences: fromUserPreferencesRow(data) };
+}
+
+// 2026-09-01: the one place a user's chosen native language needs to be
+// known BEFORE the main word snapshot loads (loadData() calls this first,
+// then threads the result into loadRemoteLibrarySnapshot) — the full
+// preferences bag otherwise only loads later, alongside daily-study state,
+// which would be too late for this. Deliberately its own tiny query rather
+// than reordering loadData()'s existing sequence.
+export async function loadNativeLanguagePreference() {
+  const user = await readCurrentUser();
+  if (!user?.id) return DEFAULT_NATIVE_LANGUAGE;
+  const { data, error } = await supabase.from(TABLES.userPreferences).select("preferences").eq("user_id", user.id).maybeSingle();
+  if (error || !data) return DEFAULT_NATIVE_LANGUAGE;
+  return clean(data.preferences?.nativeLanguage) || DEFAULT_NATIVE_LANGUAGE;
 }
 
 export async function upsertUserPreferences(preferences = {}) {

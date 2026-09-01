@@ -754,6 +754,17 @@
                   </label>
                   <small>Hur många nya ord "Lär dig nya ord" föreslår per dag. Gäller tills du ändrar det igen.</small>
                 </section>
+                <section class="profile-detail-card">
+                  <span>Mitt modersmål</span>
+                  <label class="field-label" for="nativeLanguageSelect">
+                    Förklaringsspråk
+                    <select id="nativeLanguageSelect">
+                      <option value="zh">中文</option>
+                      <option value="en">English</option>
+                    </select>
+                  </label>
+                  <small>Vilket språk ordförklaringar, exempel och tips visas på. Appens egna knappar och menyer ändras inte än.</small>
+                </section>
                 <section class="profile-settings-list" aria-label="Inställningar">
                   <button type="button"><span>Synkronisering</span><strong id="profileSyncStatus">Aktiv</strong></button>
                   <button type="button"><span>Exportera data</span><span aria-hidden="true">›</span></button>
@@ -1477,6 +1488,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=203" type="module"></script>
+    <script src="/app.js?v=204" type="module"></script>
   </body>
 </html>

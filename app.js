@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=145";
+import * as remoteDb from "./src/lib/db.js?v=146";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -404,6 +404,7 @@ const state = {
   stopBatchEnrich: false,
   dailyNewWordTarget: 10,
   favoriteCategory: "all",
+  nativeLanguage: "zh",
   exportPos: "all",
   exportNotebook: "all",
   favoriteStates: new Map(),
@@ -839,6 +840,7 @@ const els = {
   readingStarterList: document.querySelector("#readingStarterList"),
   openInShadowingBtn: document.querySelector("#openInShadowingBtn"),
   dailyNewWordTargetSelect: document.querySelector("#dailyNewWordTargetSelect"),
+  nativeLanguageSelect: document.querySelector("#nativeLanguageSelect"),
   dailyNewWordTargetReadout: document.querySelector("#dailyNewWordTargetReadout"),
   studyCompletePanel: document.querySelector("#studyCompletePanel"),
   completeTodayCount: document.querySelector("#completeTodayCount"),
@@ -883,7 +885,7 @@ let appInitializationComplete = false;
 
 async function ensureRemoteLibrarySnapshot() {
   if (!remoteLibrarySnapshotLoaded) {
-    remoteLibrarySnapshot = await remoteDb.loadRemoteLibrarySnapshot();
+    remoteLibrarySnapshot = await remoteDb.loadRemoteLibrarySnapshot(state.nativeLanguage);
     void remoteDb.ensureRemoteNotebookNames(DEFAULT_BOOKSHELF_CATEGORIES).catch((error) => {
       console.warn("[Min Ordbok] Failed to ensure default bookshelf categories.", error);
     });
@@ -1320,6 +1322,7 @@ function persistUserPreferences() {
       exportPos: state.exportPos,
       shadowingLoopEnabled: state.shadowingLoopEnabled,
       dailyNewWordTarget: state.dailyNewWordTarget,
+      nativeLanguage: state.nativeLanguage,
     },
   }).catch((error) => console.warn("[Min Ordbok] Remote preferences sync failed.", error));
 }
@@ -2375,7 +2378,20 @@ async function applyManualRelatedWordExamples() {
   if (changed) await replaceWords(updatedWords);
 }
 
+// 2026-09-01: fetched here, before readWords(), because the word snapshot
+// itself needs to know which language's translation rows to fetch — the
+// rest of the preferences bag (persistUserPreferences' fields) only loads
+// later in this same function, which would be too late for this one.
+async function loadNativeLanguagePreference() {
+  try {
+    state.nativeLanguage = await remoteDb.loadNativeLanguagePreference();
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load native language preference. Defaulting to zh.", error);
+  }
+}
+
 async function loadData() {
+  await loadNativeLanguagePreference();
   const words = await readWords();
   await refreshDailyProgress(words);
   remotePhase4Snapshot = await remoteDb.loadRemotePhase4Snapshot({
@@ -2734,7 +2750,7 @@ async function renderFraserView() {
       els.fraserList.append(loading);
     }
     try {
-      const rows = await remoteDb.loadPhraseObjects();
+      const rows = await remoteDb.loadPhraseObjects(state.nativeLanguage);
       phraseObjects.splice(0, phraseObjects.length, ...rows);
     } catch (error) {
       console.warn("[SpråkLab] Failed to load Fraser/Uttryck catalog.", error);
@@ -4026,7 +4042,7 @@ async function lookupAndOpenReadingWord(token) {
   try {
     const baseWordId = await remoteDb.lookupBaseWordIdForForm(clean_);
     if (baseWordId) {
-      const baseWord = dictionaryWords.find((word) => word.id === baseWordId) || (await remoteDb.loadWordOrPhraseById(baseWordId).catch(() => null));
+      const baseWord = dictionaryWords.find((word) => word.id === baseWordId) || (await remoteDb.loadWordOrPhraseById(baseWordId, state.nativeLanguage).catch(() => null));
       if (baseWord) {
         showWordGlossPopover(baseWord);
         return;
@@ -4379,6 +4395,9 @@ function renderStudyStats() {
   }
   if (els.dailyNewWordTargetSelect && document.activeElement !== els.dailyNewWordTargetSelect) {
     els.dailyNewWordTargetSelect.value = String(dailyTarget);
+  }
+  if (els.nativeLanguageSelect && document.activeElement !== els.nativeLanguageSelect) {
+    els.nativeLanguageSelect.value = state.nativeLanguage;
   }
   if (els.dailyNewWordTargetReadout) {
     els.dailyNewWordTargetReadout.textContent = `Mål/dag: ${dailyTarget}`;
@@ -6330,7 +6349,7 @@ function enhanceGrammarSectionWithStructuredForms(card, word) {
 // this quietly does nothing until they're generated.
 function enhanceUsageSectionWithExtraExamples(card, word) {
   if (!word?.id) return;
-  remoteDb.loadWordExamples(word.id).then((examples) => {
+  remoteDb.loadWordExamples(word.id, state.nativeLanguage).then((examples) => {
     if (!examples.length || card.dataset.id !== word.id) return;
     const section = card.querySelector(".example-section");
     if (!section) return;
@@ -6439,7 +6458,12 @@ function createStudyCollocationList(collocations, fallbackExample, sourceWord) {
     const meaning = document.createElement("em");
     const example = document.createElement("span");
     phrase.textContent = item.phrase;
-    meaning.textContent = item.meaning || "中文释义待补";
+    // 2026-09-01: was a hardcoded Chinese "meaning pending" placeholder —
+    // wrong to show regardless of native language once translations exist
+    // for more than one. A genuinely missing meaning (rare, pre-existing
+    // data gap) now just omits the element instead of a fake placeholder.
+    if (item.meaning) meaning.textContent = item.meaning;
+    else meaning.hidden = true;
     example.textContent = item.example ? stripChineseExampleTranslation(item.example) : "Exempel saknas.";
     li.append(phrase, meaning, example);
     if (sourceWord?.id) {
@@ -6760,7 +6784,12 @@ function createCollocationList(collocations, fallbackExample) {
     const meaning = document.createElement("em");
     const example = document.createElement("span");
     phrase.textContent = item.phrase;
-    meaning.textContent = item.meaning || "中文释义待补";
+    // 2026-09-01: was a hardcoded Chinese "meaning pending" placeholder —
+    // wrong to show regardless of native language once translations exist
+    // for more than one. A genuinely missing meaning (rare, pre-existing
+    // data gap) now just omits the element instead of a fake placeholder.
+    if (item.meaning) meaning.textContent = item.meaning;
+    else meaning.hidden = true;
     example.textContent = item.example
       ? `Exempel: ${stripChineseExampleTranslation(item.example)}`
       : "Exempel saknas för den här frasen";
@@ -12058,6 +12087,41 @@ function bindEvents() {
     state.dailyStudy = ensureDailyStudyPlan(state.studyScope);
     await persistDailyStudyPlan(state.dailyStudy);
     renderStudyStats();
+  });
+  // 2026-09-01: switching native language changes which
+  // learning_object_translations row every word/phrase/example reads —
+  // that's threaded through at load time (loadData -> ensureRemoteLibrarySnapshot
+  // etc.), not something worth re-deriving live across the whole already-
+  // rendered app. Reload the same way resetDataBtn already does for "get me
+  // a fully fresh, consistent state" — but persistUserPreferences() itself
+  // is fire-and-forget (by design, for its many synchronous call sites), so
+  // reloading right after calling it could race the save and reload before
+  // the new preference actually reached the server. Await the write
+  // directly here instead, since this one call site genuinely depends on
+  // it finishing first.
+  els.nativeLanguageSelect?.addEventListener("change", async (event) => {
+    state.nativeLanguage = event.target.value === "en" ? "en" : "zh";
+    try {
+      await remoteDb.upsertUserPreferences({
+        studyScope: state.studyScope,
+        selectedNotebookName: state.selectedNotebook,
+        shadowingShowSubtitles: state.shadowingShowSubtitles,
+        shadowingContinuous: state.shadowingContinuous,
+        shadowingAutoPause: state.shadowingAutoPause,
+        shadowingLevel: state.shadowingLevel,
+        preferences: {
+          favoriteCategory: state.favoriteCategory,
+          exportNotebook: state.exportNotebook,
+          exportPos: state.exportPos,
+          shadowingLoopEnabled: state.shadowingLoopEnabled,
+          dailyNewWordTarget: state.dailyNewWordTarget,
+          nativeLanguage: state.nativeLanguage,
+        },
+      });
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to save native language preference before reload.", error);
+    }
+    location.reload();
   });
 
   els.checkSpellingBtn.addEventListener("click", checkCurrentSpelling);
