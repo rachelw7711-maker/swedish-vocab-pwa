@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=144";
+import * as remoteDb from "./src/lib/db.js?v=145";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -6522,27 +6522,24 @@ function buildTypedRelatedList(items) {
   return list;
 }
 
-// Adds a "Minnesknep" (memory tip) section when learning_object_translations
-// has one, and upgrades the flat-text "Relaterade ord" section with proper
-// Synonymer/Motsatsord/Ordfamilj sections once learning_object_relationships
-// has typed data for this word — neither had a read path anywhere in the
-// app before this (see Reviews/SPK-DIC-001-标准对照评估与实施建议.md §2).
-// Same lazy-fetch-after-render pattern as
-// enhanceGrammarSectionWithStructuredForms: the synchronous render above
-// already shows a reasonable state (no "Minnesknep" section, generic flat
-// "Relaterade ord"), this only upgrades it once the fetch resolves.
+// Upgrades the flat-text "Relaterade ord" section with proper Synonymer/
+// Motsatsord/Ordfamilj sections once learning_object_relationships has
+// typed data for this word — had no read path anywhere in the app before
+// this (see Reviews/SPK-DIC-001-标准对照评估与实施建议.md §2). Same
+// lazy-fetch-after-render pattern as enhanceGrammarSectionWithStructuredForms:
+// the synchronous render above already shows a reasonable state (generic
+// flat "Relaterade ord"), this only upgrades it once the fetch resolves.
+// 2026-09-01: no longer also fetches translation detail for a Minnesknep
+// fallback — normalizeWord now merges learning_object_translations into
+// word.memory_tip at load time (structure cleanup), so the synchronous
+// render already has the real content; the separate async fallback here
+// was dead weight once that landed.
 function enhanceExtendedLearningSection(card, word) {
   if (!word?.id) return;
-  Promise.all([
-    remoteDb.loadWordRelationships(word.id).catch((error) => {
-      console.warn("[SpråkLab] Failed to load word relationships for", word.id, error);
-      return [];
-    }),
-    remoteDb.loadWordTranslationDetail(word.id).catch((error) => {
-      console.warn("[SpråkLab] Failed to load translation detail for", word.id, error);
-      return null;
-    }),
-  ]).then(([relationships, translationDetail]) => {
+  remoteDb.loadWordRelationships(word.id).catch((error) => {
+    console.warn("[SpråkLab] Failed to load word relationships for", word.id, error);
+    return [];
+  }).then((relationships) => {
     if (card.dataset.id !== word.id) return;
     const details = card.querySelector(".extended-learning-group") || card.querySelector(".detail-list");
     if (!details) return;
@@ -6576,15 +6573,6 @@ function enhanceExtendedLearningSection(card, word) {
         relatedSection.querySelector("p, .related-word-list")?.remove();
         relatedSection.append(buildTypedRelatedList(byType.related));
       }
-    }
-
-    // word.memory_tip (learning_objects column, filled for the whole corpus
-    // 2026-07-26) is now the primary source and already rendered
-    // synchronously above — this only covers the handful of older rows that
-    // have a learning_object_translations.learning_tip but somehow no
-    // memory_tip yet.
-    if (!clean(word.memory_tip) && clean(translationDetail?.learning_tip)) {
-      addStudyDetail(details, "Minnesknep", clean(translationDetail.learning_tip));
     }
   });
 }

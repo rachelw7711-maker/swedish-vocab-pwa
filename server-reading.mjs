@@ -945,6 +945,18 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
       if (!insertErr && inserted) {
         generatedWords = inserted;
         inserted.forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: row.chinese, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
+        // 2026-09-01 structure-cleanup fix: this path never wrote a
+        // learning_object_translations row at all (chinese only ever landed
+        // on the legacy learning_objects.chinese column), unlike every other
+        // word-creation path in the app. Worked by accident today (chinese
+        // falls back to that legacy column), but left these words with no
+        // 'zh' translation row for a future multi-language read path to
+        // find at all.
+        const translationRows = inserted.map((row) => ({ learning_object_id: row.id, native_language: "zh", meaning: row.chinese || "", updated_at: new Date().toISOString() }));
+        if (translationRows.length) {
+          const { error: translationErr } = await supabaseAdmin.from("learning_object_translations").insert(translationRows);
+          if (translationErr) console.warn("[Reading] Failed to insert translation rows for generated words.", translationErr);
+        }
       }
     }
     // Keep a real surplus pool (still 2x) here too — the AI Worth Learning

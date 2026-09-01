@@ -87,8 +87,12 @@ function wordContentSignature(word) {
     english: clean(word?.english),
     forms: clean(word?.forms),
     example: clean(word?.example),
+    example_zh: clean(word?.example_zh),
     collocations: clean(word?.collocations),
     related_words: clean(word?.related_words),
+    memory_tip: clean(word?.memory_tip),
+    grammar_note: clean(word?.grammar_note),
+    meaning_note: clean(word?.meaning_note),
     tags: Array.isArray(word?.tags) ? word.tags : [],
     notebook: clean(word?.notebook),
   });
@@ -164,6 +168,18 @@ function normalizeWord(row, userRow = null, translationRow = null) {
     // language 'zh'); fall back to the legacy `chinese` column if no
     // translation row was fetched/found yet, so older data keeps working.
     chinese: clean(translationRow?.meaning) || clean(row.chinese),
+    // 2026-09-01 structure cleanup: these five were being read straight off
+    // learning_objects (via the `...row` spread below) with no native-
+    // language awareness at all — a word's memory tip/grammar note/
+    // collocations/related words/example translation would show Chinese
+    // regardless of the reader's selected language. Same translationRow-
+    // first, legacy-column-fallback pattern as `chinese` above; the legacy
+    // columns stay as the zh-only fallback for now (see the migration's
+    // comment for why they aren't dropped yet).
+    memory_tip: clean(translationRow?.learning_tip) || clean(row.memory_tip),
+    grammar_note: clean(translationRow?.grammar_note) || clean(row.grammar_note),
+    meaning_note: clean(translationRow?.meaning_note) || clean(row.meaning_note),
+    example_zh: clean(translationRow?.example_translation) || clean(row.example_zh),
     // "english" is a historical misnomer kept as the JS-facing property
     // name for now to avoid touching every app.js call site in this pass
     // (see Reviews/词条数据结构设计草案…md) — the field has always held a
@@ -175,8 +191,8 @@ function normalizeWord(row, userRow = null, translationRow = null) {
     english: clean(row.swedish_explanation) || readNoteSection(note, "Swedish explanation"),
     forms: clean(row.forms) || readNoteSection(note, "Forms"),
     example: clean(row.example) || clean(row.example_sv),
-    collocations: clean(row.collocations) || readNoteSection(note, "Collocations"),
-    related_words: clean(row.related_words) || clean(row.relatedWords) || readNoteSection(note, "Related words"),
+    collocations: clean(translationRow?.collocations) || clean(row.collocations) || readNoteSection(note, "Collocations"),
+    related_words: clean(translationRow?.related_words) || clean(row.related_words) || clean(row.relatedWords) || readNoteSection(note, "Related words"),
     tags: Array.isArray(row.tags) && row.tags.length
       ? row.tags
       : clean(readNoteSection(note, "Tags") || row.level).split(",").map(clean).filter(Boolean),
@@ -544,7 +560,14 @@ export async function loadWordOrPhraseById(id) {
   if (!cleanId) return null;
   const { data, error } = await supabase.from(TABLES.words).select("*").eq("id", cleanId).maybeSingle();
   if (error) throw error;
-  return data ? normalizeWord(data) : null;
+  if (!data) return null;
+  const { data: translationRow } = await supabase
+    .from(TABLES.wordTranslations)
+    .select("*")
+    .eq("learning_object_id", cleanId)
+    .eq("native_language", DEFAULT_NATIVE_LANGUAGE)
+    .maybeSingle();
+  return normalizeWord(data, null, translationRow);
 }
 
 // "Promote" one collocation line from a word's Fraser section into its own
@@ -681,13 +704,21 @@ function toWordRow(word, userId = null) {
 // Writes the native-language ('zh' for now — see DEFAULT_NATIVE_LANGUAGE)
 // row in learning_object_translations for a word. Called alongside
 // toWordRow so a word edit updates both the language-neutral row and its
-// Chinese content in one sync pass.
+// Chinese content in one sync pass. 2026-09-01: now syncs all six
+// native-language-dependent fields (not just meaning) — see the structure
+// cleanup migration's comment for why the other five were added.
 function toWordTranslationRow(word) {
   if (!word?.id) return null;
   return {
     learning_object_id: word.id,
     native_language: DEFAULT_NATIVE_LANGUAGE,
     meaning: clean(word.chinese),
+    example_translation: clean(word.example_zh),
+    learning_tip: clean(word.memory_tip),
+    grammar_note: clean(word.grammar_note),
+    meaning_note: clean(word.meaning_note),
+    collocations: clean(word.collocations),
+    related_words: clean(word.related_words),
     updated_at: new Date().toISOString(),
   };
 }
@@ -776,18 +807,19 @@ export async function loadWordExamples(learningObjectId) {
   return data || [];
 }
 
-// Full learning_object_translations row for one word (meaning/explanation/
-// grammar_note/learning_tip/example_translation/cultural_note) — the bulk
-// library load (loadRemoteLibrarySnapshot) only carries `meaning` forward
-// into `word.chinese`; the rest (learning_tip in particular) has had no
-// reader anywhere in the app until now. Fetched lazily per word, same
-// reasoning as loadWordForms above.
+// Full learning_object_translations row for one word, for a language other
+// than the caller's current one (e.g. previewing a word's English content
+// while browsing in Chinese) — normalizeWord/loadRemoteLibrarySnapshot
+// already bring the current-language row's full field set forward via
+// `translationRow` for the normal bulk-load path, this is only needed for
+// a specific-language lookup outside that. Same lazy-per-word reasoning as
+// loadWordForms above.
 export async function loadWordTranslationDetail(learningObjectId, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const id = clean(learningObjectId);
   if (!id) return null;
   const { data, error } = await supabase
     .from(TABLES.wordTranslations)
-    .select("meaning, explanation, grammar_note, learning_tip, example_translation, cultural_note")
+    .select("meaning, grammar_note, learning_tip, example_translation, meaning_note, collocations, related_words")
     .eq("learning_object_id", id)
     .eq("native_language", nativeLanguage)
     .maybeSingle();
