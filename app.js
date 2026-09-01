@@ -1,4 +1,4 @@
-import * as remoteDb from "./src/lib/db.js?v=146";
+import * as remoteDb from "./src/lib/db.js?v=147";
 import * as shadowingStore from "./src/lib/shadowing-store.js";
 import { getAccessToken, getCurrentUser, supabase, syncAuthState } from "./src/lib/supabase.js";
 import { educationWordPacks } from "./vocab-data.js";
@@ -2850,7 +2850,7 @@ async function renderReadingStarterLibrary() {
   if (!state.starterLibraryLoaded) {
     state.starterLibraryLoaded = true;
     try {
-      state.starterLibrary = await remoteDb.loadStarterLibrary();
+      state.starterLibrary = await remoteDb.loadStarterLibrary(state.nativeLanguage);
     } catch (error) {
       console.warn("[SpråkLab] Failed to load starter reading library.", error);
     }
@@ -2950,7 +2950,7 @@ async function enhanceReadingListWithStats() {
   if (!ids.length) return;
   let statsByResource;
   try {
-    statsByResource = await remoteDb.loadReadingListStats(ids);
+    statsByResource = await remoteDb.loadReadingListStats(ids, state.nativeLanguage);
   } catch (error) {
     console.warn("[SpråkLab] Failed to load reading list stats.", error);
     return;
@@ -3182,16 +3182,16 @@ function openReadingEditor(item = null) {
         renderTextbookGlossary(resource.textbookGlossary);
       }
       renderReadingReport();
-      remoteDb.loadTextAnalysis(textResourceId).then((analysis) => {
+      remoteDb.loadTextAnalysis(textResourceId, state.nativeLanguage).then((analysis) => {
         if (els.readingItemId.value !== item.id) return; // user navigated away
         if (!analysis || (!analysis.selectedVocabulary.length && !analysis.selectedExpressions.length && !analysis.summarySv)) return;
         state.currentReadingAnalysis = analysis;
         openReadingResults(item);
-        renderReadingAnalysis(analysis, { deepReady: resource.deepReady });
+        renderReadingAnalysis(analysis, { deepReady: analysis.deepReady });
         // A previous session's deep layer may have been interrupted (e.g.
         // the app was closed right after the fast layer landed) — pick it
         // back up here rather than leaving the placeholder stuck forever.
-        if (!resource.deepReady) continueDeepReadingAnalysis(textResourceId);
+        if (!analysis.deepReady) continueDeepReadingAnalysis(textResourceId);
       }).catch((error) => console.warn("[SpråkLab] Failed to load existing text analysis.", error));
     }).catch((error) => console.warn("[SpråkLab] Failed to load text resource.", error));
   }
@@ -3305,7 +3305,7 @@ async function analyzeCurrentReadingItem() {
   openReadingResults(saved);
   showReadingAnalysisLoading();
   try {
-    const { textResource, analysis, deepReady } = await remoteDb.analyzeReadingText(textToAnalyze, "paste", state.readingPendingGlossary || []);
+    const { textResource, analysis, deepReady } = await remoteDb.analyzeReadingText(textToAnalyze, "paste", state.readingPendingGlossary || [], state.nativeLanguage);
     const updated = { ...saved, text_resource_id: textResource.id };
     const result = await remoteDb.upsertReadingItem(updated);
     const finalItem = result?.item || updated;
@@ -3353,7 +3353,7 @@ function showReadingAnalysisLoading() {
 // already unlocked.
 async function continueDeepReadingAnalysis(textResourceId) {
   try {
-    const { analysis } = await remoteDb.analyzeReadingTextDeep(textResourceId);
+    const { analysis } = await remoteDb.analyzeReadingTextDeep(textResourceId, state.nativeLanguage);
     // Guard against the user having navigated to a different reading item
     // while the deep call was in flight — only apply the result if we're
     // still looking at the same one.
@@ -3816,7 +3816,7 @@ async function generateSummaryForCurrentReadingItem() {
   els.generateReadingSummaryBtn.disabled = true;
   els.generateReadingSummaryBtn.textContent = "Genererar…";
   try {
-    const summary = await remoteDb.generateReadingSummary(item.text_resource_id);
+    const summary = await remoteDb.generateReadingSummary(item.text_resource_id, state.nativeLanguage);
     els.readingSummarySv.textContent = summary.summary_sv;
     els.readingSummaryZh.textContent = summary.summary_zh;
     els.readingSummarySv.hidden = false;
@@ -4315,7 +4315,7 @@ async function renderHomeAchievements() {
   // normally gets populated).
   if (els.entryLibraryProgressLabel || els.entryLibraryProgressFill) {
     try {
-      const starterLibrary = state.starterLibraryLoaded ? state.starterLibrary : await remoteDb.loadStarterLibrary();
+      const starterLibrary = state.starterLibraryLoaded ? state.starterLibrary : await remoteDb.loadStarterLibrary(state.nativeLanguage);
       if (myToken !== homeAchievementsRenderToken) return;
       if (!state.starterLibraryLoaded) {
         state.starterLibraryLoaded = true;
@@ -4333,7 +4333,7 @@ async function renderHomeAchievements() {
 
   if (resourceIds.length) {
     try {
-      const statsByResource = await remoteDb.loadReadingListStats(resourceIds);
+      const statsByResource = await remoteDb.loadReadingListStats(resourceIds, state.nativeLanguage);
       if (myToken !== homeAchievementsRenderToken) return;
       state.readingListStats = { ...(state.readingListStats || {}), ...statsByResource };
       const wordsTotal = resourceIds.reduce((sum, id) => sum + (state.readingListStats[id]?.wordCount || 0), 0);

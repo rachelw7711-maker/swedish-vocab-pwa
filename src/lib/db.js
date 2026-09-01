@@ -1808,6 +1808,8 @@ function fromTextAnalysisRow(row) {
   return {
     id: row.id,
     textResourceId: row.text_resource_id,
+    nativeLanguage: row.native_language || "zh",
+    deepReady: row.status === "ready",
     selectedVocabulary: row.selected_vocabulary || [],
     selectedExpressions: row.selected_expressions || [],
     keySentences: row.key_sentences || [],
@@ -1828,7 +1830,7 @@ function fromTextAnalysisRow(row) {
 // Reviews/AI成本控制与阅读模块-实施计划-2026-07-26.md — the server checks its
 // own text_hash cache first, so re-analyzing the same text (or switching
 // between Läsning/Shadowing) never re-calls the AI.
-export async function analyzeReadingText(text, sourceType = "paste", glossary = []) {
+export async function analyzeReadingText(text, sourceType = "paste", glossary = [], nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const token = await getAccessToken().catch(() => "");
   const response = await fetch("/api/reading/analyze", {
     method: "POST",
@@ -1836,7 +1838,7 @@ export async function analyzeReadingText(text, sourceType = "paste", glossary = 
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       "content-type": "application/json",
     },
-    body: JSON.stringify({ text, sourceType, glossary }),
+    body: JSON.stringify({ text, sourceType, glossary, nativeLanguage }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte analysera texten.");
@@ -1852,7 +1854,7 @@ export async function analyzeReadingText(text, sourceType = "paste", glossary = 
 // Two-layer generation, deep half (2026-08-02) — called right after
 // analyzeReadingText above when its deepReady comes back false. Fills in
 // vocabulary/expressions/sentences/patterns on the same text_analysis row.
-export async function analyzeReadingTextDeep(textResourceId) {
+export async function analyzeReadingTextDeep(textResourceId, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const token = await getAccessToken().catch(() => "");
   const response = await fetch("/api/reading/analyze-deep", {
     method: "POST",
@@ -1860,7 +1862,7 @@ export async function analyzeReadingTextDeep(textResourceId) {
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       "content-type": "application/json",
     },
-    body: JSON.stringify({ textResourceId }),
+    body: JSON.stringify({ textResourceId, nativeLanguage }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte slutföra analysen.");
@@ -1887,7 +1889,7 @@ export async function classifyReadingExpression(expressionId, classification) {
 
 // 规范§9.3/§10 — summary is a separate, user-initiated call, never bundled
 // into analyzeReadingText above.
-export async function generateReadingSummary(textResourceId) {
+export async function generateReadingSummary(textResourceId, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const token = await getAccessToken().catch(() => "");
   const response = await fetch("/api/reading/summary", {
     method: "POST",
@@ -1895,7 +1897,7 @@ export async function generateReadingSummary(textResourceId) {
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       "content-type": "application/json",
     },
-    body: JSON.stringify({ textResourceId }),
+    body: JSON.stringify({ textResourceId, nativeLanguage }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Kunde inte generera sammanfattning.");
@@ -2130,12 +2132,12 @@ export async function resolveContentReport(id) {
 // anti-N+1 discipline as fetchAll/db.js elsewhere), so the list can show
 // word count / vocabulary / phrase / sentence counts without opening each
 // item individually.
-export async function loadReadingListStats(textResourceIds) {
+export async function loadReadingListStats(textResourceIds, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const ids = [...new Set((textResourceIds || []).filter(Boolean))];
   if (!ids.length) return {};
   const [{ data: resources, error: resourceError }, { data: analyses, error: analysisError }] = await Promise.all([
     supabase.from("text_resources").select("id, word_count").in("id", ids),
-    supabase.from("text_analysis").select("text_resource_id, selected_vocabulary, selected_expressions, key_sentences, language_patterns").in("text_resource_id", ids),
+    supabase.from("text_analysis").select("text_resource_id, selected_vocabulary, selected_expressions, key_sentences, language_patterns").in("text_resource_id", ids).eq("native_language", nativeLanguage),
   ]);
   if (resourceError) throw resourceError;
   if (analysisError) throw analysisError;
@@ -2162,10 +2164,10 @@ export async function loadReadingListStats(textResourceIds) {
 // policies added alongside is_starter_library/visibility — no server
 // endpoint needed, same "plain RLS-gated read" pattern as loadTextResource/
 // loadTextAnalysis below.
-export async function loadStarterLibrary() {
+export async function loadStarterLibrary(nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const [{ data: resources, error: resourceError }, { data: analyses, error: analysisError }] = await Promise.all([
     supabase.from("text_resources").select("id, title, word_count").eq("is_starter_library", true),
-    supabase.from("text_analysis").select("text_resource_id, headline_zh, summary_zh, selected_vocabulary").eq("visibility", "public"),
+    supabase.from("text_analysis").select("text_resource_id, headline_zh, summary_zh, selected_vocabulary").eq("visibility", "public").eq("native_language", nativeLanguage),
   ]);
   if (resourceError) throw resourceError;
   if (analysisError) throw analysisError;
@@ -2208,20 +2210,22 @@ export async function addStarterTextToReading(textResourceId) {
 export async function loadTextResource(textResourceId) {
   const id = clean(textResourceId);
   if (!id) return null;
-  const { data, error } = await supabase.from("text_resources").select("id, word_count, textbook_glossary, analysis_status").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("text_resources").select("id, word_count, textbook_glossary").eq("id", id).maybeSingle();
   if (error) throw error;
-  return data
-    ? { id: data.id, wordCount: data.word_count || 0, textbookGlossary: data.textbook_glossary || [], deepReady: data.analysis_status === "ready" }
-    : null;
+  // deepReady used to be read off text_resources.analysis_status, but that's
+  // per-resource while deep-readiness is now per-(resource, language) — see
+  // loadTextAnalysis's own row.deepReady instead.
+  return data ? { id: data.id, wordCount: data.word_count || 0, textbookGlossary: data.textbook_glossary || [] } : null;
 }
 
-export async function loadTextAnalysis(textResourceId) {
+export async function loadTextAnalysis(textResourceId, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const id = clean(textResourceId);
   if (!id) return null;
   const { data, error } = await supabase
     .from("text_analysis")
     .select("*")
     .eq("text_resource_id", id)
+    .eq("native_language", nativeLanguage)
     .order("analysis_version", { ascending: false })
     .limit(1)
     .maybeSingle();

@@ -200,7 +200,7 @@ createServer(async (req, res) => {
       // /api/generate-word (pre-existing, ungated), don't repeat that gap
       // here now that it's been noticed — see spraklab_future_readiness memory.
       const user = await readAuthenticatedUser(req);
-      const { text, sourceType, glossary } = await readBody(req);
+      const { text, sourceType, glossary, nativeLanguage } = await readBody(req);
       if (!text || typeof text !== "string" || !text.trim()) {
         sendJson(res, 400, { error: "Klistra in en text att analysera." });
         return;
@@ -215,6 +215,7 @@ createServer(async (req, res) => {
         text: text.trim(),
         sourceType: sourceType || "paste",
         glossary: Array.isArray(glossary) ? glossary : [],
+        nativeLanguage: nativeLanguage === "en" ? "en" : "zh",
       });
       sendJson(res, 200, { textResource, analysis, tier, cached, deepReady });
       return;
@@ -222,12 +223,12 @@ createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/api/reading/analyze-deep") {
       const user = await readAuthenticatedUser(req);
-      const { textResourceId } = await readBody(req);
+      const { textResourceId, nativeLanguage } = await readBody(req);
       if (!textResourceId) {
         sendJson(res, 400, { error: "textResourceId saknas." });
         return;
       }
-      const { analysis, tier } = await analyzeReadingResourceDeep({ supabaseAdmin, userId: user.id, textResourceId });
+      const { analysis, tier } = await analyzeReadingResourceDeep({ supabaseAdmin, userId: user.id, textResourceId, nativeLanguage: nativeLanguage === "en" ? "en" : "zh" });
       sendJson(res, 200, { analysis, tier });
       return;
     }
@@ -242,12 +243,12 @@ createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/api/reading/summary") {
       const user = await readAuthenticatedUser(req);
-      const { textResourceId } = await readBody(req);
+      const { textResourceId, nativeLanguage } = await readBody(req);
       if (!textResourceId) {
         sendJson(res, 400, { error: "textResourceId saknas." });
         return;
       }
-      const summary = await generateReadingSummary({ supabaseAdmin, userId: user.id, textResourceId });
+      const summary = await generateReadingSummary({ supabaseAdmin, userId: user.id, textResourceId, nativeLanguage: nativeLanguage === "en" ? "en" : "zh" });
       sendJson(res, 200, { summary });
       return;
     }

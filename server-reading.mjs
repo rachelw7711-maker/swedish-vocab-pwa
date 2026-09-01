@@ -8,6 +8,16 @@ import { createHash, randomUUID } from "node:crypto";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 
+// Reviews/阅读模块多母语支持-架构方案-2026-09-01.md — every AI-facing prompt
+// below still names its output fields *_zh (legacy, kept to avoid a large
+// unrelated rename across db.js/app.js) but the actual content is generated
+// directly in whichever language this maps to, e.g. English content lands
+// in the same "summary_zh"/"meaning_zh" fields when nativeLanguage is "en".
+const NATIVE_LANGUAGE_NAMES = { zh: "Simplified Chinese", en: "English" };
+function languageName(nativeLanguage) {
+  return NATIVE_LANGUAGE_NAMES[nativeLanguage] || NATIVE_LANGUAGE_NAMES.zh;
+}
+
 // 规范§5 — thresholds are config, not hardcoded in the frontend.
 // keyCollocations (Fraser candidates) / keyIdioms (Uttryck candidates) are
 // split per 阅读模块设计想法-专业review-2026-07-27.md §5 — they have
@@ -228,16 +238,27 @@ function extractCandidateTokens(cleanedText) {
 
 // 规范§3/§8: check user's own word state, then the main dictionary, before
 // ever considering AI. Batches the lookup instead of one query per token.
-async function matchAgainstCorpus(supabaseAdmin, tokens) {
+async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage = "zh") {
   const found = new Map(); // token -> { id, swedish, pos, chinese, cefr_level, frequency_rank }
   if (!tokens.length) return found;
 
+  // chinese here is really "native-language meaning" (legacy field name) —
+  // the learning_objects.chinese column stays zh-only, so a non-zh request
+  // overrides it with the matching learning_object_translations row when one
+  // exists (same override-else-fallback pattern as db.js's normalizeWord).
+  const pickMeaning = (row) => {
+    if (nativeLanguage === "zh") return row.chinese;
+    const translated = (row.learning_object_translations || []).find((t) => t.native_language === nativeLanguage);
+    return translated?.meaning || row.chinese;
+  };
+  const selectCols = "id, swedish, part_of_speech, chinese, cefr_level, frequency_rank, learning_object_translations(meaning, native_language)";
+
   const { data: exact } = await supabaseAdmin
     .from("learning_objects")
-    .select("id, swedish, part_of_speech, chinese, cefr_level, frequency_rank")
+    .select(selectCols)
     .eq("object_type", "word")
     .in("swedish", tokens);
-  (exact || []).forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: row.chinese, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
+  (exact || []).forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: pickMeaning(row), cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
 
   const remaining = tokens.filter((t) => !found.has(t));
   if (remaining.length) {
@@ -246,14 +267,14 @@ async function matchAgainstCorpus(supabaseAdmin, tokens) {
     if (stillMissingIds.length) {
       const { data: baseWords } = await supabaseAdmin
         .from("learning_objects")
-        .select("id, swedish, part_of_speech, chinese, cefr_level, frequency_rank")
+        .select(selectCols)
         .in("id", stillMissingIds);
       const byId = new Map((baseWords || []).map((w) => [w.id, w]));
       (forms || []).forEach((f) => {
         const base = byId.get(f.learning_object_id);
         if (!base) return;
         const token = f.form_value.toLowerCase();
-        if (!found.has(token)) found.set(token, { id: base.id, swedish: base.swedish, pos: base.part_of_speech, chinese: base.chinese, cefr_level: base.cefr_level, frequency_rank: base.frequency_rank });
+        if (!found.has(token)) found.set(token, { id: base.id, swedish: base.swedish, pos: base.part_of_speech, chinese: pickMeaning(base), cefr_level: base.cefr_level, frequency_rank: base.frequency_rank });
       });
     }
   }
@@ -423,9 +444,10 @@ async function scoreVocabularyWorthLearning(candidates, cleanedText, targetCount
 
 // 规范§8 — batched generation for genuinely missing words, one AI call for
 // up to MAX_BATCH_GENERATE words at once, never one call per word.
-async function batchGenerateMissingWords(missingTokens) {
+async function batchGenerateMissingWords(missingTokens, nativeLanguage = "zh") {
   if (!missingTokens.length) return [];
   const batch = missingTokens.slice(0, MAX_BATCH_GENERATE);
+  const langName = languageName(nativeLanguage);
   const schema = {
     type: "object",
     additionalProperties: false,
@@ -455,7 +477,7 @@ async function batchGenerateMissingWords(missingTokens) {
     schema,
     maxOutputTokens: 4000,
     systemPrompt:
-      "You are a Swedish dictionary editor for Chinese-speaking learners. For each token given, determine its dictionary base form (lemma) and return a minimal but correct entry: swedish (the lemma, not the inflected form as it appeared), pos, chinese (Simplified Chinese meaning), swedish_explanation (simple Swedish definition), forms (one 'form_type: value' per line — for verbs: infinitiv/presens/preteritum/supinum; for nouns: genus/singular_indefinite/singular_definite/plural_indefinite/plural_definite; for adjectives: base_form/neuter_form/plural_form), example (one natural Swedish sentence). If a token is not a real Swedish word (OCR noise, a name, a typo), set is_real_word to false and leave other fields minimal.",
+      `You are a Swedish dictionary editor for ${langName}-speaking learners. For each token given, determine its dictionary base form (lemma) and return a minimal but correct entry: swedish (the lemma, not the inflected form as it appeared), pos, chinese (a concise ${langName} meaning), swedish_explanation (simple Swedish definition), forms (one 'form_type: value' per line — for verbs: infinitiv/presens/preteritum/supinum; for nouns: genus/singular_indefinite/singular_definite/plural_indefinite/plural_definite; for adjectives: base_form/neuter_form/plural_form), example (one natural Swedish sentence). If a token is not a real Swedish word (OCR noise, a name, a typo), set is_real_word to false and leave other fields minimal.`,
     userPrompt: `Tokens (may be inflected forms — return each as its dictionary lemma):\n${batch.join(", ")}`,
   });
   return { words: (result.words || []).filter((w) => w.is_real_word), usage };
@@ -470,7 +492,8 @@ async function batchGenerateMissingWords(missingTokens) {
 // possibly non-literal expression". Key sentences are a third, independent
 // output (not just the source_sentence attached to a word/phrase) — the
 // most Shadowing-worthy sentences in the article.
-async function extractKeyExpressions(cleanedText, tier, glossary = [], vocabularyWords = []) {
+async function extractKeyExpressions(cleanedText, tier, glossary = [], vocabularyWords = [], nativeLanguage = "zh") {
+  const langName = languageName(nativeLanguage);
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const [collocMin, collocMax] = tierConfig.keyCollocations;
   const [idiomMin, idiomMax] = tierConfig.keyIdioms;
@@ -539,7 +562,7 @@ async function extractKeyExpressions(cleanedText, tier, glossary = [], vocabular
     schemaName: "key_expressions_and_sentences",
     schema,
     maxOutputTokens: 3000,
-    systemPrompt: `You extract four things from a Swedish text for a Chinese-speaking learner, each with its own criteria — never invent content, everything must actually appear in the text.
+    systemPrompt: `You extract four things from a Swedish text for a ${langName}-speaking learner, each with its own criteria — never invent content, everything must actually appear in the text. Every field named *_zh below (meaning_zh, source_sentence_zh, translation_zh) must be written entirely in ${langName} regardless of its name — write in ${langName}, never in Chinese unless ${langName} is Chinese, and never let a stray Swedish or ${langName} word drift into a field written in the other language.
 
 1. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious. Words that merely happen to sit next to each other in the sentence are not a collocation — the real test is: would a learner want to memorize this exact combination as one unit? If not, don't extract it.
 
@@ -555,7 +578,7 @@ Both collocations and idioms must be normalized to a reusable "learnable form", 
    e. Unclear reference or implied meaning — a pronoun or demonstrative (det/sådant/allt det där) that's genuinely hard to resolve without context.
    f. Tone, attitude, or a rhetorical question that changes the sentence's real meaning beyond its literal words.
    g. The sentence models a high-value, directly-reusable expression structure.
-   Do NOT select a sentence merely because: it's plot-important, it's the article's first sentence, it contains exactly one unfamiliar word (that word belongs in Viktiga ord, not here), its word order is perfectly ordinary, its structure is very basic, or it's a simple factual statement with no extra comprehension difficulty. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, written in Chinese (like meaning_zh/translation_zh elsewhere) — it must explain the ACTUAL comprehension mechanism, never a generic label alone like "从句结构" or "反问句". Required depth, e.g. for "Trots att det inte var december än hade affärerna redan börjat julskylta.": "trots att引导让步从句；än表示'还、尚'；hade börjat是过去完成时，表示在故事当前时间点之前这件事已经开始" — not just "过去完成时".
+   Do NOT select a sentence merely because: it's plot-important, it's the article's first sentence, it contains exactly one unfamiliar word (that word belongs in Viktiga ord, not here), its word order is perfectly ordinary, its structure is very basic, or it's a simple factual statement with no extra comprehension difficulty. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, written in ${langName} (like meaning_zh/translation_zh elsewhere) — it must explain the ACTUAL comprehension mechanism, never a generic label alone like "clause structure" or "rhetorical question". Required depth — for the Swedish sentence "Trots att det inte var december än hade affärerna redan börjat julskylta.", a reason at this level of specific detail (written in ${langName}, this is just illustrating the depth/specificity expected): "trots att introduces a concessive clause; än here means 'yet/still'; hade börjat is past perfect, marking that this had already started before the story's current point in time" — not a bare label like "past perfect".
 
 4. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). The test: can the learner directly substitute their own words into this pattern and reuse it in a new spoken or written sentence? If not, don't extract it — e.g. "när + bisats", "subjekt + verb", or "adjektiv + substantiv" are all far too basic/broad to have real learning value as a "pattern", even though they're technically patterns. Give the pattern name, its meaning in Chinese, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
 
@@ -580,7 +603,7 @@ Every source_sentence/sentence must be quoted exactly from the text. Return empt
 // status "ai_generated" (same convention as auto-generated words — see
 // spraklab-ai-review-gate-reminder memory: this review gate isn't enforced
 // yet, so these are immediately visible like everything else).
-async function resolveExpressionEntries(supabaseAdmin, items, { objectType, category }) {
+async function resolveExpressionEntries(supabaseAdmin, items, { objectType, category, nativeLanguage = "zh" }) {
   if (!items.length) return items;
   const texts = items.map((item) => item.expression_text);
   const { data: existing } = await supabaseAdmin.from("learning_objects").select("id, swedish").in("object_type", ["phrase", "expression"]).in("swedish", texts);
@@ -596,7 +619,12 @@ async function resolveExpressionEntries(supabaseAdmin, items, { objectType, cate
       pos_detail: "",
       object_type: objectType,
       category,
-      chinese: item.meaning_zh,
+      // learning_objects.chinese must stay actually-Chinese (it's the
+      // always-present legacy fallback every zh read path still uses) — a
+      // phrase first discovered while reading in a non-zh language only
+      // gets its translation-row meaning below, same as every other
+      // per-language content gap in this app.
+      chinese: nativeLanguage === "zh" ? item.meaning_zh : "",
       swedish_explanation: "",
       example_sv: item.source_sentence,
       forms: "",
@@ -612,7 +640,7 @@ async function resolveExpressionEntries(supabaseAdmin, items, { objectType, cate
     if (!insertError && inserted) {
       const translationRows = inserted.map((row) => {
         const source = toCreate.find((item) => item.expression_text.toLowerCase() === row.swedish.toLowerCase());
-        return { learning_object_id: row.id, native_language: "zh", meaning: source?.meaning_zh || "", updated_at: now };
+        return { learning_object_id: row.id, native_language: nativeLanguage, meaning: source?.meaning_zh || "", updated_at: now };
       });
       if (translationRows.length) await supabaseAdmin.from("learning_object_translations").insert(translationRows);
       inserted.forEach((row) => byText.set(row.swedish.toLowerCase(), row.id));
@@ -665,7 +693,7 @@ export async function classifyReadingExpression({ supabaseAdmin, expressionId, c
 // Cross-user by design (service-role bypasses RLS) — only ever reads
 // text_analysis (structured knowledge), never another user's
 // text_resources.original_text/cleaned_text.
-async function findPublicAnalysisByHash(supabaseAdmin, hash) {
+async function findPublicAnalysisByHash(supabaseAdmin, hash, nativeLanguage = "zh") {
   const { data: resources } = await supabaseAdmin.from("text_resources").select("id").eq("text_hash", hash);
   const resourceIds = (resources || []).map((r) => r.id);
   if (!resourceIds.length) return null;
@@ -674,6 +702,8 @@ async function findPublicAnalysisByHash(supabaseAdmin, hash) {
     .select("*")
     .in("text_resource_id", resourceIds)
     .eq("visibility", "public")
+    .eq("native_language", nativeLanguage)
+    .eq("status", "ready")
     .order("analysis_version", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -736,7 +766,8 @@ async function materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis
 // right after this one returns. Both write into the SAME text_analysis row
 // (insert here, update there) so cache-hit/public-reuse logic still keys
 // off one row per text_hash exactly as before.
-async function generateFastLayer(cleanedText, tier) {
+async function generateFastLayer(cleanedText, tier, nativeLanguage = "zh") {
+  const langName = languageName(nativeLanguage);
   const [minSentences, maxSentences] = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier].summarySentences;
   const schema = {
     type: "object",
@@ -753,16 +784,16 @@ async function generateFastLayer(cleanedText, tier) {
     schemaName: "reading_fast_layer",
     schema,
     maxOutputTokens: 900,
-    systemPrompt: `You orient a Chinese-speaking learner to a Swedish text before they start reading — this must be fast to read and fast to generate, it is NOT the full analysis (vocabulary/expressions/grammar come later from a separate step).
+    systemPrompt: `You orient a ${langName}-speaking learner to a Swedish text before they start reading — this must be fast to read and fast to generate, it is NOT the full analysis (vocabulary/expressions/grammar come later from a separate step). Fields named *_zh below (headline_zh, summary_zh) must be written in ${langName} regardless of their name.
 
-1. headline_zh: one short Chinese sentence naming what the article is about.
-2. summary_sv/summary_zh: ${minSentences}-${maxSentences} sentences (max 5) each, covering only the main topic, core content, and key conclusion — no background info, no grammar explanation.
-3. key_points: exactly 3 short Chinese bullet points (fewer only if the text is too short/simple to genuinely support 3 distinct ones) naming the most important pieces of CONTENT in the article — what a reader should watch for or take away. These are about content, never about grammar or language structure (that's a separate feature elsewhere in the app) — do not describe a grammatical construction here.`,
+1. headline_zh: one short ${langName} sentence naming what the article is about.
+2. summary_sv/summary_zh: ${minSentences}-${maxSentences} sentences (max 5) each, covering only the main topic, core content, and key conclusion — no background info, no grammar explanation. summary_sv stays 100% in Swedish; summary_zh is 100% in ${langName}. These are two independent texts, not one text shown twice — never let a word or phrase from one leak into the other (e.g. summary_sv must never contain a stray ${langName} word or vice versa), even where they express the same idea.
+3. key_points: exactly 3 short ${langName} bullet points (fewer only if the text is too short/simple to genuinely support 3 distinct ones) naming the most important pieces of CONTENT in the article — what a reader should watch for or take away. These are about content, never about grammar or language structure (that's a separate feature elsewhere in the app) — do not describe a grammatical construction here.`,
     userPrompt: cleanedText,
   });
 }
 
-export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, sourceType = "paste", glossary = [] }) {
+export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, sourceType = "paste", glossary = [], nativeLanguage = "zh" }) {
   const cleaned = cleanText(text);
   const wordCount = countWords(cleaned);
   const hash = textHash(cleaned);
@@ -798,17 +829,18 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
     .from("text_analysis")
     .select("*")
     .eq("text_resource_id", textResource.id)
+    .eq("native_language", nativeLanguage)
     .order("analysis_version", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (existingAnalysis) {
-    // Either fully cached (deep layer already ran a previous time) or a
-    // fast-only row left over from an interrupted previous attempt (e.g.
-    // the user closed the app before the deep call finished) — either way,
-    // no new AI call needed here; the client decides whether to also call
-    // the deep endpoint based on deepReady.
-    const deepReady = textResource.analysis_status === "ready";
+    // Either fully cached (deep layer already ran a previous time, in this
+    // language) or a fast-only row left over from an interrupted previous
+    // attempt (e.g. the user closed the app before the deep call finished)
+    // — either way, no new AI call needed here; the client decides whether
+    // to also call the deep endpoint based on deepReady.
+    const deepReady = existingAnalysis.status === "ready";
     if (deepReady) await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: existingAnalysis });
     return { textResource, analysis: existingAnalysis, tier, cached: true, deepReady };
   }
@@ -825,7 +857,7 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
   // calling AI. The current user still gets their own private
   // text_resource row for their own reading history above; nothing about
   // another user's submission is exposed here beyond the shared analysis.
-  const publicAnalysis = await findPublicAnalysisByHash(supabaseAdmin, hash);
+  const publicAnalysis = await findPublicAnalysisByHash(supabaseAdmin, hash, nativeLanguage);
   if (publicAnalysis) {
     await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: publicAnalysis });
     await supabaseAdmin.from("text_resources").update({ analysis_status: "ready" }).eq("id", textResource.id);
@@ -838,7 +870,7 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
     throw error;
   }
 
-  const { result, usage } = await generateFastLayer(cleaned, tier);
+  const { result, usage } = await generateFastLayer(cleaned, tier, nativeLanguage);
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_fast_layer", model: MODEL, usage, cacheHit: false });
   if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
 
@@ -847,6 +879,8 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
     .insert({
       text_resource_id: textResource.id,
       analysis_version: 1,
+      native_language: nativeLanguage,
+      status: "summary_ready",
       headline_zh: result.headline_zh,
       summary_sv: result.summary_sv,
       summary_zh: result.summary_zh,
@@ -861,16 +895,133 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
   return { textResource, analysis: analysisRow, tier, cached: false, deepReady: false };
 }
 
+// Reviews/阅读模块多母语支持-架构方案-2026-09-01.md §三: when a SECOND
+// language is requested for an article whose deep layer already ran in a
+// different language, don't repeat the expensive part (candidate token
+// extraction, missing-word generation, Worth Learning scoring, key-
+// expression extraction from the whole article) — the "what to select" is
+// language-independent and already decided. Just ask for a target-language
+// explanation of that same fixed list, one cheap bundled call, and refresh
+// the vocabulary meaning fallback from the corpus (no AI, it's just a
+// lookup). Returns the updated (current-language) text_analysis row.
+async function explainExistingSelectionInLanguage({ supabaseAdmin, userId, textResource, existingAnalysis, sourceAnalysis, nativeLanguage }) {
+  const langName = languageName(nativeLanguage);
+  const expressions = sourceAnalysis.selected_expressions || [];
+  const sentences = sourceAnalysis.key_sentences || [];
+  const patterns = sourceAnalysis.language_patterns || [];
+  const usageLogEntries = [];
+
+  let explained = { expressions: [], sentences: [], patterns: [] };
+  if (expressions.length || sentences.length || patterns.length) {
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        expressions: {
+          type: "array",
+          items: { type: "object", additionalProperties: false, properties: { meaning: { type: "string" }, source_sentence_translation: { type: "string" } }, required: ["meaning", "source_sentence_translation"] },
+        },
+        sentences: {
+          type: "array",
+          items: { type: "object", additionalProperties: false, properties: { translation: { type: "string" }, reason: { type: "string" } }, required: ["translation", "reason"] },
+        },
+        patterns: {
+          type: "array",
+          items: { type: "object", additionalProperties: false, properties: { meaning: { type: "string" } }, required: ["meaning"] },
+        },
+      },
+      required: ["expressions", "sentences", "patterns"],
+    };
+    const userPrompt = JSON.stringify({
+      expressions: expressions.map((e) => ({ expression_text: e.expression_text, source_sentence: e.source_sentence })),
+      sentences: sentences.map((s) => ({ sentence: s.sentence })),
+      patterns: patterns.map((p) => ({ pattern: p.pattern, source_sentence: p.source_sentence })),
+    });
+    const { result, usage } = await callOpenAI({
+      schemaName: "explain_existing_selection",
+      schema,
+      maxOutputTokens: 2000,
+      systemPrompt: `A Swedish text has already been analyzed and these expressions/sentences/patterns were already selected as worth learning by a previous pass — you are NOT selecting or filtering anything here, only explaining each one for a ${langName}-speaking learner, one output entry per input entry, same order, same count.
+
+For each entry in "expressions": meaning = a concise ${langName} translation/explanation of the expression; source_sentence_translation = a ${langName} translation of its source_sentence.
+For each entry in "sentences": translation = a ${langName} translation of the sentence; reason = a ${langName} explanation of why this sentence is worth studying — the actual comprehension mechanism (grammar point, idiom, ambiguity, tense relationship, etc.), never a generic label alone.
+For each entry in "patterns": meaning = a concise ${langName} explanation of the pattern.`,
+      userPrompt,
+    });
+    explained = result;
+    logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_translate_selection", model: MODEL, usage, cacheHit: false });
+  }
+
+  // Vocabulary meaning fallback: a plain corpus lookup, no AI needed — the
+  // word_id references are reused as-is (language-independent facts).
+  const wordIds = (sourceAnalysis.selected_vocabulary || []).map((v) => v.word_id).filter(Boolean);
+  const meaningByWordId = new Map();
+  if (wordIds.length) {
+    const { data: rows } = await supabaseAdmin
+      .from("learning_objects")
+      .select("id, chinese, learning_object_translations(meaning, native_language)")
+      .in("id", wordIds);
+    (rows || []).forEach((row) => {
+      const translated = (row.learning_object_translations || []).find((t) => t.native_language === nativeLanguage);
+      meaningByWordId.set(row.id, nativeLanguage === "zh" ? row.chinese : (translated?.meaning || row.chinese));
+    });
+  }
+
+  const selectedVocabulary = (sourceAnalysis.selected_vocabulary || []).map((v) => ({ ...v, chinese: meaningByWordId.get(v.word_id) ?? v.chinese }));
+  const selectedExpressions = expressions.map((e, index) => ({
+    ...e,
+    meaning_zh: explained.expressions[index]?.meaning || "",
+    source_sentence_zh: explained.expressions[index]?.source_sentence_translation || "",
+  }));
+  const selectedSentences = sentences.map((s, index) => ({
+    ...s,
+    translation_zh: explained.sentences[index]?.translation || "",
+    reason: explained.sentences[index]?.reason || s.reason,
+  }));
+  const selectedPatterns = patterns.map((p, index) => ({ ...p, meaning_zh: explained.patterns[index]?.meaning || "" }));
+
+  const { data: analysisRow, error } = await supabaseAdmin
+    .from("text_analysis")
+    .update({
+      selected_vocabulary: selectedVocabulary,
+      selected_expressions: selectedExpressions,
+      key_sentences: selectedSentences,
+      language_patterns: selectedPatterns,
+      status: "ready",
+    })
+    .eq("id", existingAnalysis.id)
+    .select()
+    .single();
+  if (error) throw error;
+
+  usageLogEntries.push({
+    user_id: userId || null,
+    text_resource_id: textResource.id,
+    feature: "analysis",
+    model: MODEL,
+    input_tokens: 0,
+    output_tokens: 0,
+    credits_used: calculateCredits("analysis", textResource.word_count),
+    actual_cost: 0,
+    cache_hit: true,
+  });
+  if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
+
+  return analysisRow;
+}
+
 // Deep layer — the original heavy vocabulary/expressions/sentences/patterns
 // work, unchanged in substance, now operating on a text_resource +
 // text_analysis row the fast layer already created, UPDATING that same row
-// instead of inserting a new one. Idempotent: if analysis_status is already
-// "ready" (e.g. a duplicate client call), just returns the existing row
-// rather than re-spending AI calls.
-export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textResourceId }) {
+// instead of inserting a new one. Idempotent: if this language's own row is
+// already "ready" (e.g. a duplicate client call), just returns the existing
+// row rather than re-spending AI calls. If a DIFFERENT language's row for
+// the same article already reached "ready", takes the cheap
+// explainExistingSelectionInLanguage path instead of the full pipeline below.
+export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textResourceId, nativeLanguage = "zh" }) {
   const { data: textResource, error: resourceError } = await supabaseAdmin
     .from("text_resources")
-    .select("id, cleaned_text, word_count, analysis_status, textbook_glossary")
+    .select("id, cleaned_text, word_count, textbook_glossary")
     .eq("id", textResourceId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -884,6 +1035,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     .from("text_analysis")
     .select("*")
     .eq("text_resource_id", textResource.id)
+    .eq("native_language", nativeLanguage)
     .order("analysis_version", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -895,9 +1047,26 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
 
   const tier = classifyLength(textResource.word_count);
 
-  if (textResource.analysis_status === "ready") {
+  if (existingAnalysis.status === "ready") {
     await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: existingAnalysis });
     return { analysis: existingAnalysis, tier };
+  }
+
+  const { data: readyOtherLanguage } = await supabaseAdmin
+    .from("text_analysis")
+    .select("*")
+    .eq("text_resource_id", textResource.id)
+    .eq("status", "ready")
+    .neq("native_language", nativeLanguage)
+    .order("analysis_version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (readyOtherLanguage) {
+    const analysisRow = await explainExistingSelectionInLanguage({ supabaseAdmin, userId, textResource, existingAnalysis, sourceAnalysis: readyOtherLanguage, nativeLanguage });
+    await supabaseAdmin.from("text_resources").update({ analysis_status: "ready" }).eq("id", textResource.id);
+    await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: analysisRow });
+    return { analysis: analysisRow, tier };
   }
 
   const cleaned = textResource.cleaned_text;
@@ -914,7 +1083,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   // missing-word generation call — the book already did that job for free.
   const glossaryWords = new Set((glossary || []).map((g) => String(g.word || "").toLowerCase()).filter(Boolean));
   const tokens = [...freq.keys()].filter((t) => !glossaryWords.has(t));
-  const found = await matchAgainstCorpus(supabaseAdmin, tokens);
+  const found = await matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage);
   const userWordState = await fetchUserWordState(supabaseAdmin, userId, [...found.values()].map((w) => w.id));
 
   let ranked = rankFoundWords(found, freq, firstSeenCapitalized, userWordState, vocabularyLimit * 2);
@@ -928,14 +1097,18 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
 
   let generatedWords = [];
   if (missingTokens.length && ranked.length < vocabularyLimit) {
-    const { words, usage } = await batchGenerateMissingWords(missingTokens);
+    const { words, usage } = await batchGenerateMissingWords(missingTokens, nativeLanguage);
     logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "missing_word_batch", model: MODEL, usage, cacheHit: false });
     if (words.length) {
       const rows = words.map((w) => ({
         swedish: w.swedish,
         part_of_speech: w.pos,
         object_type: "word",
-        chinese: w.chinese,
+        // learning_objects.chinese must stay actually-Chinese — see the
+        // matching comment in resolveExpressionEntries. A word first
+        // generated while reading in a non-zh language only gets a
+        // translation-row meaning below.
+        chinese: nativeLanguage === "zh" ? w.chinese : "",
         swedish_explanation: w.swedish_explanation,
         forms: w.forms,
         example: w.example,
@@ -944,15 +1117,20 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
       const { data: inserted, error: insertErr } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish, part_of_speech, chinese, cefr_level, frequency_rank");
       if (!insertErr && inserted) {
         generatedWords = inserted;
-        inserted.forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: row.chinese, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
+        inserted.forEach((row) => {
+          const source = words.find((w) => w.swedish.toLowerCase() === row.swedish.toLowerCase());
+          found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: source?.chinese || row.chinese, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank });
+        });
         // 2026-09-01 structure-cleanup fix: this path never wrote a
         // learning_object_translations row at all (chinese only ever landed
         // on the legacy learning_objects.chinese column), unlike every other
-        // word-creation path in the app. Worked by accident today (chinese
+        // word-creation path in the app. Worked by accident for zh (chinese
         // falls back to that legacy column), but left these words with no
-        // 'zh' translation row for a future multi-language read path to
-        // find at all.
-        const translationRows = inserted.map((row) => ({ learning_object_id: row.id, native_language: "zh", meaning: row.chinese || "", updated_at: new Date().toISOString() }));
+        // translation row for a future multi-language read path to find.
+        const translationRows = inserted.map((row) => {
+          const source = words.find((w) => w.swedish.toLowerCase() === row.swedish.toLowerCase());
+          return { learning_object_id: row.id, native_language: nativeLanguage, meaning: source?.chinese || "", updated_at: new Date().toISOString() };
+        });
         if (translationRows.length) {
           const { error: translationErr } = await supabaseAdmin.from("learning_object_translations").insert(translationRows);
           if (translationErr) console.warn("[Reading] Failed to insert translation rows for generated words.", translationErr);
@@ -975,20 +1153,20 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     word_id: c.word.id,
     swedish: c.word.swedish,
     // Rachel, 2026-08-10: the reading word list's collapsed card needs to
-    // show ordklass + Chinese meaning right away, but a just-generated
-    // missing word isn't in the client's own (session-start) word snapshot
-    // yet — carry both fields on the entry itself so the frontend never
-    // has to depend on that snapshot being fresh.
+    // show ordklass + native-language meaning right away, but a just-
+    // generated missing word isn't in the client's own (session-start) word
+    // snapshot yet — carry both fields on the entry itself so the frontend
+    // never has to depend on that snapshot being fresh.
     pos: c.word.pos,
     chinese: c.word.chinese,
     occurrences: c.occurrences,
     worth_learning_score: c.worthLearningScore ?? null,
   }));
 
-  const { collocations, idioms, keySentences, languagePatterns, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary, rawSelectedVocabulary.map((v) => v.swedish));
+  const { collocations, idioms, keySentences, languagePatterns, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary, rawSelectedVocabulary.map((v) => v.swedish), nativeLanguage);
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "key_expressions", model: MODEL, usage: exprUsage, cacheHit: false });
-  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, collocations, { objectType: "phrase", category: "common_collocation" });
-  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, idioms, { objectType: "expression", category: "everyday_expression" });
+  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
+  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
   const selectedExpressions = [
     ...resolvedCollocations.map((e) => ({ ...e, category: "collocation" })),
     ...resolvedIdioms.map((e) => ({ ...e, category: "idiom" })),
@@ -1015,6 +1193,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
       selected_expressions: selectedExpressions,
       key_sentences: selectedSentences,
       language_patterns: selectedPatterns,
+      status: "ready",
     })
     .eq("id", existingAnalysis.id)
     .select()
@@ -1044,17 +1223,18 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
 }
 
 // 规范§9.3/§10 — summary is on-demand only, never generated at import time.
-export async function generateReadingSummary({ supabaseAdmin, userId, textResourceId }) {
+export async function generateReadingSummary({ supabaseAdmin, userId, textResourceId, nativeLanguage = "zh" }) {
   const { data: resource, error: resourceError } = await supabaseAdmin.from("text_resources").select("id, cleaned_text, word_count, user_id").eq("id", textResourceId).eq("user_id", userId).single();
   if (resourceError || !resource) {
     const error = new Error("Texten hittades inte.");
     error.status = 404;
     throw error;
   }
-  const { data: analysis } = await supabaseAdmin.from("text_analysis").select("*").eq("text_resource_id", textResourceId).order("analysis_version", { ascending: false }).limit(1).maybeSingle();
+  const { data: analysis } = await supabaseAdmin.from("text_analysis").select("*").eq("text_resource_id", textResourceId).eq("native_language", nativeLanguage).order("analysis_version", { ascending: false }).limit(1).maybeSingle();
   if (analysis?.summary_sv) return { summary_sv: analysis.summary_sv, summary_zh: analysis.summary_zh, cached: true };
 
   const tier = classifyLength(resource.word_count);
+  const langName = languageName(nativeLanguage);
   const [minSentences, maxSentences] = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier].summarySentences;
   const schema = {
     type: "object",
@@ -1066,7 +1246,7 @@ export async function generateReadingSummary({ supabaseAdmin, userId, textResour
     schemaName: "reading_summary",
     schema,
     maxOutputTokens: 800,
-    systemPrompt: `Summarize the given Swedish text in ${minSentences}-${maxSentences} sentences, maximum 5. Cover only the main topic, core content, and key conclusion — no background info, no grammar explanation. Provide both a Swedish summary and a Simplified Chinese summary of equivalent length.`,
+    systemPrompt: `Summarize the given Swedish text in ${minSentences}-${maxSentences} sentences, maximum 5. Cover only the main topic, core content, and key conclusion — no background info, no grammar explanation. Provide both a Swedish summary (summary_sv) and a ${langName} summary (summary_zh, written in ${langName} regardless of its field name) of equivalent length. These are two independent texts, not one text shown twice — never let a word or phrase from one leak into the other, even where they express the same idea.`,
     userPrompt: resource.cleaned_text,
   });
 
@@ -1077,7 +1257,7 @@ export async function generateReadingSummary({ supabaseAdmin, userId, textResour
   if (analysis) {
     await supabaseAdmin.from("text_analysis").update({ summary_sv: result.summary_sv, summary_zh: result.summary_zh, summary_generated_at: new Date().toISOString() }).eq("id", analysis.id);
   } else {
-    await supabaseAdmin.from("text_analysis").insert({ text_resource_id: textResourceId, analysis_version: 1, summary_sv: result.summary_sv, summary_zh: result.summary_zh, summary_generated_at: new Date().toISOString() });
+    await supabaseAdmin.from("text_analysis").insert({ text_resource_id: textResourceId, analysis_version: 1, native_language: nativeLanguage, status: "summary_ready", summary_sv: result.summary_sv, summary_zh: result.summary_zh, summary_generated_at: new Date().toISOString() });
   }
 
   return { summary_sv: result.summary_sv, summary_zh: result.summary_zh, cached: false };
