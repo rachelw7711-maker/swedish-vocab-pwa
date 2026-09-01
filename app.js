@@ -826,9 +826,12 @@ const els = {
   achievementReadingCount: document.querySelector("#achievementReadingCount"),
   achievementReadingDetail: document.querySelector("#achievementReadingDetail"),
   achievementShadowingTime: document.querySelector("#achievementShadowingTime"),
-  entryNewCount: document.querySelector("#entryNewCount"),
-  entryReviewCount: document.querySelector("#entryReviewCount"),
-  entryReviewDetail: document.querySelector("#entryReviewDetail"),
+  entryReviewProgressLabel: document.querySelector("#entryReviewProgressLabel"),
+  entryReviewProgressFill: document.querySelector("#entryReviewProgressFill"),
+  entryNewProgressLabel: document.querySelector("#entryNewProgressLabel"),
+  entryNewProgressFill: document.querySelector("#entryNewProgressFill"),
+  entryLibraryProgressLabel: document.querySelector("#entryLibraryProgressLabel"),
+  entryLibraryProgressFill: document.querySelector("#entryLibraryProgressFill"),
   studyWorkloadMessage: document.querySelector("#studyWorkloadMessage"),
   readingShadowingEntryCard: document.querySelector("#readingShadowingEntryCard"),
   readingShadowingEntryTitle: document.querySelector("#readingShadowingEntryTitle"),
@@ -4237,14 +4240,17 @@ async function renderReadingShadowingEntryCard() {
   const shadowingToday = getShadowingItems().filter((item) => Number(item.createdAt || 0) >= todayMs).length;
 
   // 2026-08-11, Rachel's request: the card's title is now a static
-  // "Läs/Lyssna/Härma" explaining what Studio is (set in index.html),
-  // not swapped per state — only the detail line and button still change.
+  // "Läs/Lyssna/Härma" explaining what Studio is (set in index.html), not
+  // swapped per state — only the detail line changes.
+  // 2026-09-02: readingShadowingEntryBtn is now the circle-arrow icon
+  // overlaid on the cover image (see .study-entry-enter) — no more
+  // .textContent here, that used to overwrite the arrow SVG with plain
+  // "Börja träna"/"Fortsätt" text. The detail line alone communicates the
+  // start-vs-continue state now.
   if (!readingsToday && !shadowingToday) {
     els.readingShadowingEntryDetail.textContent = "Ta ett foto eller klistra in en text";
-    els.readingShadowingEntryBtn.textContent = "Börja träna";
   } else {
     els.readingShadowingEntryDetail.textContent = `${readingsToday} läsning${readingsToday === 1 ? "" : "ar"} idag · ${shadowingToday} Shadowing-pass idag`;
-    els.readingShadowingEntryBtn.textContent = "Fortsätt";
   }
 }
 
@@ -4301,6 +4307,30 @@ async function renderHomeAchievements() {
   }
   if (els.achievementReadingCount) els.achievementReadingCount.textContent = readingItems.length;
   const resourceIds = readingItems.map((item) => item.text_resource_id).filter(Boolean);
+
+  // Startbibliotek homepage card progress ("X av 12 tillagda") — same
+  // "fetch fresh, don't gate on a shared loaded flag" reasoning as
+  // readingItems above, and needed here regardless of whether the user has
+  // ever opened the starter-library tab yet (that's where state.starterLibrary
+  // normally gets populated).
+  if (els.entryLibraryProgressLabel || els.entryLibraryProgressFill) {
+    try {
+      const starterLibrary = state.starterLibraryLoaded ? state.starterLibrary : await remoteDb.loadStarterLibrary();
+      if (myToken !== homeAchievementsRenderToken) return;
+      if (!state.starterLibraryLoaded) {
+        state.starterLibraryLoaded = true;
+        state.starterLibrary = starterLibrary;
+      }
+      const starterResourceIds = new Set(starterLibrary.map((entry) => entry.id));
+      const addedCount = new Set(resourceIds.filter((id) => starterResourceIds.has(id))).size;
+      const total = starterLibrary.length;
+      if (els.entryLibraryProgressLabel) els.entryLibraryProgressLabel.textContent = total ? `${addedCount} av ${total} tillagda` : "…";
+      if (els.entryLibraryProgressFill) els.entryLibraryProgressFill.style.width = `${total ? Math.round((addedCount / total) * 100) : 0}%`;
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to load starter library progress for home card.", error);
+    }
+  }
+
   if (resourceIds.length) {
     try {
       const statsByResource = await remoteDb.loadReadingListStats(resourceIds);
@@ -4378,16 +4408,20 @@ function renderStudyStats() {
   els.studyReviewCount.textContent = `${completedReview}/${dueOverdueTotal}`;
   els.studyStreakCount.textContent = streak;
   els.studyMasteredCount.textContent = mastered;
-  els.entryNewCount.textContent = `${availableNew} ord idag`;
-  els.entryReviewCount.textContent = reviewSession.completed && reviewTotal > 0
-    ? `${completedReview} av ${reviewTotal} klara idag`
-    : `${availableReview} ord kvar idag`;
-  // "Due: N / Overdue: M / Estimated: X min" per SPK-HOM-001 §3.1 —
-  // dueOverdueTotal is the real uncapped backlog, not just today's batch.
-  if (els.entryReviewDetail) {
-    els.entryReviewDetail.textContent = dueOverdueTotal > 0
-      ? `Idag ${dueTodayCount} · Försenat ${overdueCount} · Ca ${Math.max(1, Math.round(dueOverdueTotal * 0.75))} min`
-      : "";
+  // 2026-09-02, Rachel's homepage card redesign: "X av Y klara" + a percent
+  // bar, under the new poster-image cards, replacing the old plain count
+  // text. Reuses the exact same numbers the old text already computed.
+  if (els.entryReviewProgressLabel) {
+    els.entryReviewProgressLabel.textContent = reviewTotal > 0 ? `${completedReview} av ${reviewTotal} klara` : "Inget att repetera idag";
+  }
+  if (els.entryReviewProgressFill) {
+    els.entryReviewProgressFill.style.width = `${reviewTotal > 0 ? Math.round((completedReview / reviewTotal) * 100) : 0}%`;
+  }
+  if (els.entryNewProgressLabel) {
+    els.entryNewProgressLabel.textContent = `${todayNew} av ${dailyTarget} klara`;
+  }
+  if (els.entryNewProgressFill) {
+    els.entryNewProgressFill.style.width = `${dailyTarget > 0 ? Math.round((todayNew / dailyTarget) * 100) : 0}%`;
   }
   if (els.studyWorkloadMessage) {
     els.studyWorkloadMessage.textContent = workload.reason;
@@ -4402,13 +4436,16 @@ function renderStudyStats() {
   if (els.dailyNewWordTargetReadout) {
     els.dailyNewWordTargetReadout.textContent = `Mål/dag: ${dailyTarget}`;
   }
+  // 2026-09-02: these are now small circle-arrow icon buttons (see
+  // .study-entry-enter), not text buttons — only toggle .disabled here,
+  // never .textContent, which would overwrite the arrow SVG with plain text.
   if (els.startNewStudyBtn) {
     els.startNewStudyBtn.disabled = availableNew === 0 || newSession.completed;
-    els.startNewStudyBtn.textContent = workload.allowedNewWords === 0 && dueOverdueTotal > 0 ? "Slutför repetition först" : "Börja lära";
+    els.startNewStudyBtn.title = workload.allowedNewWords === 0 && dueOverdueTotal > 0 ? "Slutför repetition först" : "Börja lära";
   }
   if (els.startReviewStudyBtn) {
     els.startReviewStudyBtn.disabled = reviewTotal === 0;
-    els.startReviewStudyBtn.textContent = reviewSession.completed && reviewTotal > 0 ? "Visa repetition" : "Börja repetera";
+    els.startReviewStudyBtn.title = reviewSession.completed && reviewTotal > 0 ? "Visa repetition" : "Börja repetera";
   }
   els.completeTodayCount.textContent = `${completedTotal} klara idag`;
   els.completeMasteredCount.textContent = `${mastered} lärda ord`;

@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=188" />
+    <link rel="stylesheet" href="/styles.css?v=189" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -159,50 +159,47 @@
             </ol>
             <div class="study-entry-grid">
               <article class="study-entry-card">
-                <div class="study-entry-copy">
-                  <div class="study-entry-heading">
-                    <p class="section-kicker">REPETITION</p>
-                    <span class="study-entry-icon" aria-hidden="true">📝</span>
-                  </div>
-                  <h3>Repetera ord</h3>
+                <div class="study-entry-image" style="background-image: url('/icons/home-cards/repetition.png')">
+                  <button class="study-entry-enter" id="startReviewStudyBtn" type="button" aria-label="Börja repetera">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
                 </div>
-                <strong id="entryReviewCount">…</strong>
-                <span class="study-entry-detail" id="entryReviewDetail"></span>
-                <button class="primary-button" id="startReviewStudyBtn" type="button">Börja repetera</button>
+                <div class="study-entry-progress">
+                  <span class="study-entry-progress-label" id="entryReviewProgressLabel">…</span>
+                  <div class="study-entry-progress-track"><div class="study-entry-progress-fill" id="entryReviewProgressFill"></div></div>
+                </div>
               </article>
               <article class="study-entry-card">
-                <div class="study-entry-copy">
-                  <div class="study-entry-heading">
-                    <p class="section-kicker">NYA ORD</p>
-                    <span class="study-entry-icon" aria-hidden="true">🔍</span>
-                  </div>
-                  <h3>Lär dig nya ord</h3>
+                <div class="study-entry-image" style="background-image: url('/icons/home-cards/nyaord.png')">
+                  <button class="study-entry-enter" id="startNewStudyBtn" type="button" aria-label="Börja lära dig nya ord">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
                 </div>
-                <strong id="entryNewCount">…</strong>
-                <span class="study-entry-target-readonly" id="dailyNewWordTargetReadout">Mål/dag: 10</span>
-                <button class="secondary-button" id="startNewStudyBtn" type="button">Börja lära</button>
+                <div class="study-entry-progress">
+                  <span class="study-entry-progress-label" id="entryNewProgressLabel">…</span>
+                  <div class="study-entry-progress-track"><div class="study-entry-progress-fill" id="entryNewProgressFill"></div></div>
+                </div>
               </article>
               <article class="study-entry-card" id="readingShadowingEntryCard">
-                <div class="study-entry-copy">
-                  <div class="study-entry-heading">
-                    <p class="section-kicker">STUDIO</p>
-                    <span class="study-entry-icon" aria-hidden="true">📖</span>
-                  </div>
-                  <h3 id="readingShadowingEntryTitle">Läs/<wbr>Lyssna/<wbr>Härma</h3>
+                <div class="study-entry-image" style="background-image: url('/icons/home-cards/studio.png')">
+                  <button class="study-entry-enter" id="readingShadowingEntryBtn" type="button" aria-label="Öppna Läs/Lyssna/Härma">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
                 </div>
-                <span class="study-entry-detail" id="readingShadowingEntryDetail">Ta ett foto eller klistra in en text</span>
-                <button class="secondary-button" id="readingShadowingEntryBtn" type="button">Börja träna</button>
+                <div class="study-entry-progress">
+                  <span class="study-entry-progress-label" id="readingShadowingEntryDetail">Ta ett foto eller klistra in en text</span>
+                </div>
               </article>
               <article class="study-entry-card" id="starterLibraryEntryCard">
-                <div class="study-entry-copy">
-                  <div class="study-entry-heading">
-                    <p class="section-kicker">STARTBIBLIOTEK</p>
-                    <span class="study-entry-icon" aria-hidden="true">📚</span>
-                  </div>
-                  <h3>Läs direkt</h3>
+                <div class="study-entry-image" style="background-image: url('/icons/home-cards/lasning.png')">
+                  <button class="study-entry-enter" id="starterLibraryEntryBtn" type="button" aria-label="Öppna startbiblioteket">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
                 </div>
-                <span class="study-entry-detail">12 färdiga texter, A1–B2</span>
-                <button class="secondary-button" id="starterLibraryEntryBtn" type="button">Öppna biblioteket</button>
+                <div class="study-entry-progress">
+                  <span class="study-entry-progress-label" id="entryLibraryProgressLabel">…</span>
+                  <div class="study-entry-progress-track"><div class="study-entry-progress-fill" id="entryLibraryProgressFill"></div></div>
+                </div>
               </article>
             </div>
             <div class="study-entry-dots" id="studyEntryDots" role="tablist" aria-label="Fler kort"></div>
@@ -1488,6 +1485,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=204" type="module"></script>
+    <script src="/app.js?v=205" type="module"></script>
   </body>
 </html>

@@ -3447,76 +3447,83 @@ h2 {
   background: var(--accent-strong, #3f5f52);
 }
 
+/* 2026-09-02, Rachel's request: replaced the icon+heading+text-button
+   layout with the poster-style cover images she supplied (cropped to their
+   colored brushstroke region, see icons/home-cards/) — a small circle
+   "enter" button top-right of the image, a completion progress bar below. */
 .study-entry-card {
   display: grid;
-  align-content: space-between;
   gap: 8px;
-  min-height: 148px;
-  flex: 0 0 158px;
-  width: 158px;
+  flex: 0 0 260px;
+  width: 260px;
   scroll-snap-align: start;
-  padding: 12px;
-  border: 1px solid rgba(55, 65, 72, 0.08);
   border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(55, 65, 72, 0.08);
   background: rgba(255, 255, 255, 0.66);
   box-shadow: 0 12px 30px rgba(31, 42, 48, 0.055);
 }
 
-.study-entry-copy {
-  display: grid;
-  gap: 8px;
+.study-entry-image {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 600 / 312;
+  background-size: cover;
+  background-position: center;
+  background-color: rgba(111, 143, 128, 0.15);
 }
 
-.study-entry-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.study-entry-icon {
-  display: inline-grid;
+.study-entry-enter {
+  position: absolute;
+  top: 10px;
+  right: 10px;
   width: 34px;
   height: 34px;
-  flex: 0 0 auto;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #353b39;
+  display: grid;
   place-items: center;
-  border-radius: 12px;
-  background: rgba(111, 143, 128, 0.1);
-  color: var(--accent-strong);
-  font-size: 1.05rem;
-  line-height: 1;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
 }
 
-.study-entry-icon svg {
-  width: 19px;
-  height: 19px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.study-entry-enter svg {
+  width: 18px;
+  height: 18px;
 }
 
-.study-entry-card h3 {
-  color: #303735;
-  font-size: 1.08rem;
-  font-weight: 740;
-  /* "Läs/Lyssna/Härma" has no spaces, so without this the browser treats
-     it as one unbreakable word and it overflows the card's fixed width. */
-  overflow-wrap: anywhere;
+.study-entry-enter:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
-.study-entry-card > strong {
-  color: var(--accent-strong);
-  font-size: 0.84rem;
-  font-weight: 720;
+.study-entry-progress {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px;
 }
 
-.study-entry-detail {
-  display: block;
+.study-entry-progress-label {
+  font-size: 0.8rem;
   color: var(--muted);
-  font-size: 0.76rem;
-  margin-top: -6px;
+  font-weight: 640;
+}
+
+.study-entry-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(55, 65, 72, 0.1);
+  overflow: hidden;
+}
+
+.study-entry-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  transition: width 300ms ease;
 }
 
 .study-entry-target-label {
@@ -3538,13 +3545,6 @@ h2 {
   font-size: 0.8rem;
 }
 
-.study-entry-target-readonly {
-  display: block;
-  color: var(--muted);
-  font-size: 0.78rem;
-  margin-top: -4px;
-}
-
 .study-workload-message {
   margin: 4px 0 0;
   padding: 8px 12px;
@@ -3552,10 +3552,6 @@ h2 {
   background: rgba(196, 138, 61, 0.12);
   color: #8a5a1f;
   font-size: 0.8rem;
-}
-
-.study-entry-card button {
-  width: 100%;
 }
 
 
@@ -6517,43 +6513,8 @@ dialog::backdrop {
   }
 
   .study-entry-card {
-    padding: 11px;
     border-radius: 16px;
-    gap: 8px;
-  }
-
-  .study-entry-copy {
     gap: 6px;
-  }
-
-  .study-entry-heading {
-    gap: 8px;
-  }
-
-  .study-entry-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
-  }
-
-  .study-entry-icon svg {
-    width: 17px;
-    height: 17px;
-  }
-
-  .study-entry-card h3 {
-    font-size: 0.98rem;
-    line-height: 1.22;
-  }
-
-  .study-entry-card > strong {
-    font-size: 0.76rem;
-  }
-
-  .study-entry-card button {
-    min-height: 42px;
-    padding-inline: 8px;
-    font-size: 0.82rem;
   }
 
   .study-steps {

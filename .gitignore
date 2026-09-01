@@ -22,6 +22,8 @@ icons/*
 !icons/home-hero-illustration.png
 !icons/library-covers/
 !icons/library-covers/*
+!icons/home-cards/
+!icons/home-cards/*
 public/icons/*
 !public/icons/app-icon.png
 !public/icons/apple-touch-icon.png
