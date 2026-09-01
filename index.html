@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=186" />
+    <link rel="stylesheet" href="/styles.css?v=187" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -89,10 +89,27 @@
             </h2>
           </section>
 
-          <section class="hero-illustration home-animation" aria-label="Dagens illustration">
-            <div class="animation-scene" aria-hidden="true">
-              <img class="mot-sverige-cutout" src="/icons/home-hero-illustration.png" alt="" />
-            </div>
+          <section class="home-achievements" id="homeAchievements" aria-label="Mina resultat">
+            <article class="home-achievement-card">
+              <span class="home-achievement-icon" aria-hidden="true">🔥</span>
+              <strong id="achievementStreak">…</strong>
+              <span>dagar i rad</span>
+            </article>
+            <article class="home-achievement-card">
+              <span class="home-achievement-icon" aria-hidden="true">📚</span>
+              <strong id="achievementWordsLearned">…</strong>
+              <span>lärda ord</span>
+            </article>
+            <article class="home-achievement-card">
+              <span class="home-achievement-icon" aria-hidden="true">📖</span>
+              <strong id="achievementReadingCount">…</strong>
+              <span id="achievementReadingDetail">texter lästa</span>
+            </article>
+            <article class="home-achievement-card">
+              <span class="home-achievement-icon" aria-hidden="true">🎙️</span>
+              <strong id="achievementShadowingTime">…</strong>
+              <span>Shadowing</span>
+            </article>
           </section>
 
           <section class="search-panel home-search-panel" aria-label="Sök">
@@ -188,6 +205,7 @@
                 <button class="secondary-button" id="starterLibraryEntryBtn" type="button">Öppna biblioteket</button>
               </article>
             </div>
+            <div class="study-entry-dots" id="studyEntryDots" role="tablist" aria-label="Fler kort"></div>
             <p class="study-workload-message" id="studyWorkloadMessage" hidden></p>
             <div class="practice-actions" hidden>
               <button class="primary-button" id="startQuizBtn" type="button" hidden>Starta</button>
@@ -970,7 +988,7 @@
             </section>
           </div>
           <section class="shadowing-scroll-area" id="shadowingHistorySection">
-            <details class="detail-layer-group-collapsible">
+            <details class="detail-layer-group-collapsible" open>
               <summary class="detail-layer-label" id="shadowingHistorySummary">Tidigare Shadowing</summary>
               <section class="shadowing-list" id="shadowingList" aria-live="polite"></section>
             </details>
@@ -1460,6 +1478,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=200" type="module"></script>
+    <script src="/app.js?v=201" type="module"></script>
   </body>
 </html>

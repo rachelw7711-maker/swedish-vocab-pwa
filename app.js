@@ -169,6 +169,44 @@ const WORD_FORM_LABELS = {
   ett_form: "Ett-form",
 };
 
+// 2026-09-01, Rachel's UI/UX review-doc decision 1: the read-only Grammatik
+// display's labels (webbdesigner's "Obestämd singular: webbdesigner" etc.)
+// were pulling more visual weight than the actual word form itself — she
+// wanted the label de-emphasized and shortened, the form's real value made
+// prominent. Read-only display only (buildGrammarLinesFragment's two
+// callers); the edit form keeps the full WORD_FORM_LABELS text above for
+// clarity when Rachel is actually filling the fields in.
+const WORD_FORM_LABELS_SHORT = {
+  declension_group: "Böjningskl.",
+  singular_indefinite: "Obest. sg.",
+  singular_definite: "Best. sg.",
+  plural_indefinite: "Obest. pl.",
+  plural_definite: "Best. pl.",
+  infinitive: "Inf.",
+  present: "Pres.",
+  preteritum: "Pret.",
+  supinum: "Sup.",
+  imperative: "Imper.",
+  verb_group: "Verbgr.",
+  base_form: "Grundf.",
+  neuter_form: "Neutr.",
+  plural_form: "Plural",
+  definite_form: "Best. form",
+  comparative: "Komp.",
+  superlative_indefinite: "Sup. obest.",
+  superlative_definite: "Sup. best.",
+  superlative: "Superlativ",
+  subject_form: "Subj.form",
+  object_form: "Obj.form",
+  possessive_en: "Poss. (en)",
+  possessive_ett: "Poss. (ett)",
+  possessive_plural: "Poss. (pl.)",
+  base_verb: "Grundverb",
+  participle_form: "Partikelf.",
+  en_form: "En-form",
+  ett_form: "Ett-form",
+};
+
 // Line order per pos group for the read-only Grammatik display. `genus` is
 // deliberately left out of the noun list — it's applied to the word title
 // instead (see applyGenusToTitle) per Reviews/SPK-DIC-001_SprakLab_Word_Card
@@ -466,7 +504,6 @@ const els = {
   exportNotebookSelect: document.querySelector("#exportNotebookSelect"),
   printLibraryBtn: document.querySelector("#printLibraryBtn"),
   homeGreeting: document.querySelector("#homeGreeting"),
-  homeHeroImage: document.querySelector(".mot-sverige-cutout"),
   authDialog: document.querySelector("#authDialog"),
   authForm: document.querySelector("#authForm"),
   authLoginTab: document.querySelector("#authLoginTab"),
@@ -781,6 +818,13 @@ const els = {
   studyReviewCount: document.querySelector("#studyReviewCount"),
   studyStreakCount: document.querySelector("#studyStreakCount"),
   studyMasteredCount: document.querySelector("#studyMasteredCount"),
+  studyEntryGrid: document.querySelector(".study-entry-grid"),
+  studyEntryDots: document.querySelector("#studyEntryDots"),
+  achievementStreak: document.querySelector("#achievementStreak"),
+  achievementWordsLearned: document.querySelector("#achievementWordsLearned"),
+  achievementReadingCount: document.querySelector("#achievementReadingCount"),
+  achievementReadingDetail: document.querySelector("#achievementReadingDetail"),
+  achievementShadowingTime: document.querySelector("#achievementShadowingTime"),
   entryNewCount: document.querySelector("#entryNewCount"),
   entryReviewCount: document.querySelector("#entryReviewCount"),
   entryReviewDetail: document.querySelector("#entryReviewDetail"),
@@ -4188,8 +4232,103 @@ function openReadingShadowingEntry() {
   openReadingEditor(null);
 }
 
+// Homepage achievement showcase (Reviews/UI-UX全面review-对标成熟app-2026-09-01.md
+// 决策2): replaces the old static hero illustration with 4 real cumulative
+// stats, same idea as mature apps' profile stat grids. Streak/words-learned
+// come straight from state already loaded by loadData(); reading word-count
+// needs its own batched stats query (same one Mina studier/renderReadingList
+// use) so it's fetched lazily here and the card upgrades once it resolves,
+// same "render what's on hand now, enhance once async data lands" pattern
+// used throughout this file.
+// renderStudyStats (and so this) is called from many independent places
+// during boot as auth/daily-plan/etc. state resolves — an early call
+// (before loadData() has populated state.words/shadowingRecordings) and a
+// later, fully-populated call can both be in flight together, and without
+// ordering, the early call's async reading-items fetch (started before the
+// user session was even ready, so it can resolve to an empty list) can
+// finish AFTER the later correct call and silently overwrite it with stale
+// zeros. Guard with a "latest call wins" token: a call whose token has been
+// superseded by a newer one by the time its async work resolves abandons
+// its own writes instead of clobbering the newer (more accurate) render.
+let homeAchievementsRenderToken = 0;
+async function renderHomeAchievements() {
+  const myToken = ++homeAchievementsRenderToken;
+  if (els.achievementStreak) els.achievementStreak.textContent = state.studyStats?.current_streak || 0;
+  if (els.achievementWordsLearned) els.achievementWordsLearned.textContent = state.words.filter((word) => word.learned).length;
+
+  const shadowingMs = validShadowingRecordings().reduce((sum, recording) => sum + Math.max(0, Number(recording.audio_duration_ms || 0) || 0), 0);
+  if (els.achievementShadowingTime) els.achievementShadowingTime.textContent = formatMsAsDuration(shadowingMs);
+
+  // Deliberately doesn't gate on/reuse state.readingItemsLoaded — that flag
+  // is also set by renderReadingView/renderProfileReadingStats/etc., and
+  // this card can render concurrently with those at boot; racing on a
+  // shared "loaded" flag meant whichever call happened to flip it first
+  // left every other reader seeing a still-empty state.readingItems. Small
+  // per-user list, cheap to fetch fresh here and use the local result
+  // directly rather than depend on shared state timing.
+  let readingItems;
+  try {
+    readingItems = await remoteDb.loadReadingItems();
+  } catch (error) {
+    console.warn("[SpråkLab] Failed to load reading items for home achievements.", error);
+    return;
+  }
+  if (myToken !== homeAchievementsRenderToken) return; // a newer call has already started/finished
+  if (!state.readingItemsLoaded) {
+    state.readingItemsLoaded = true;
+    state.readingItems = readingItems;
+  }
+  if (els.achievementReadingCount) els.achievementReadingCount.textContent = readingItems.length;
+  const resourceIds = readingItems.map((item) => item.text_resource_id).filter(Boolean);
+  if (resourceIds.length) {
+    try {
+      const statsByResource = await remoteDb.loadReadingListStats(resourceIds);
+      if (myToken !== homeAchievementsRenderToken) return;
+      state.readingListStats = { ...(state.readingListStats || {}), ...statsByResource };
+      const wordsTotal = resourceIds.reduce((sum, id) => sum + (state.readingListStats[id]?.wordCount || 0), 0);
+      if (els.achievementReadingDetail) els.achievementReadingDetail.textContent = `texter · ${wordsTotal} ord lästa`;
+    } catch (error) {
+      console.warn("[SpråkLab] Failed to load reading stats for home achievements.", error);
+    }
+  }
+}
+
+// 决策2, "还有更多"提示较弱: the homepage's 4-card swipe row had no
+// discoverable "there's more" affordance beyond a thin native scrollbar —
+// the 4th card (Startbibliotek, added this session) sat fully off the
+// first screen with nothing hinting a user should swipe. Standard
+// dot-indicator pattern: one dot per card, active dot tracks scroll
+// position (via scroll-snap, already set up on .study-entry-grid),
+// clicking a dot scrolls to that card.
+function setupStudyEntryDots() {
+  const grid = els.studyEntryGrid;
+  const dotsEl = els.studyEntryDots;
+  if (!grid || !dotsEl) return;
+  const cards = Array.from(grid.children);
+  if (cards.length < 2) return;
+  dotsEl.replaceChildren();
+  cards.forEach((_, index) => {
+    const dot = document.createElement("button");
+    dot.type = "button";
+    dot.className = "study-entry-dot";
+    dot.setAttribute("aria-label", `Kort ${index + 1} av ${cards.length}`);
+    dot.addEventListener("click", () => {
+      cards[index].scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    });
+    dotsEl.append(dot);
+  });
+  const updateActiveDot = () => {
+    const cardStep = cards[1].offsetLeft - cards[0].offsetLeft;
+    const activeIndex = cardStep > 0 ? Math.round(grid.scrollLeft / cardStep) : 0;
+    dotsEl.querySelectorAll(".study-entry-dot").forEach((dot, index) => dot.classList.toggle("active", index === activeIndex));
+  };
+  grid.addEventListener("scroll", updateActiveDot, { passive: true });
+  updateActiveDot();
+}
+
 function renderStudyStats() {
   renderReadingShadowingEntryCard();
+  void renderHomeAchievements();
   state.dailyStudy = ensureDailyStudyPlan();
   // 2026-08-29 audit fix (SprakLab-Audit-Report.md §2.1): state.dailyProgress
   // starts as null until refreshDailyProgress's remote round-trip resolves.
@@ -5951,7 +6090,7 @@ function createWordCard(word, mode = "library") {
 
     const grammarGroup = addLayerGroup(details, "语法变化");
     addStudyDetail(grammarGroup, "Grammatik", formatGrammarForStudy(word));
-    formatPosSpecificGrammarExtras(word).forEach(({ label, value }) => addStudyDetail(grammarGroup, label, value));
+    formatPosSpecificGrammarExtras(word).forEach(({ label, value, isChineseText }) => addStudyDetail(grammarGroup, label, value, { isChineseText }));
 
     const usageGroup = addLayerGroup(details, "真实使用");
     addStudyDetail(usageGroup, "Exempel", formatExampleForStudy(word.example));
@@ -5961,7 +6100,7 @@ function createWordCard(word, mode = "library") {
     const extendedGroup = addLayerGroup(details, "扩展学习", { collapsible: true, expanded: false });
     extendedGroup.classList.add("extended-learning-group");
     addStudyDetail(extendedGroup, "Relaterade ord", createRelatedWordList(word.related_words));
-    if (word.memory_tip) addStudyDetail(extendedGroup, "Minnesknep", word.memory_tip);
+    if (word.memory_tip) addStudyDetail(extendedGroup, "Minnesknep", word.memory_tip, { isChineseText: true });
 
     enhanceGrammarSectionWithStructuredForms(card, word);
     enhanceExtendedLearningSection(card, word);
@@ -6066,11 +6205,15 @@ function buildGrammarLinesFragment(lines) {
     const line = document.createElement("p");
     line.className = "grammar-line";
     if (label) {
-      const strong = document.createElement("strong");
-      strong.textContent = `${label}: `;
-      line.append(strong);
+      const labelEl = document.createElement("span");
+      labelEl.className = "grammar-line-label";
+      labelEl.textContent = `${label}: `;
+      line.append(labelEl);
     }
-    line.append(document.createTextNode(value));
+    const valueEl = document.createElement("strong");
+    valueEl.className = "grammar-line-value";
+    valueEl.textContent = value;
+    line.append(valueEl);
     container.append(line);
   });
   return container;
@@ -6083,6 +6226,18 @@ const USAGE_REGISTER_LABELS = {
   informal: "informellt",
   everyday: "vardagligt",
 };
+
+// 2026-09-01, Rachel's UI/UX review-doc decision 1: these 5 pos-specific
+// grammar-extra fields had English labels sitting next to otherwise
+// all-Swedish grammar terminology (Grammatik/Böjningsklass/Transitivitet),
+// and their DB values (countable/transitive/regular etc.) are raw English
+// too — same gap Transitivitet's own value already had, just not flagged
+// until now. Swedish label + Swedish value throughout, same
+// display-only-mapping pattern as USAGE_REGISTER_LABELS above (DB values
+// stay English, only the rendered text changes).
+const COUNTABILITY_VALUE_LABELS = { countable: "Räknebart", uncountable: "Oräknebart", both: "Båda" };
+const TRANSITIVITY_VALUE_LABELS = { transitive: "Transitivt", intransitive: "Intransitivt", both: "Båda" };
+const COMPARISON_TYPE_VALUE_LABELS = { regular: "Regelbunden", irregular: "Oregelbunden", "non-comparable": "Ej komparerbar" };
 
 function formatUsageRegisters(registers) {
   return registers.map((r) => USAGE_REGISTER_LABELS[r] || r).join(", ");
@@ -6103,19 +6258,19 @@ const PARTICIPLE_FUNCTION_TAG_LABELS = {
 function formatPosSpecificGrammarExtras(word) {
   const lines = [];
   if (word.pos === "noun") {
-    if (word.countability) lines.push({ label: "Countability", value: word.countability });
-    if (word.grammar_note) lines.push({ label: "Grammar Note", value: word.grammar_note });
+    if (word.countability) lines.push({ label: "Räknebarhet", value: COUNTABILITY_VALUE_LABELS[word.countability] || word.countability });
+    if (word.grammar_note) lines.push({ label: "Anmärkning", value: word.grammar_note, isChineseText: true });
   } else if (word.pos === "verb") {
-    if (word.transitivity) lines.push({ label: "Transitivitet", value: word.transitivity });
+    if (word.transitivity) lines.push({ label: "Transitivitet", value: TRANSITIVITY_VALUE_LABELS[word.transitivity] || word.transitivity });
     if (word.passiv_s) lines.push({ label: "Passiv -s", value: word.passiv_s });
   } else if (word.pos === "adjective") {
     if (word.adverb_form) lines.push({ label: "Adverbform", value: word.adverb_form });
-    if (word.comparison_type) lines.push({ label: "Comparison Type", value: word.comparison_type });
+    if (word.comparison_type) lines.push({ label: "Komparationstyp", value: COMPARISON_TYPE_VALUE_LABELS[word.comparison_type] || word.comparison_type });
   } else if (word.pos === "presens_particip" || word.pos === "perfekt_particip") {
     if (word.function_tags.length) {
-      lines.push({ label: "Function Tags", value: word.function_tags.map((t) => PARTICIPLE_FUNCTION_TAG_LABELS[t] || t).join(", ") });
+      lines.push({ label: "Funktionstaggar", value: word.function_tags.map((t) => PARTICIPLE_FUNCTION_TAG_LABELS[t] || t).join(", ") });
     }
-    if (word.meaning_note) lines.push({ label: "Meaning Note", value: word.meaning_note });
+    if (word.meaning_note) lines.push({ label: "Betydelseanteckning", value: word.meaning_note, isChineseText: true });
   }
   return lines;
 }
@@ -6151,7 +6306,7 @@ function enhanceGrammarSectionWithStructuredForms(card, word) {
     const order = WORD_FORM_LINE_ORDER_BY_POS[posGroup] || [];
     const lines = order
       .filter((type) => byType.get(type))
-      .map((type) => ({ label: WORD_FORM_LABELS[type] || type, value: byType.get(type) }));
+      .map((type) => ({ label: WORD_FORM_LABELS_SHORT[type] || WORD_FORM_LABELS[type] || type, value: byType.get(type) }));
     if (lines.length) {
       const section = card.querySelector(".grammar-section");
       section?.querySelector("p, .grammar-lines")?.remove();
@@ -6243,10 +6398,15 @@ function addLayerGroup(list, label, { collapsible = false, expanded = true } = {
   return group;
 }
 
-function addStudyDetail(list, term, content) {
+function addStudyDetail(list, term, content, { isChineseText = false } = {}) {
   const section = document.createElement("section");
   section.className = "study-detail-section";
-  if (term === "Kinesisk betydelse") section.classList.add("chinese-meaning-section");
+  // 2026-09-01: any field whose VALUE is free-text Chinese prose (the main
+  // definition, but also memory_tip/grammar_note/meaning_note) should read
+  // with the same typography — Rachel caught these using the plain default
+  // paragraph style instead while Kinesisk betydelse alone got the
+  // Chinese-tuned font/line-height treatment.
+  if (term === "Kinesisk betydelse" || isChineseText) section.classList.add("chinese-meaning-section");
   if (term === "Grammatik") section.classList.add("grammar-section");
   if (term === "Relaterade ord") section.classList.add("related-section");
   if (term === "Exempel") section.classList.add("example-section");
@@ -10935,25 +11095,6 @@ function enforceStartsideStartup({ resetScroll = true } = {}) {
   forceHomeView({ resetScroll });
 }
 
-function waitForImageReady(image) {
-  if (!image) return Promise.resolve();
-  if (image.complete && image.naturalWidth > 0) {
-    if (typeof image.decode === "function") {
-      return image.decode().catch(() => undefined);
-    }
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    const done = () => {
-      image.removeEventListener("load", done);
-      image.removeEventListener("error", done);
-      resolve();
-    };
-    image.addEventListener("load", done, { once: true });
-    image.addEventListener("error", done, { once: true });
-  });
-}
-
 // The single shared header button (topbarLibraryBack) also stands in for
 // the Läsning results page's and Shadowing Practice page's own Tillbaka
 // (Rachel, 2026-08-10: move those into this top-right slot instead of a
@@ -11232,6 +11373,8 @@ function bindEvents() {
     els.fraserTypeFilter.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("active", chip === button));
     renderFraserView();
   });
+
+  setupStudyEntryDots();
 
   els.readingLibraryFilter?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-reading-scope]");
@@ -12441,7 +12584,6 @@ async function bootstrapApp() {
       await remoteDb.recordSuccessfulSync();
     }
     await syncPendingUserData({ reloadData: true });
-    await waitForImageReady(els.homeHeroImage);
   } catch (error) {
     console.error("[Min Ordbok] Startup failed", error);
     // Deliberately left as a blocking alert() rather than showToast() — the

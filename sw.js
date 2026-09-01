@@ -1,4 +1,4 @@
-const CACHE_NAME = "ordbok-v130";
+const CACHE_NAME = "ordbok-v131";
 const ALLOWED_ICON_PATHS = new Set([
   "/icons/app-icon.png",
   "/icons/apple-touch-icon.png",
@@ -8,7 +8,6 @@ const ALLOWED_ICON_PATHS = new Set([
   "/icons/pwa-512x512.png",
   "/icons/maskable-icon.png",
   "/icons/enkel-symbol.png",
-  "/icons/home-hero-illustration.png",
 ]);
 
 const CORE_ASSETS = [
@@ -32,7 +31,6 @@ const CORE_ASSETS = [
   "./icons/pwa-512x512.png",
   "./icons/maskable-icon.png",
   "./icons/enkel-symbol.png",
-  "./icons/home-hero-illustration.png",
 ];
 
 self.addEventListener("install", (event) => {
