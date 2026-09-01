@@ -4557,18 +4557,10 @@ h2 {
 
 .reading-summary-block,
 .reading-keywords-block,
-.reading-phrases-block {
+.reading-phrases-block,
+.reading-sentences-block {
   display: grid;
   gap: 8px;
-}
-
-.reading-summary-block h4,
-.reading-keywords-block h4,
-.reading-phrases-block h4 {
-  margin: 0;
-  color: #353b39;
-  font-size: 0.92rem;
-  font-weight: 700;
 }
 
 .reading-headline {
@@ -4841,11 +4833,6 @@ h2 {
   gap: 6px;
 }
 
-.reading-report-card h4 {
-  margin: 0 0 4px;
-  font-size: 0.95rem;
-}
-
 .reading-report-stats,
 .reading-report-grid,
 .reading-report-time {
@@ -4881,25 +4868,24 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+/* 2026-09-01, Rachel's request: the article is now the page's main
+   content (click-to-gloss is the feature's whole point), not a secondary
+   widget — dropped the boxed card treatment (border/background) so it
+   reads as the page itself rather than something nested inside it, and
+   sized the text for comfortable long-form reading instead of the
+   compact list styling the sections below it use. */
 .reading-annotate-section {
-  border-radius: 14px;
-  background: var(--surface-soft);
-  border: 1px solid var(--line);
-  padding: 12px 14px;
-}
-
-.reading-annotate-section h4 {
-  margin: 0 0 2px;
-  font-size: 0.9rem;
+  padding: 4px 0 16px;
 }
 
 .reading-annotate-hint {
-  margin: 0 0 8px;
-  font-size: 0.76rem;
+  margin: 0 0 12px;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
 .reading-annotate-text {
+  font-size: 1.05rem;
   line-height: 1.9;
 }
 

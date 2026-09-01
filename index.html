@@ -51,7 +51,7 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=187" />
+    <link rel="stylesheet" href="/styles.css?v=188" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -377,8 +377,16 @@
             <div class="reading-analysis-loading" id="readingAnalysisLoading" hidden>
               <p>🔄 Analyserar …</p>
             </div>
+            <section class="reading-annotate-section" id="readingAnnotateSection" hidden>
+              <p class="reading-annotate-hint">Klicka på ett ord för att slå upp det, eller på en mening för att markera den och skriva en anteckning.</p>
+              <div id="readingAnnotateText" class="reading-annotate-text"></div>
+              <div class="reading-annotate-actions">
+                <button class="reading-text-toggle-btn" id="readingAnnotateToggleBtn" type="button" hidden>Visa hela texten</button>
+                <button class="secondary-button reading-annotate-shadowing-btn" id="sendReadingToShadowingBtn" type="button">🎧 Shadowing</button>
+              </div>
+            </section>
             <div class="reading-summary-block">
-              <h4>Sammanfattning</h4>
+              <p class="detail-layer-label">Sammanfattning</p>
               <button class="secondary-button" id="generateReadingSummaryBtn" type="button">Generera sammanfattning</button>
               <p id="readingHeadlineZh" class="reading-headline" hidden></p>
               <p id="readingSummarySv"></p>
@@ -389,32 +397,23 @@
               <p>🔄 AI fortsätter analysera fler ord och uttryck …</p>
             </div>
             <div class="reading-keywords-block" id="readingKeywordsBlock">
-              <h4>Ord värda att lära sig</h4>
+              <p class="detail-layer-label">Ord värda att lära sig</p>
               <div id="readingKeyWords" class="reading-chip-list"></div>
             </div>
             <div class="reading-phrases-block" id="readingPhrasesBlock">
-              <h4>Fraser &amp; Uttryck i texten</h4>
+              <p class="detail-layer-label">Fraser &amp; Uttryck i texten</p>
               <div id="readingKeyPhrases" class="reading-phrase-list"></div>
             </div>
             <div class="reading-sentences-block" id="readingSentencesBlock">
-              <h4>Viktiga meningar</h4>
+              <p class="detail-layer-label">Viktiga meningar</p>
               <div id="readingKeySentences" class="reading-sentence-list"></div>
             </div>
-            <div class="reading-patterns-block" id="readingPatternsBlock">
-              <h4>🔤 Språkmönster</h4>
+            <details class="reading-patterns-block detail-layer-group-collapsible" id="readingPatternsBlock">
+              <summary class="detail-layer-label">🔤 Språkmönster</summary>
               <div id="readingLanguagePatterns" class="reading-pattern-list"></div>
-            </div>
-            <section class="reading-annotate-section" id="readingAnnotateSection" hidden>
-              <h4>📝 Läs och markera</h4>
-              <p class="reading-annotate-hint">Klicka på en mening för att markera den. Markerade meningar kan få en egen anteckning.</p>
-              <div id="readingAnnotateText" class="reading-annotate-text"></div>
-              <div class="reading-annotate-actions">
-                <button class="reading-text-toggle-btn" id="readingAnnotateToggleBtn" type="button" hidden>Visa hela texten</button>
-                <button class="secondary-button reading-annotate-shadowing-btn" id="sendReadingToShadowingBtn" type="button">🎧 Shadowing</button>
-              </div>
-            </section>
+            </details>
             <section class="reading-report-card" id="readingReportCard" hidden>
-              <h4>📖 Läsrapport</h4>
+              <p class="detail-layer-label">📖 Läsrapport</p>
               <div class="reading-report-stats">
                 <span>Textlängd: <strong data-report-word-count></strong></span>
                 <span data-report-cefr-row hidden>Nivå: <strong data-report-cefr></strong></span>
@@ -1478,6 +1477,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=201" type="module"></script>
+    <script src="/app.js?v=202" type="module"></script>
   </body>
 </html>

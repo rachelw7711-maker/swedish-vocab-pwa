@@ -3957,7 +3957,12 @@ function renderReadingAnnotateSection(item) {
   // jarring).
   if (els.readingAnnotateSection.dataset.readingAnnotateItemId !== item.id) {
     els.readingAnnotateSection.dataset.readingAnnotateItemId = item.id;
-    els.readingAnnotateSection.dataset.expanded = "false";
+    // 2026-09-01, Rachel's request: the article is now the page's main
+    // content, shown in full by default rather than collapsed to a
+    // 4-sentence preview — collapsing is now something the reader opts
+    // into (via the same toggle, now offering "Visa mindre") rather than
+    // the default.
+    els.readingAnnotateSection.dataset.expanded = "true";
   }
   const expanded = els.readingAnnotateSection.dataset.expanded === "true";
   const allSentences = splitReadingSentences(item.source_text);
