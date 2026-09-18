@@ -51,14 +51,23 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="/styles.css?v=189" />
+    <!-- 2026-09-18: new home page (Figma) uses a serif display face for
+         headings ("Välkommen till SpråkLab" / "Hej, Rachel"). Exact Figma
+         font name wasn't available (no Dev Mode access, see Reviews/
+         首页重设计（Figma-Logged-Out-In）评审与实施方案-2026-09-18.md) — Playfair
+         Display is a close visual match to the screenshots; flag to Rachel
+         if the real family differs. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css?v=190" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
       <div class="startup-splash-card">
         <img src="/icons/app-icon.png?v=22" alt="" aria-hidden="true" class="startup-splash-icon" />
         <strong>SpråkLab</strong>
-        <span>Laddar ord och startsida</span>
+        <span>Förbereder SpråkLab…</span>
         <div class="startup-splash-spinner" aria-hidden="true"></div>
       </div>
     </div>
@@ -84,35 +93,56 @@
           <button class="home-reset-button" id="resetDataBtn" type="button" title="Uppdatera" aria-label="Uppdatera">↻</button>
           <section class="home-hero" aria-label="Startsida">
             <h2 id="homeGreeting">
-              <span>Hej!</span>
-              <span>Bra jobbat idag.</span>
+              <span>Välkommen till SpråkLab</span>
             </h2>
+            <p class="home-tagline">Lär dig naturligt, väx lite varje dag.</p>
           </section>
 
-          <section class="home-achievements" id="homeAchievements" aria-label="Mina resultat">
-            <article class="home-achievement-card">
-              <span class="home-achievement-icon" aria-hidden="true">🔥</span>
-              <strong id="achievementStreak">…</strong>
-              <span>dagar i rad</span>
-            </article>
-            <article class="home-achievement-card">
-              <span class="home-achievement-icon" aria-hidden="true">📚</span>
-              <strong id="achievementWordsLearned">…</strong>
-              <span>lärda ord</span>
-            </article>
-            <article class="home-achievement-card">
-              <span class="home-achievement-icon" aria-hidden="true">📖</span>
-              <strong id="achievementReadingCount">…</strong>
-              <span id="achievementReadingDetail">texter lästa</span>
-            </article>
-            <article class="home-achievement-card">
-              <span class="home-achievement-icon" aria-hidden="true">🎙️</span>
-              <strong id="achievementShadowingTime">…</strong>
-              <span>Shadowing</span>
-            </article>
+          <!-- Home — Logged Out / Logged In (Figma, 2026-09-18): one section,
+               two states toggled by renderHomeProgressSection() from
+               renderAuthState() — signed-out shows a save-your-progress
+               prompt, signed-in shows the 3 real stats. achievementStreak/
+               achievementWordsLearned/achievementShadowingTime keep their
+               ids so renderHomeAchievements() (app.js) doesn't need to
+               change; achievementReadingCount/-Detail (not in this design)
+               were dropped, all references to them are already null-guarded. -->
+          <section class="home-progress" id="homeProgress" aria-label="Mina framsteg">
+            <div class="home-progress-signedout" id="homeProgressSignedOut">
+              <h3 class="home-section-title">Spara dina framsteg</h3>
+              <p class="home-progress-hint">Logga in för att spara ord, texter och din studiehistorik.</p>
+            </div>
+            <div class="home-progress-stats" id="homeProgressStats" hidden>
+              <h3 class="home-section-title">Dina framsteg</h3>
+              <div class="home-progress-stats-row">
+                <div class="home-progress-stat">
+                  <div class="home-progress-stat-value">
+                    <strong id="achievementStreak">…</strong>
+                    <span class="home-progress-stat-icon" aria-hidden="true">🔥</span>
+                  </div>
+                  <span class="home-progress-stat-label">Aktiva dagar</span>
+                </div>
+                <div class="home-progress-stat">
+                  <div class="home-progress-stat-value">
+                    <strong id="achievementWordsLearned">…</strong>
+                  </div>
+                  <span class="home-progress-stat-label">Nya ord</span>
+                </div>
+                <div class="home-progress-stat">
+                  <div class="home-progress-stat-value">
+                    <strong id="achievementShadowingTime">…</strong>
+                    <span class="home-progress-stat-unit">min</span>
+                  </div>
+                  <span class="home-progress-stat-label">Shadowing</span>
+                </div>
+              </div>
+            </div>
           </section>
 
-          <section class="search-panel home-search-panel" aria-label="Sök">
+          <!-- Collapsed by default (Figma has no visible search box on
+               either home state) — opened via the floating homeSearchFab
+               button near the tabbar. Reuses #searchInput/#searchBtn and
+               all existing search logic unchanged, just toggles .hidden. -->
+          <section class="search-panel home-search-panel" id="homeSearchPanel" aria-label="Sök" hidden>
             <div class="search-box">
               <span aria-hidden="true">⌕</span>
               <input
@@ -124,10 +154,117 @@
                 aria-label="Sök svenska ord"
               />
               <button class="search-button" id="searchBtn" type="button">Sök</button>
+              <button class="home-search-close" id="homeSearchClose" type="button" aria-label="Stäng sök">×</button>
             </div>
           </section>
 
-          <section class="practice-panel home-practice-panel" aria-label="Studiepanel">
+          <section class="home-section home-deep-reading" aria-label="Djupläsning">
+            <h3 class="home-section-title">Djupläsning</h3>
+            <article class="deep-reading-card" id="readingShadowingEntryCard">
+              <div class="deep-reading-card-body">
+                <h4>Skanna · Analysera</h4>
+                <p class="home-tagline-small">Fota en text du vill lära dig</p>
+                <ul class="deep-reading-list">
+                  <li>analysera den</li>
+                  <li>öva med shadowing</li>
+                </ul>
+                <button class="pill-button" id="readingShadowingEntryBtn" type="button" aria-label="Öppna Läs/Lyssna/Härma">
+                  Skanna <span aria-hidden="true">📷</span>
+                </button>
+                <span id="readingShadowingEntryDetail" class="sr-only">Ta ett foto eller klistra in en text</span>
+              </div>
+              <div class="deep-reading-art" aria-hidden="true">
+                <span class="deco-shape deco-shape--triangle"></span>
+                <span class="deco-shape deco-shape--circle-dark"></span>
+                <span class="deco-shape deco-shape--circle-rose"></span>
+                <span class="deco-shape deco-shape--dot deco-shape--dot1"></span>
+                <span class="deco-shape deco-shape--dot deco-shape--dot2"></span>
+                <span class="deco-shape deco-shape--line"></span>
+              </div>
+            </article>
+          </section>
+
+          <section class="home-section" aria-label="Dagens ord">
+            <h3 class="home-section-title">Dagens ord</h3>
+            <div class="dagens-ord-row">
+              <button class="dagens-ord-card" id="startReviewStudyBtn" type="button" aria-label="Börja repetera">
+                <span class="dagens-ord-card-head">
+                  <span class="dagens-ord-icon" aria-hidden="true">✏️</span>
+                  <span class="dagens-ord-chevron" aria-hidden="true">›</span>
+                </span>
+                <span class="dagens-ord-title">Repetera ord</span>
+                <span class="dagens-ord-progress">
+                  <span class="dagens-ord-progress-track"><span class="dagens-ord-progress-fill" id="entryReviewProgressFill"></span></span>
+                  <span class="dagens-ord-progress-label" id="entryReviewProgressLabel">…</span>
+                </span>
+              </button>
+              <button class="dagens-ord-card" id="startNewStudyBtn" type="button" aria-label="Börja lära dig nya ord">
+                <span class="dagens-ord-card-head">
+                  <span class="dagens-ord-icon" aria-hidden="true">🎓</span>
+                  <span class="dagens-ord-chevron" aria-hidden="true">›</span>
+                </span>
+                <span class="dagens-ord-title">Lär dig nya ord</span>
+                <span class="dagens-ord-progress">
+                  <span class="dagens-ord-progress-track"><span class="dagens-ord-progress-fill" id="entryNewProgressFill"></span></span>
+                  <span class="dagens-ord-progress-label" id="entryNewProgressLabel">…</span>
+                </span>
+              </button>
+            </div>
+          </section>
+
+          <!-- Kom ihåg (new, 2026-09-18): 3 previously-learned words worth
+               revisiting, picked by renderMemoryRecallWords() (app.js) —
+               deliberately sorted by the existing next_review_at field, not
+               hardcoded to "today's new words", so it upgrades cleanly once
+               a fuller SRS queue exists (Rachel's 2026-09-18 instruction). -->
+          <section class="home-section home-recall" aria-label="Kom ihåg">
+            <h3 class="home-section-title">Kom ihåg</h3>
+            <p class="home-recall-empty" id="homeRecallEmpty">Här visas några ord du lärt dig tidigare.</p>
+            <div class="home-recall-row" id="homeRecallRow" hidden></div>
+          </section>
+
+          <section class="home-section" aria-label="Utforska mer">
+            <h3 class="home-section-title">Utforska mer</h3>
+            <div class="explore-more-row">
+              <article class="explore-more-card" id="starterLibraryEntryCard">
+                <div class="explore-more-body">
+                  <h4>Läs en artikel</h4>
+                  <p class="home-tagline-small">Träna svenska med texter</p>
+                  <button class="pill-button" id="starterLibraryEntryBtn" type="button" aria-label="Öppna startbiblioteket">Prova</button>
+                </div>
+                <div class="explore-more-art" aria-hidden="true">
+                  <span class="deco-shape deco-shape--circle-rose deco-shape--sm"></span>
+                  <span class="deco-shape deco-shape--circle-dark deco-shape--sm"></span>
+                  <span class="deco-shape deco-shape--dot deco-shape--dot1"></span>
+                </div>
+                <span id="entryLibraryProgressLabel" class="sr-only">…</span>
+                <span id="entryLibraryProgressFill" class="sr-only" aria-hidden="true"></span>
+              </article>
+              <!-- "Vanliga fraser" (固定短语/常用固定搭配) is deliberately kept
+                   separate from "Uttryck" (地道表达) even though both still
+                   live in the same fraserView/object_type data today — this
+                   card scopes the entry to object_type "phrase" so it's a
+                   drop-in swap to a dedicated Vanliga-fraser view later
+                   without touching this card (Rachel's 2026-09-18 note). -->
+              <article class="explore-more-card" id="homeVanligaFraserCard">
+                <div class="explore-more-body">
+                  <h4>Vanliga fraser</h4>
+                  <p class="home-tagline-small">"ta det lugnt"</p>
+                  <button class="pill-button" id="homeVanligaFraserBtn" type="button" aria-label="Öppna Vanliga fraser">Prova</button>
+                </div>
+                <div class="explore-more-art" aria-hidden="true">
+                  <span class="deco-shape deco-shape--circle-rose deco-shape--sm"></span>
+                  <span class="deco-shape deco-shape--circle-dark deco-shape--sm"></span>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Existing inline practice flow (unchanged logic) — hidden until
+               a Dagens ord card starts a session (see startStudySession in
+               app.js), per Rachel's 2026-09-18 instruction to keep reusing
+               this UI as-is rather than building a new practice system. -->
+          <section class="practice-panel home-practice-panel" id="homePracticeSession" aria-label="Studiepanel" hidden>
             <div class="study-metrics" aria-label="Dagens studieöversikt">
               <article>
                 <span>今日新词</span>
@@ -157,52 +294,6 @@
               <li data-step="spell">Skriv ordet</li>
               <li data-step="check">Kontrollera</li>
             </ol>
-            <div class="study-entry-grid">
-              <article class="study-entry-card">
-                <div class="study-entry-image" style="background-image: url('/icons/home-cards/repetition.png')">
-                  <button class="study-entry-enter" id="startReviewStudyBtn" type="button" aria-label="Börja repetera">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                </div>
-                <div class="study-entry-progress">
-                  <span class="study-entry-progress-label" id="entryReviewProgressLabel">…</span>
-                  <div class="study-entry-progress-track"><div class="study-entry-progress-fill" id="entryReviewProgressFill"></div></div>
-                </div>
-              </article>
-              <article class="study-entry-card">
-                <div class="study-entry-image" style="background-image: url('/icons/home-cards/nyaord.png')">
-                  <button class="study-entry-enter" id="startNewStudyBtn" type="button" aria-label="Börja lära dig nya ord">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                </div>
-                <div class="study-entry-progress">
-                  <span class="study-entry-progress-label" id="entryNewProgressLabel">…</span>
-                  <div class="study-entry-progress-track"><div class="study-entry-progress-fill" id="entryNewProgressFill"></div></div>
-                </div>
-              </article>
-              <article class="study-entry-card" id="readingShadowingEntryCard">
-                <div class="study-entry-image" style="background-image: url('/icons/home-cards/studio.png')">
-                  <button class="study-entry-enter" id="readingShadowingEntryBtn" type="button" aria-label="Öppna Läs/Lyssna/Härma">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                </div>
-                <div class="study-entry-progress">
-                  <span class="study-entry-progress-label" id="readingShadowingEntryDetail">Ta ett foto eller klistra in en text</span>
-                </div>
-              </article>
-              <article class="study-entry-card" id="starterLibraryEntryCard">
-                <div class="study-entry-image" style="background-image: url('/icons/home-cards/lasning.png')">
-                  <button class="study-entry-enter" id="starterLibraryEntryBtn" type="button" aria-label="Öppna startbiblioteket">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                </div>
-                <div class="study-entry-progress">
-                  <span class="study-entry-progress-label" id="entryLibraryProgressLabel">…</span>
-                  <div class="study-entry-progress-track"><div class="study-entry-progress-fill" id="entryLibraryProgressFill"></div></div>
-                </div>
-              </article>
-            </div>
-            <div class="study-entry-dots" id="studyEntryDots" role="tablist" aria-label="Fler kort"></div>
             <p class="study-workload-message" id="studyWorkloadMessage" hidden></p>
             <div class="practice-actions" hidden>
               <button class="primary-button" id="startQuizBtn" type="button" hidden>Starta</button>
@@ -1004,7 +1095,7 @@
       </main>
 
       <nav class="tabbar" aria-label="Huvudfunktioner">
-        <button class="tab active" type="button" data-view="homeView" aria-label="Startsida">
+        <button class="tab active" type="button" data-view="homeView" aria-label="Start">
           <span class="tab-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" focusable="false">
               <path d="M4 10.5 12 4l8 6.5" />
@@ -1012,17 +1103,20 @@
               <path d="M10 20v-5h4v5" />
             </svg>
           </span>
-          <span class="tab-label">Hemsida</span>
+          <span class="tab-label">Start</span>
         </button>
-        <button class="tab" type="button" data-view="libraryView" aria-label="Bibliotek">
+        <!-- 2026-09-18: Figma renames Bibliotek → Utforska (globe icon); the
+             tab still opens the same existing libraryView, no content
+             changes underneath. -->
+        <button class="tab" type="button" data-view="libraryView" aria-label="Utforska">
           <span class="tab-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" focusable="false">
-              <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z" />
-              <path d="M5 5.5A2.5 2.5 0 0 1 7.5 8H19" />
-              <path d="M15.5 4.5v4" />
+              <circle cx="12" cy="12" r="8.2" />
+              <path d="M3.8 12h16.4" />
+              <path d="M12 3.8c2.6 2.4 4 5.2 4 8.2s-1.4 5.8-4 8.2c-2.6-2.4-4-5.2-4-8.2s1.4-5.8 4-8.2Z" />
             </svg>
           </span>
-          <span class="tab-label">Bibliotek</span>
+          <span class="tab-label">Utforska</span>
         </button>
         <button class="tab" type="button" data-view="profileView" aria-label="Profil">
           <span class="tab-icon" aria-hidden="true">
@@ -1034,6 +1128,15 @@
           <span class="tab-label">Profil</span>
         </button>
       </nav>
+      <!-- Floating search entry (Figma, 2026-09-18) — replaces the homepage's
+           always-visible search box; opens #homeSearchPanel in place, which
+           still runs the exact same #searchInput/#searchBtn search logic. -->
+      <button class="home-search-fab" id="homeSearchFab" type="button" aria-label="Sök">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="M20 20l-3.6-3.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
 
       <dialog id="authDialog" class="auth-dialog">
         <form id="authForm" class="auth-dialog-form">
@@ -1485,6 +1588,6 @@
     </template>
 
     <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
-    <script src="/app.js?v=206" type="module"></script>
+    <script src="/app.js?v=207" type="module"></script>
   </body>
 </html>

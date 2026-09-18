@@ -839,6 +839,16 @@ const els = {
   readingShadowingEntryBtn: document.querySelector("#readingShadowingEntryBtn"),
   starterLibraryEntryCard: document.querySelector("#starterLibraryEntryCard"),
   starterLibraryEntryBtn: document.querySelector("#starterLibraryEntryBtn"),
+  homeVanligaFraserCard: document.querySelector("#homeVanligaFraserCard"),
+  homeVanligaFraserBtn: document.querySelector("#homeVanligaFraserBtn"),
+  homeProgressSignedOut: document.querySelector("#homeProgressSignedOut"),
+  homeProgressStats: document.querySelector("#homeProgressStats"),
+  homeSearchPanel: document.querySelector("#homeSearchPanel"),
+  homeSearchFab: document.querySelector("#homeSearchFab"),
+  homeSearchClose: document.querySelector("#homeSearchClose"),
+  homeRecallEmpty: document.querySelector("#homeRecallEmpty"),
+  homeRecallRow: document.querySelector("#homeRecallRow"),
+  homePracticeSession: document.querySelector("#homePracticeSession"),
   readingLibraryFilter: document.querySelector("#readingLibraryFilter"),
   readingStarterList: document.querySelector("#readingStarterList"),
   openInShadowingBtn: document.querySelector("#openInShadowingBtn"),
@@ -4380,6 +4390,7 @@ function setupStudyEntryDots() {
 function renderStudyStats() {
   renderReadingShadowingEntryCard();
   void renderHomeAchievements();
+  renderMemoryRecallWords();
   state.dailyStudy = ensureDailyStudyPlan();
   // 2026-08-29 audit fix (SprakLab-Audit-Report.md §2.1): state.dailyProgress
   // starts as null until refreshDailyProgress's remote round-trip resolves.
@@ -4462,13 +4473,77 @@ function renderStudyStats() {
   els.studyCompletePanel.hidden = !(todayNew >= dailyTarget && dueOverdueTotal === 0 && !state.currentQuiz);
 }
 
+// Home — Logged Out / Logged In (Figma, 2026-09-18): both states share the
+// same tagline ("Lär dig naturligt, väx lite varje dag."), only the h2 title
+// changes — generic welcome when signed out, "Hej, <name>" when signed in.
+// Called from renderAuthState() on every auth transition, not just once at
+// boot, so it updates live on sign-in/out without a reload.
 function setupHomeGreeting() {
   if (!els.homeGreeting) return;
+  const isSignedIn = Boolean(state.auth.user?.id);
   const title = document.createElement("span");
-  const subtitle = document.createElement("span");
-  title.textContent = "Hej!";
-  subtitle.textContent = "Bra jobbat idag.";
-  els.homeGreeting.replaceChildren(title, subtitle);
+  title.textContent = isSignedIn ? `Hej, ${getAuthDisplayName(state.auth.user)}` : "Välkommen till SpråkLab";
+  els.homeGreeting.replaceChildren(title);
+}
+
+// Home — Logged Out / Logged In (Figma, 2026-09-18): toggles the "Spara dina
+// framsteg" login prompt vs. the real 3-stat row. The stats themselves are
+// still computed by the existing renderHomeAchievements() — this only
+// switches which block is visible.
+function renderHomeProgressSection() {
+  const isSignedIn = Boolean(state.auth.user?.id);
+  if (els.homeProgressSignedOut) els.homeProgressSignedOut.hidden = isSignedIn;
+  if (els.homeProgressStats) els.homeProgressStats.hidden = !isSignedIn;
+}
+
+// Kom ihåg (Figma, 2026-09-18): surfaces up to 3 previously-learned words
+// worth revisiting — Rachel's spec is "not today's new words", and "don't
+// hardcode this to today's session since a real SRS queue may replace it
+// later". Sorts by the existing next_review_at field (already the same
+// field the daily study plan schedules reviews against) so this is already
+// SRS-flavored, not a special one-off rule, and upgrades for free once a
+// fuller SRS pass lands. Available to guests too (state.words/learned is
+// local-first regardless of auth) per Rachel's guest-access instructions.
+function renderMemoryRecallWords() {
+  if (!els.homeRecallRow || !els.homeRecallEmpty) return;
+  const learnedWords = state.words.filter((word) => word.learned);
+  if (!learnedWords.length) {
+    els.homeRecallEmpty.hidden = false;
+    els.homeRecallRow.hidden = true;
+    els.homeRecallRow.replaceChildren();
+    return;
+  }
+  const picks = [...learnedWords]
+    .sort((a, b) => (Number(a.next_review_at || 0) || 0) - (Number(b.next_review_at || 0) || 0))
+    .slice(0, 3);
+  els.homeRecallRow.replaceChildren(
+    ...picks.map((word) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "recall-chip";
+      chip.textContent = word.swedish;
+      chip.addEventListener("click", () => openWordDetail(word, "home-recall"));
+      return chip;
+    }),
+  );
+  els.homeRecallEmpty.hidden = true;
+  els.homeRecallRow.hidden = false;
+}
+
+// "Vanliga fraser" home card (Figma, 2026-09-18): Vanliga fraser (固定短语)
+// and Uttryck (地道表达) still share one fraserView/object_type today, but
+// Rachel intends to split them into separate modules later — so this only
+// scopes the existing phrase filter (same one the Fraser & Uttryck chips
+// use) rather than building anything new, keeping the swap to a dedicated
+// view a one-function change later.
+function openVanligaFraserEntry() {
+  state.fraserTypeFilter = "phrase";
+  resetListLimit("fraser");
+  els.fraserTypeFilter?.querySelectorAll(".chip").forEach((chip) => {
+    chip.classList.toggle("active", chip.dataset.fraserType === "phrase");
+    chip.setAttribute("aria-selected", String(chip.dataset.fraserType === "phrase"));
+  });
+  activateView("fraserView");
 }
 
 function renderProfileView() {
@@ -5428,6 +5503,8 @@ function renderAuthState() {
   const isSignedIn = Boolean(user?.id);
   const mastered = state.words.filter((word) => word.learned).length;
   const todayNew = Math.min(Number(state.dailyProgress?.todayNewCount || 0) || 0, Number(state.dailyNewWordTarget || 10) || 10);
+  setupHomeGreeting();
+  renderHomeProgressSection();
   if (els.profileSignedOutCard) els.profileSignedOutCard.hidden = isSignedIn;
   if (els.profileSignedInGrid) els.profileSignedInGrid.hidden = !isSignedIn;
   if (!isSignedIn) showProfilePage("main");
@@ -10074,6 +10151,11 @@ function getPrimaryCollocation(word) {
 }
 
 async function startStudySession(mode) {
+  // Figma home redesign (2026-09-18): the practice UI stays exactly what it
+  // was, just hidden until a Dagens ord card is tapped — reveal it here so
+  // both entry points (Repetera ord / Lär dig nya ord) share one place that
+  // does it.
+  if (els.homePracticeSession) els.homePracticeSession.hidden = false;
   if (!state.words.length) {
     showToast("Ordlistan laddas fortfarande. Försök igen om en stund.", { type: "warning" });
     forceHomeView({ resetScroll: true });
@@ -11441,6 +11523,23 @@ function bindEvents() {
     setReadingLibraryScope(button.dataset.readingScope);
   });
   els.starterLibraryEntryCard?.addEventListener("click", openStarterLibraryEntry);
+  els.homeVanligaFraserCard?.addEventListener("click", openVanligaFraserEntry);
+
+  // Floating search entry (Figma, 2026-09-18): toggles the existing search
+  // box's visibility only — #searchInput/#searchBtn/runSearch etc. are all
+  // untouched.
+  els.homeSearchFab?.addEventListener("click", () => {
+    if (!els.homeSearchPanel) return;
+    const opening = els.homeSearchPanel.hidden;
+    els.homeSearchPanel.hidden = !opening;
+    if (opening) {
+      els.homeSearchPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      els.searchInput?.focus();
+    }
+  });
+  els.homeSearchClose?.addEventListener("click", () => {
+    if (els.homeSearchPanel) els.homeSearchPanel.hidden = true;
+  });
 
   els.newReadingBtn?.addEventListener("click", () => openReadingEditor(null));
   els.closeReadingEditorBtn?.addEventListener("click", closeReadingEditor);

@@ -6679,3 +6679,473 @@ dialog::backdrop {
     box-shadow: none;
   }
 }
+
+/* ==========================================================================
+   Home — Logged Out / Logged In redesign (Figma, 2026-09-18)
+   Reviews/首页重设计（Figma-Logged-Out-In）评审与实施方案-2026-09-18.md
+
+   Per Rachel's 2026-09-18 decision (question 6): these are NEW semantic
+   tokens scoped to .home-page only — they don't touch the global --accent
+   (#5f7b6e) or any other page's colors. Other views keep their current
+   look until they're individually redesigned to this same Figma direction;
+   at that point these tokens (or their eventual global equivalents) migrate
+   outward. Exact hex/spacing values are estimated from the two exported
+   PNGs (no Figma Dev Mode access) — flag any visible mismatch to Rachel for
+   a follow-up pixel-tuning pass rather than treating this as final. */
+.home-page {
+  --home-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --home-text-primary: #2b2b2e;
+  --home-text-secondary: #756c66;
+  --home-muted: #9a9088;
+  --home-primary: #6b5568;
+  --home-primary-strong: #55425a;
+  --home-card-bg: #e9e1e6;
+  --home-surface: #ffffff;
+  --home-border: rgba(43, 43, 46, 0.08);
+  --home-progress-track: #d9cdd3;
+  --home-progress-fill: #8a6d7c;
+  --home-decorative-rose: #dfb2a0;
+  --home-decorative-charcoal: #3a3a3c;
+  --home-decorative-gold: var(--gold, #9d6800);
+  --home-pill-bg: #efe9e3;
+  --home-pill-text: #2b2b2e;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.home-page .home-hero h2 {
+  font-family: var(--home-serif);
+  color: var(--home-text-primary);
+  font-weight: 600;
+}
+
+.home-page .home-hero h2 span:first-child {
+  font-size: 1.9rem;
+  letter-spacing: 0.01em;
+}
+
+.home-tagline {
+  margin: 0;
+  color: var(--home-text-secondary);
+  font-style: italic;
+  font-size: 0.92rem;
+}
+
+.home-tagline-small {
+  margin: 2px 0 8px;
+  color: var(--home-text-secondary);
+  font-style: italic;
+  font-size: 0.86rem;
+}
+
+.home-section {
+  display: grid;
+  gap: 10px;
+}
+
+.home-section-title {
+  margin: 0;
+  color: var(--home-text-primary);
+  font: var(--font-section-title);
+}
+
+/* Home — Logged Out / Logged In progress block: signed-out shows a
+   save-your-progress prompt, signed-in shows the 3-stat row. Toggled by
+   renderHomeProgressSection() in app.js. */
+.home-progress-hint {
+  margin: 2px 0 0;
+  color: var(--home-text-secondary);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.home-progress-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.home-progress-stat {
+  display: grid;
+  gap: 2px;
+}
+
+.home-progress-stat-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.home-progress-stat-value strong {
+  color: var(--home-text-primary);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.home-progress-stat-icon {
+  font-size: 1rem;
+}
+
+.home-progress-stat-unit {
+  color: var(--home-text-secondary);
+  font-size: 0.78rem;
+}
+
+.home-progress-stat-label {
+  color: var(--home-text-secondary);
+  font-size: 0.82rem;
+}
+
+/* Floating search box — collapsed by default, opened by .home-search-fab. */
+.home-page .home-search-panel {
+  position: relative;
+  border-radius: 16px;
+}
+
+.home-search-close {
+  border: 0;
+  background: transparent;
+  color: var(--home-muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+/* Djupläsning — single feature card with a small CSS-drawn decorative
+   illustration (no exported art asset from Figma; shapes approximate the
+   screenshot's triangle + two circles + accent dots). */
+.deep-reading-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 20px;
+  background: var(--home-surface);
+  border: 1px solid var(--home-border);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.deep-reading-card-body h4 {
+  margin: 0;
+  color: var(--home-text-primary);
+  font: var(--font-card-title-emphasized);
+}
+
+.deep-reading-list {
+  margin: 6px 0 12px;
+  padding-left: 18px;
+  color: var(--home-text-secondary);
+  font-size: 0.86rem;
+  display: grid;
+  gap: 2px;
+}
+
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--home-pill-bg);
+  color: var(--home-pill-text);
+  font: var(--font-button);
+  padding: 9px 18px;
+  cursor: pointer;
+}
+
+.deep-reading-art {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  flex: 0 0 100px;
+}
+
+.deco-shape {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.deco-shape--triangle {
+  width: 0;
+  height: 0;
+  border-radius: 0;
+  border-left: 34px solid transparent;
+  border-right: 34px solid transparent;
+  border-bottom: 58px solid rgba(43, 43, 46, 0.08);
+  left: 0;
+  bottom: 0;
+}
+
+.deco-shape--circle-dark {
+  width: 60px;
+  height: 60px;
+  background: var(--home-decorative-charcoal);
+  right: 4px;
+  top: 6px;
+}
+
+.deco-shape--circle-rose {
+  width: 42px;
+  height: 42px;
+  background: var(--home-decorative-rose);
+  left: 14px;
+  bottom: 10px;
+}
+
+.deco-shape--sm.deco-shape--circle-dark {
+  width: 40px;
+  height: 40px;
+  right: 8px;
+  top: 8px;
+}
+
+.deco-shape--sm.deco-shape--circle-rose {
+  width: 30px;
+  height: 30px;
+  left: 6px;
+  bottom: 6px;
+}
+
+.deco-shape--dot {
+  width: 6px;
+  height: 6px;
+  background: var(--home-decorative-gold);
+}
+
+.deco-shape--dot1 {
+  right: 10px;
+  top: 30px;
+}
+
+.deco-shape--dot2 {
+  right: 30px;
+  bottom: 18px;
+}
+
+.deco-shape--line {
+  width: 1px;
+  height: 60px;
+  border-radius: 0;
+  background: rgba(43, 43, 46, 0.25);
+  right: 18px;
+  top: 12px;
+}
+
+/* Dagens ord — the two cards, and the entry buttons/progress bars inside
+   them, are the exact same startReviewStudyBtn/startNewStudyBtn/
+   entry*ProgressLabel/entry*ProgressFill elements the practice flow already
+   used — only the surrounding markup/CSS changed (Rachel's 2026-09-18
+   instruction not to touch the practice logic itself). Horizontal
+   scroll+snap, same pattern as the old .study-entry-grid, so a 3rd/4th card
+   can be added later without a layout rewrite. */
+.dagens-ord-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dagens-ord-card {
+  flex: 0 0 calc(50% - 6px);
+  scroll-snap-align: start;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  border: 0;
+  border-radius: 18px;
+  background: var(--home-card-bg);
+  padding: 14px;
+  cursor: pointer;
+}
+
+.dagens-ord-card:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.dagens-ord-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dagens-ord-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.95rem;
+}
+
+.dagens-ord-chevron {
+  color: var(--home-text-secondary);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.dagens-ord-title {
+  color: var(--home-text-primary);
+  font: var(--font-card-title);
+  font-weight: 700;
+}
+
+.dagens-ord-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.dagens-ord-progress-track {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--home-progress-track);
+  overflow: hidden;
+}
+
+.dagens-ord-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--home-progress-fill);
+  transition: width 300ms ease;
+}
+
+.dagens-ord-progress-label {
+  color: var(--home-text-secondary);
+  font-size: 0.78rem;
+}
+
+/* Kom ihåg */
+.home-recall-empty {
+  margin: 0;
+  color: var(--home-text-secondary);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.home-recall-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.recall-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--home-border);
+  border-radius: 999px;
+  background: var(--home-surface);
+  color: var(--home-text-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+
+/* Utforska mer */
+.explore-more-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.explore-more-card {
+  position: relative;
+  flex: 0 0 78%;
+  max-width: 300px;
+  scroll-snap-align: start;
+  border-radius: 20px;
+  background: var(--home-surface);
+  border: 1px solid var(--home-border);
+  padding: 16px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.explore-more-body h4 {
+  margin: 0;
+  color: var(--home-text-primary);
+  font: var(--font-card-title-emphasized);
+}
+
+.explore-more-art {
+  position: relative;
+  height: 56px;
+  margin-top: 8px;
+}
+
+.explore-more-art .deco-shape {
+  bottom: -10px;
+}
+
+/* Floating search button (Figma) — absolutely positioned against
+   .app-shell (the nearest positioned ancestor, itself position:fixed), so
+   it stays anchored to the 430px app column instead of the full viewport
+   on wider screens. */
+.home-search-fab {
+  position: absolute;
+  right: 12px;
+  /* Sits beside the tabbar pill (same baseline), not stacked above it —
+     the pill's own bottom margin is env(safe-area-inset-bottom), see
+     .tabbar below, so matching that here keeps both flush at the bottom
+     while the fab (52px, taller than --tabbar-height) reads as slightly
+     elevated, matching the Figma screenshot. */
+  bottom: env(safe-area-inset-bottom);
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 40, 40, 0.06);
+  background: #ffffff;
+  color: var(--home-text-primary, #2b2b2e);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 22px rgba(31, 42, 48, 0.14);
+  z-index: 41;
+  cursor: pointer;
+}
+
+.home-search-fab svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Bottom tabbar — Figma shows icon + label together (icons existed in the
+   markup already but were CSS-disabled, display:none, before this) plus a
+   floating pill shape instead of the old edge-to-edge bar. */
+.tab-icon {
+  display: grid;
+}
+
+.tabbar {
+  margin: 0 10px env(safe-area-inset-bottom);
+  border-radius: 22px;
+  border: 1px solid rgba(34, 40, 40, 0.06);
+  box-shadow: 0 10px 24px rgba(31, 42, 48, 0.08);
+  width: auto;
+  height: var(--tabbar-height);
+  padding: 0 8px;
+}
+/* ========================================================================== */
