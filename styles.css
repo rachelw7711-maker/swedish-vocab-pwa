@@ -869,7 +869,7 @@ body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
   }
 }
 
-.home-page {
+#homeView.home-page {
   position: relative;
   display: grid;
   align-content: start;
@@ -886,10 +886,6 @@ body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
 .home-page .practice-panel,
 .home-page .home-hero {
   margin-bottom: 0;
-}
-
-#homeView.active {
-  display: block;
 }
 
 #homeView:not(.active) {
