@@ -20,7 +20,7 @@
   --soft-shadow: 0 10px 26px rgba(31, 42, 48, 0.055);
   --blur: blur(22px) saturate(180%);
   --topbar-height: calc(58px + env(safe-area-inset-top));
-  --tabbar-height: 50px;
+  --tabbar-height: 61px;
   --app-max-width: 430px;
   --chinese-font: "圆体-简", "Yuanti SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 
@@ -456,11 +456,22 @@ body[data-active-view="homeView"]:has(.topbar-auth-button[data-signed-in="true"]
   grid-template-rows: 0 minmax(0, 1fr) calc(var(--tabbar-height) + env(safe-area-inset-bottom));
 }
 
+/* Home-Logged Out's topbar (Figma 348:865) — same fill as the page behind
+   it (#f2f2f2), not white; scoped to the home view so the shared topbar
+   keeps its existing white look everywhere else. */
+body[data-active-view="homeView"] .topbar {
+  background: #f2f2f2;
+  border-bottom-color: #e9e9ee;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+}
+
 /* Home-Logged Out's "Logga in" pill (Figma 348:868/348:869) — scoped to
    the home view so the shared topbar button keeps its existing look
    everywhere else. */
 body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
+  height: 28px;
   border: 0.5px solid #8a8682;
+  border-radius: 16px;
   background: #f5f3f0;
   color: #817d79;
   font-size: 0.86rem;
@@ -708,6 +719,10 @@ body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
   line-height: 1;
 }
 
+/* Bottom tabbar — Figma (Dev Mode MCP, node 348:844 / 93:5679): a floating
+   pill (white, 0.6px #c3c1c1 border, no shadow), narrower than the full
+   width so the separate circular search button (node 348:843) floats to
+   its right with an 11px gap, not overlapping it. */
 .tabbar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -715,14 +730,14 @@ body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
   position: relative;
   grid-row: 3;
   z-index: 40;
-  width: 100%;
+  width: auto;
   height: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
   align-content: start;
-  padding: 0 12px env(safe-area-inset-bottom);
+  padding: 0 8px env(safe-area-inset-bottom);
+  margin: 0 94px env(safe-area-inset-bottom) 22px;
   box-sizing: border-box;
-  border: 1px solid rgba(34, 40, 40, 0.06);
-  border-bottom: 0;
-  border-radius: 0;
+  border: 0.6px solid #c3c1c1;
+  border-radius: 999px;
   background: #ffffff;
   box-shadow: none;
 }
@@ -738,11 +753,11 @@ body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
   height: var(--tabbar-height);
   padding: 0 6px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 999px;
   background: transparent;
-  color: var(--muted);
-  font-size: 0.98rem;
-  font-weight: 720;
+  color: #8a8580;
+  font-size: 0.8125rem;
+  font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
   transition:
@@ -761,55 +776,54 @@ body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
 }
 
 .tab-icon {
+  position: relative;
+  z-index: 1;
   display: none;
-  flex: 0 0 20px;
+  flex: 0 0 24px;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
-  max-width: 18px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  max-width: 24px;
   overflow: hidden;
 }
 
-.tab-icon svg {
+.tab-icon img {
   display: block;
-  width: 17px !important;
-  height: 17px !important;
-  max-width: 17px;
-  max-height: 17px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .tab-label {
   position: relative;
-  padding-bottom: 5px;
+  z-index: 1;
+  padding-bottom: 0;
   line-height: 1;
 }
 
 .tab.active {
-  color: var(--accent-strong);
+  position: relative;
+  color: #5a5652;
   background: transparent;
 }
 
-.tab.active .tab-label::after {
+/* Rounded-pill highlight behind the active tab (node 348:845/120:60,
+   #efefef, inset 6px vertically to match the 49px-tall pill inside the
+   61px bar) — replaces the old underline indicator, which Figma doesn't
+   have. */
+.tab.active::before {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 24px;
-  height: 2px;
+  z-index: 0;
+  inset: 6px 6px;
   border-radius: 999px;
-  background: var(--accent);
-  transform: translateX(-50%);
+  background: #efefef;
 }
 
 .tab.active .tab-icon,
 .tab.active .tab-label {
-  color: var(--accent-strong);
+  color: #5a5652;
 }
 
 .home-hero {
@@ -7186,51 +7200,34 @@ img.explore-more-art {
   height: 7px;
 }
 
-/* Floating search button (Figma) — absolutely positioned against
-   .app-shell (the nearest positioned ancestor, itself position:fixed), so
-   it stays anchored to the 430px app column instead of the full viewport
-   on wider screens. */
+/* Floating search button (Figma, node 348:843) — same size, border and
+   baseline as the tabbar pill (both 61px tall, flush, no shadow on
+   either); absolutely positioned against .app-shell (the nearest
+   positioned ancestor, itself position:fixed), so it stays anchored to
+   the 430px app column instead of the full viewport on wider screens. */
 .home-search-fab {
   position: absolute;
-  right: 12px;
-  /* Sits beside the tabbar pill (same baseline), not stacked above it —
-     the pill's own bottom margin is env(safe-area-inset-bottom), see
-     .tabbar below, so matching that here keeps both flush at the bottom
-     while the fab (52px, taller than --tabbar-height) reads as slightly
-     elevated, matching the Figma screenshot. */
+  right: 22px;
   bottom: env(safe-area-inset-bottom);
-  width: 52px;
-  height: 52px;
+  width: var(--tabbar-height);
+  height: var(--tabbar-height);
   border-radius: 999px;
-  border: 1px solid rgba(34, 40, 40, 0.06);
+  border: 0.6px solid #c3c1c1;
   background: #ffffff;
   color: var(--home-text-primary, #2b2b2e);
   display: grid;
   place-items: center;
-  box-shadow: 0 10px 22px rgba(31, 42, 48, 0.14);
+  box-shadow: none;
   z-index: 41;
   cursor: pointer;
 }
 
-.home-search-fab svg {
-  width: 20px;
-  height: 20px;
+.home-search-fab img {
+  width: 24px;
+  height: 24px;
 }
 
-/* Bottom tabbar — Figma shows icon + label together (icons existed in the
-   markup already but were CSS-disabled, display:none, before this) plus a
-   floating pill shape instead of the old edge-to-edge bar. */
 .tab-icon {
   display: grid;
-}
-
-.tabbar {
-  margin: 0 10px env(safe-area-inset-bottom);
-  border-radius: 22px;
-  border: 1px solid rgba(34, 40, 40, 0.06);
-  box-shadow: 0 10px 24px rgba(31, 42, 48, 0.08);
-  width: auto;
-  height: var(--tabbar-height);
-  padding: 0 8px;
 }
 /* ========================================================================== */

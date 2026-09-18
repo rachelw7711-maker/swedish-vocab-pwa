@@ -24,6 +24,8 @@ icons/*
 !icons/library-covers/*
 !icons/home-cards/
 !icons/home-cards/*
+!icons/tabbar/
+!icons/tabbar/*
 public/icons/*
 !public/icons/app-icon.png
 !public/icons/apple-touch-icon.png
