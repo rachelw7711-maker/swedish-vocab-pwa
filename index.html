@@ -22,7 +22,7 @@
     <script>
       (() => {
         const key = "swedish-vocab-pwa.layoutVersion";
-        const version = "layout-20260711-33";
+        const version = "layout-20260711-34";
         const params = new URLSearchParams(location.search);
         const currentLayout = params.get("layout");
         let storedVersion = null;
@@ -51,16 +51,18 @@
         });
       })();
     </script>
-    <!-- 2026-09-18: new home page (Figma) uses a serif display face for
-         headings ("Välkommen till SpråkLab" / "Hej, Rachel"). Exact Figma
-         font name wasn't available (no Dev Mode access, see Reviews/
-         首页重设计（Figma-Logged-Out-In）评审与实施方案-2026-09-18.md) — Playfair
-         Display is a close visual match to the screenshots; flag to Rachel
-         if the real family differs. -->
+    <!-- 2026-09-18: Home page (Figma) fonts, confirmed via Figma Dev Mode
+         MCP (get_design_context) — Italiana for the greeting, Judson
+         Italic for the tagline, Calistoga for the big stat numbers, Inter
+         for everything else. Replaces the earlier Playfair Display guess
+         made without Dev Mode access. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=190" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Italiana&family=Judson:ital@1&family=Calistoga&family=Inter:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=191" />
   </head>
   <body data-active-view="homeView" data-app-ready="loading">
     <div id="startupSplash" class="startup-splash" aria-live="polite" aria-label="Laddar appen">
@@ -113,26 +115,43 @@
             </div>
             <div class="home-progress-stats" id="homeProgressStats" hidden>
               <h3 class="home-section-title">Dina framsteg</h3>
+              <!-- 4 cards, matching Figma (Home-Logged In, node 314:665) —
+                   horizontally scrollable, "Lästa texter" reuses the
+                   existing achievementReadingCount element (already wired
+                   in renderHomeAchievements(), just wasn't in this markup
+                   yet). -->
               <div class="home-progress-stats-row">
                 <div class="home-progress-stat">
                   <div class="home-progress-stat-value">
                     <strong id="achievementStreak">…</strong>
-                    <span class="home-progress-stat-icon" aria-hidden="true">🔥</span>
                   </div>
                   <span class="home-progress-stat-label">Aktiva dagar</span>
+                  <img class="home-progress-stat-icon" src="/icons/home-cards/stat-streak.svg" alt="" aria-hidden="true" />
                 </div>
                 <div class="home-progress-stat">
                   <div class="home-progress-stat-value">
                     <strong id="achievementWordsLearned">…</strong>
                   </div>
                   <span class="home-progress-stat-label">Nya ord</span>
+                  <img class="home-progress-stat-icon" src="/icons/home-cards/stat-newwords.svg" alt="" aria-hidden="true" />
+                </div>
+                <div class="home-progress-stat">
+                  <!-- formatMsAsDuration() (app.js) already returns a full
+                       "X min"/"X h Y min" string — no separate unit span
+                       needed (a leftover one here used to render "…min"
+                       then, once loaded, a duplicated "min min"). -->
+                  <div class="home-progress-stat-value">
+                    <strong id="achievementShadowingTime">…</strong>
+                  </div>
+                  <span class="home-progress-stat-label">Shadowing</span>
+                  <img class="home-progress-stat-icon" src="/icons/home-cards/stat-shadowing.svg" alt="" aria-hidden="true" />
                 </div>
                 <div class="home-progress-stat">
                   <div class="home-progress-stat-value">
-                    <strong id="achievementShadowingTime">…</strong>
-                    <span class="home-progress-stat-unit">min</span>
+                    <strong id="achievementReadingCount">…</strong>
                   </div>
-                  <span class="home-progress-stat-label">Shadowing</span>
+                  <span class="home-progress-stat-label">Lästa texter</span>
+                  <img class="home-progress-stat-icon" src="/icons/home-cards/stat-reading.svg" alt="" aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -168,19 +187,14 @@
                   <li>analysera den</li>
                   <li>öva med shadowing</li>
                 </ul>
-                <button class="pill-button" id="readingShadowingEntryBtn" type="button" aria-label="Öppna Läs/Lyssna/Härma">
-                  Skanna <span aria-hidden="true">📷</span>
+                <button class="pill-button pill-button--scan" id="readingShadowingEntryBtn" type="button" aria-label="Öppna Läs/Lyssna/Härma">
+                  Skanna <img class="pill-button-icon" src="/icons/home-cards/camera.svg" alt="" aria-hidden="true" />
                 </button>
                 <span id="readingShadowingEntryDetail" class="sr-only">Ta ett foto eller klistra in en text</span>
               </div>
-              <div class="deep-reading-art" aria-hidden="true">
-                <span class="deco-shape deco-shape--triangle"></span>
-                <span class="deco-shape deco-shape--circle-dark"></span>
-                <span class="deco-shape deco-shape--circle-rose"></span>
-                <span class="deco-shape deco-shape--dot deco-shape--dot1"></span>
-                <span class="deco-shape deco-shape--dot deco-shape--dot2"></span>
-                <span class="deco-shape deco-shape--line"></span>
-              </div>
+              <!-- Figma's exact card illustration (node 314:584), exported
+                   and committed locally rather than hand-drawn CSS shapes. -->
+              <img class="deep-reading-art" src="/icons/home-cards/art-deepreading.svg" alt="" aria-hidden="true" />
             </article>
           </section>
 
@@ -189,7 +203,7 @@
             <div class="dagens-ord-row">
               <button class="dagens-ord-card" id="startReviewStudyBtn" type="button" aria-label="Börja repetera">
                 <span class="dagens-ord-card-head">
-                  <span class="dagens-ord-icon" aria-hidden="true">✏️</span>
+                  <span class="dagens-ord-icon" aria-hidden="true"><img src="/icons/home-cards/icon-pencil.svg" alt="" /></span>
                   <span class="dagens-ord-chevron" aria-hidden="true">›</span>
                 </span>
                 <span class="dagens-ord-title">Repetera ord</span>
@@ -200,7 +214,7 @@
               </button>
               <button class="dagens-ord-card" id="startNewStudyBtn" type="button" aria-label="Börja lära dig nya ord">
                 <span class="dagens-ord-card-head">
-                  <span class="dagens-ord-icon" aria-hidden="true">🎓</span>
+                  <span class="dagens-ord-icon" aria-hidden="true"><img src="/icons/home-cards/icon-cap.svg" alt="" /></span>
                   <span class="dagens-ord-chevron" aria-hidden="true">›</span>
                 </span>
                 <span class="dagens-ord-title">Lär dig nya ord</span>
@@ -232,11 +246,7 @@
                   <p class="home-tagline-small">Träna svenska med texter</p>
                   <button class="pill-button" id="starterLibraryEntryBtn" type="button" aria-label="Öppna startbiblioteket">Prova</button>
                 </div>
-                <div class="explore-more-art" aria-hidden="true">
-                  <span class="deco-shape deco-shape--circle-rose deco-shape--sm"></span>
-                  <span class="deco-shape deco-shape--circle-dark deco-shape--sm"></span>
-                  <span class="deco-shape deco-shape--dot deco-shape--dot1"></span>
-                </div>
+                <img class="explore-more-art" src="/icons/home-cards/art-article.svg" alt="" aria-hidden="true" />
                 <span id="entryLibraryProgressLabel" class="sr-only">…</span>
                 <span id="entryLibraryProgressFill" class="sr-only" aria-hidden="true"></span>
               </article>
@@ -252,10 +262,41 @@
                   <p class="home-tagline-small">"ta det lugnt"</p>
                   <button class="pill-button" id="homeVanligaFraserBtn" type="button" aria-label="Öppna Vanliga fraser">Prova</button>
                 </div>
-                <div class="explore-more-art" aria-hidden="true">
-                  <span class="deco-shape deco-shape--circle-rose deco-shape--sm"></span>
-                  <span class="deco-shape deco-shape--circle-dark deco-shape--sm"></span>
+                <img class="explore-more-art" src="/icons/home-cards/art-phrase.svg" alt="" aria-hidden="true" />
+              </article>
+              <!-- "Idiomtiska uttryck" (Figma, 314:606) — same
+                   fraserView/object_type data as Vanliga fraser above, just
+                   scoped to the "expression" filter instead of "phrase"
+                   (see openIdiomtiskaUttryckEntry in app.js). -->
+              <article class="explore-more-card explore-more-card--idiom" id="homeIdiomCard">
+                <div class="explore-more-body">
+                  <h4>Idiomtiska uttryck</h4>
+                  <p class="home-tagline-small">"glida in på en räckmacka"</p>
+                  <button class="pill-button" id="homeIdiomBtn" type="button" aria-label="Öppna Idiomtiska uttryck">Prova</button>
                 </div>
+                <span class="explore-more-art explore-more-art--idiom" aria-hidden="true">
+                  <span class="explore-more-art-line"></span>
+                  <img class="explore-more-art-ellipse" src="/icons/home-cards/idiom-ellipse.svg" alt="" />
+                  <img class="explore-more-art-face" src="/icons/home-cards/idiom-face.png" alt="" />
+                  <img class="explore-more-art-vec explore-more-art-vec2" src="/icons/home-cards/idiom-vec2.svg" alt="" />
+                  <img class="explore-more-art-vec explore-more-art-vec3" src="/icons/home-cards/idiom-vec3.svg" alt="" />
+                  <img class="explore-more-art-vec explore-more-art-vec4" src="/icons/home-cards/idiom-vec4.svg" alt="" />
+                  <img class="explore-more-art-vec explore-more-art-vec5" src="/icons/home-cards/idiom-vec5.svg" alt="" />
+                </span>
+              </article>
+              <!-- "Shadowing" (Figma, 314:606) — opens the existing
+                   standalone Shadowing module (#historyView, "Förbered"
+                   panel) directly, same entry point the shadowing editor
+                   already uses elsewhere (see openHomeShadowingEntry in
+                   app.js). Distinct from the Djupläsning card above, which
+                   starts a brand-new scan/text instead. -->
+              <article class="explore-more-card explore-more-card--shadowing" id="homeShadowingCard">
+                <div class="explore-more-body">
+                  <h4>Shadowing</h4>
+                  <p class="home-tagline-small">Öva uttal och rytm</p>
+                  <button class="pill-button" id="homeShadowingBtn" type="button" aria-label="Öppna Shadowing">Prova</button>
+                </div>
+                <img class="explore-more-art" src="/icons/home-cards/art-shadowingcard.svg" alt="" aria-hidden="true" />
               </article>
             </div>
           </section>

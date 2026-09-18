@@ -443,6 +443,30 @@ body[data-active-view="profileView"] .topbar-auth-button {
   display: none;
 }
 
+/* Home-Logged In (Figma, node 1:2) has no header at all — unlike every
+   other signed-in view, which keeps the shared logo bar. Collapse the
+   app-shell's topbar row too, so content doesn't leave an empty gap where
+   the header used to be. Home-Logged Out (348:694) keeps the topbar, so
+   this only fires once .topbar-auth-button flips to signed-in. */
+body[data-active-view="homeView"]:has(.topbar-auth-button[data-signed-in="true"]) .topbar {
+  display: none;
+}
+
+body[data-active-view="homeView"]:has(.topbar-auth-button[data-signed-in="true"]) .app-shell {
+  grid-template-rows: 0 minmax(0, 1fr) calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+}
+
+/* Home-Logged Out's "Logga in" pill (Figma 348:868/348:869) — scoped to
+   the home view so the shared topbar button keeps its existing look
+   everywhere else. */
+body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
+  border: 0.5px solid #8a8682;
+  background: #f5f3f0;
+  color: #817d79;
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
 .topbar-sync-status {
   position: relative;
   display: inline-grid;
@@ -6689,26 +6713,36 @@ dialog::backdrop {
    (#5f7b6e) or any other page's colors. Other views keep their current
    look until they're individually redesigned to this same Figma direction;
    at that point these tokens (or their eventual global equivalents) migrate
-   outward. Exact hex/spacing values are estimated from the two exported
-   PNGs (no Figma Dev Mode access) — flag any visible mismatch to Rachel for
-   a follow-up pixel-tuning pass rather than treating this as final. */
+   outward. Values below are read directly from Figma via Dev Mode MCP
+   (get_design_context on node 1:2 "Home-Logged In" / 348:694 "Home-Logged
+   Out", 2026-09-18) — this replaces the earlier estimated-from-PNG pass. */
 .home-page {
-  --home-serif: "Playfair Display", Georgia, "Times New Roman", serif;
-  --home-text-primary: #2b2b2e;
-  --home-text-secondary: #756c66;
-  --home-muted: #9a9088;
-  --home-primary: #6b5568;
-  --home-primary-strong: #55425a;
-  --home-card-bg: #e9e1e6;
+  --home-serif: "Italiana", Georgia, "Times New Roman", serif;
+  --home-serif-tagline: "Judson", Georgia, serif;
+  --home-serif-numeral: "Calistoga", Georgia, serif;
+  --home-text-primary: #302f2d;
+  --home-text-secondary: #9a9692;
+  --home-heading-muted: #77736d;
+  --home-tagline-color: #86827e;
+  --home-progress-hint-color: #807b75;
+  --home-card-title: #292826;
+  --home-card-title-alt: #373532;
+  --home-dagens-title: #373334;
+  --home-stat-value: #242321;
+  --home-muted: #9a9692;
+  --home-card-bg: #d8d0d8;
   --home-surface: #ffffff;
-  --home-border: rgba(43, 43, 46, 0.08);
-  --home-progress-track: #d9cdd3;
-  --home-progress-fill: #8a6d7c;
-  --home-decorative-rose: #dfb2a0;
-  --home-decorative-charcoal: #3a3a3c;
-  --home-decorative-gold: var(--gold, #9d6800);
-  --home-pill-bg: #efe9e3;
-  --home-pill-text: #2b2b2e;
+  --home-page-bg: #f2f2f2;
+  --home-border: transparent;
+  --home-progress-track: #c7bcc9;
+  --home-progress-fill: #a991a9;
+  --home-decorative-gold: #d8a93a;
+  --home-pill-bg: #e1e1e0;
+  --home-pill-text: #4b4946;
+  --home-pill-bg-scan: #e3e3e2;
+  --home-pill-text-scan: #373532;
+  --home-icon-badge-bg: #f1edf2;
+  background: var(--home-page-bg);
 }
 
 .sr-only {
@@ -6726,7 +6760,7 @@ dialog::backdrop {
 .home-page .home-hero h2 {
   font-family: var(--home-serif);
   color: var(--home-text-primary);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .home-page .home-hero h2 span:first-child {
@@ -6736,9 +6770,10 @@ dialog::backdrop {
 
 .home-tagline {
   margin: 0;
-  color: var(--home-text-secondary);
+  color: var(--home-tagline-color);
+  font-family: var(--home-serif-tagline);
   font-style: italic;
-  font-size: 0.92rem;
+  font-size: 1.05rem;
 }
 
 .home-tagline-small {
@@ -6755,13 +6790,25 @@ dialog::backdrop {
 
 .home-section-title {
   margin: 0;
-  color: var(--home-text-primary);
-  font: var(--font-section-title);
+  color: var(--home-heading-muted);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 /* Home — Logged Out / Logged In progress block: signed-out shows a
-   save-your-progress prompt, signed-in shows the 3-stat row. Toggled by
-   renderHomeProgressSection() in app.js. */
+   save-your-progress prompt, signed-in shows the 4-stat row. Toggled by
+   renderHomeProgressSection() in app.js. "Spara dina framsteg" and "Kom
+   ihåg" use a smaller, differently-colored section-title variant in Figma
+   than the other section headings (Djupläsning/Dagens ord/Utforska mer). */
+.home-progress-signedout .home-section-title,
+.home-recall .home-section-title {
+  color: var(--home-progress-hint-color);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
 .home-progress-hint {
   margin: 2px 0 0;
   color: var(--home-text-secondary);
@@ -6769,16 +6816,29 @@ dialog::backdrop {
   font-size: 0.9rem;
 }
 
+/* 4 cards (Aktiva dagar / Nya ord / Shadowing / Lästa texter), horizontally
+   scrollable — matches Figma (node 314:665), which explicitly marks this
+   row overflow-x-auto with the 4th card starting outside the initial
+   viewport. */
 .home-progress-stats-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
   gap: 10px;
   margin-top: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .home-progress-stat {
+  position: relative;
+  flex: 0 0 120px;
+  scroll-snap-align: start;
   display: grid;
   gap: 2px;
+  padding: 14px 12px;
+  border-radius: 20px;
+  background: var(--home-surface);
 }
 
 .home-progress-stat-value {
@@ -6788,23 +6848,30 @@ dialog::backdrop {
 }
 
 .home-progress-stat-value strong {
-  color: var(--home-text-primary);
+  color: var(--home-stat-value);
+  font-family: var(--home-serif-numeral);
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .home-progress-stat-icon {
-  font-size: 1rem;
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .home-progress-stat-unit {
-  color: var(--home-text-secondary);
-  font-size: 0.78rem;
+  color: var(--home-text-primary);
+  font-size: 0.75rem;
 }
 
 .home-progress-stat-label {
-  color: var(--home-text-secondary);
-  font-size: 0.82rem;
+  color: var(--home-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 /* Floating search box — collapsed by default, opened by .home-search-fab. */
@@ -6823,9 +6890,9 @@ dialog::backdrop {
   cursor: pointer;
 }
 
-/* Djupläsning — single feature card with a small CSS-drawn decorative
-   illustration (no exported art asset from Figma; shapes approximate the
-   screenshot's triangle + two circles + accent dots). */
+/* Djupläsning — single feature card. Illustration is Figma's own exported
+   asset (icons/home/art-deepreading.svg, node 314:584), not a hand-drawn
+   CSS approximation. */
 .deep-reading-card {
   position: relative;
   display: grid;
@@ -6835,14 +6902,13 @@ dialog::backdrop {
   padding: 18px;
   border-radius: 20px;
   background: var(--home-surface);
-  border: 1px solid var(--home-border);
   overflow: hidden;
   cursor: pointer;
 }
 
 .deep-reading-card-body h4 {
   margin: 0;
-  color: var(--home-text-primary);
+  color: var(--home-card-title-alt);
   font: var(--font-card-title-emphasized);
 }
 
@@ -6868,82 +6934,22 @@ dialog::backdrop {
   cursor: pointer;
 }
 
+.pill-button--scan {
+  background: var(--home-pill-bg-scan);
+  color: var(--home-pill-text-scan);
+}
+
+.pill-button-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .deep-reading-art {
-  position: relative;
-  width: 100px;
-  height: 100px;
-  flex: 0 0 100px;
-}
-
-.deco-shape {
-  position: absolute;
-  border-radius: 50%;
-}
-
-.deco-shape--triangle {
-  width: 0;
-  height: 0;
-  border-radius: 0;
-  border-left: 34px solid transparent;
-  border-right: 34px solid transparent;
-  border-bottom: 58px solid rgba(43, 43, 46, 0.08);
-  left: 0;
-  bottom: 0;
-}
-
-.deco-shape--circle-dark {
-  width: 60px;
-  height: 60px;
-  background: var(--home-decorative-charcoal);
-  right: 4px;
-  top: 6px;
-}
-
-.deco-shape--circle-rose {
-  width: 42px;
-  height: 42px;
-  background: var(--home-decorative-rose);
-  left: 14px;
-  bottom: 10px;
-}
-
-.deco-shape--sm.deco-shape--circle-dark {
-  width: 40px;
-  height: 40px;
-  right: 8px;
-  top: 8px;
-}
-
-.deco-shape--sm.deco-shape--circle-rose {
-  width: 30px;
-  height: 30px;
-  left: 6px;
-  bottom: 6px;
-}
-
-.deco-shape--dot {
-  width: 6px;
-  height: 6px;
-  background: var(--home-decorative-gold);
-}
-
-.deco-shape--dot1 {
-  right: 10px;
-  top: 30px;
-}
-
-.deco-shape--dot2 {
-  right: 30px;
-  bottom: 18px;
-}
-
-.deco-shape--line {
-  width: 1px;
-  height: 60px;
-  border-radius: 0;
-  background: rgba(43, 43, 46, 0.25);
-  right: 18px;
-  top: 12px;
+  flex: 0 0 110px;
+  align-self: end;
+  width: 110px;
+  height: auto;
+  margin: -18px -18px -18px 0;
 }
 
 /* Dagens ord — the two cards, and the entry buttons/progress bars inside
@@ -6989,11 +6995,17 @@ dialog::backdrop {
 .dagens-ord-icon {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.6);
-  font-size: 0.95rem;
+  background: var(--home-icon-badge-bg);
+}
+
+.dagens-ord-icon img {
+  width: auto;
+  height: auto;
+  max-width: 16px;
+  max-height: 16px;
 }
 
 .dagens-ord-chevron {
@@ -7003,9 +7015,10 @@ dialog::backdrop {
 }
 
 .dagens-ord-title {
-  color: var(--home-text-primary);
-  font: var(--font-card-title);
-  font-weight: 700;
+  color: var(--home-dagens-title);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .dagens-ord-progress {
@@ -7032,7 +7045,9 @@ dialog::backdrop {
 
 .dagens-ord-progress-label {
   color: var(--home-text-secondary);
-  font-size: 0.78rem;
+  font-style: italic;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
 }
 
 /* Kom ihåg */
@@ -7052,17 +7067,19 @@ dialog::backdrop {
 
 .recall-chip {
   flex: 0 0 auto;
-  border: 1px solid var(--home-border);
+  border: 0;
   border-radius: 999px;
   background: var(--home-surface);
   color: var(--home-text-primary);
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: 0.875rem;
+  font-weight: 500;
   padding: 9px 16px;
   cursor: pointer;
 }
 
-/* Utforska mer */
+/* Utforska mer — 4 cards (Läs en artikel / Vanliga fraser / Idiomtiska
+   uttryck / Shadowing), horizontally scrollable, matches Figma (node
+   314:606, which explicitly marks this row overflow-x-auto). */
 .explore-more-row {
   display: flex;
   gap: 12px;
@@ -7075,30 +7092,102 @@ dialog::backdrop {
 .explore-more-card {
   position: relative;
   flex: 0 0 78%;
-  max-width: 300px;
+  max-width: 280px;
+  min-height: 140px;
   scroll-snap-align: start;
-  border-radius: 20px;
+  border-radius: 18px;
   background: var(--home-surface);
-  border: 1px solid var(--home-border);
   padding: 16px;
   overflow: hidden;
   cursor: pointer;
 }
 
+/* Figma's own Shadowing card (314:618) uses a 10px radius, unlike the
+   other three explore-more cards' 18px — an intentional Figma detail, kept
+   as-is rather than normalized. */
+.explore-more-card--shadowing {
+  border-radius: 10px;
+}
+
 .explore-more-body h4 {
   margin: 0;
-  color: var(--home-text-primary);
+  color: var(--home-card-title);
   font: var(--font-card-title-emphasized);
 }
 
-.explore-more-art {
-  position: relative;
-  height: 56px;
-  margin-top: 8px;
+img.explore-more-art {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: auto;
+  max-height: 132px;
+  pointer-events: none;
 }
 
-.explore-more-art .deco-shape {
-  bottom: -10px;
+.explore-more-art--idiom {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  width: 90px;
+  height: 108px;
+  pointer-events: none;
+}
+
+.explore-more-art--idiom img,
+.explore-more-art--idiom .explore-more-art-line {
+  position: absolute;
+}
+
+.explore-more-art-line {
+  left: 76px;
+  top: 0;
+  width: 1px;
+  height: 107px;
+  background: #7a746c;
+}
+
+.explore-more-art-ellipse {
+  left: 8px;
+  top: 0;
+  width: 41px;
+  height: 97px;
+}
+
+.explore-more-art-face {
+  left: 19px;
+  top: 37px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.explore-more-art-vec2 {
+  left: 0;
+  top: 77px;
+  width: 26px;
+  height: 26px;
+}
+
+.explore-more-art-vec3 {
+  left: 17px;
+  top: 75px;
+  width: 7px;
+  height: 7px;
+}
+
+.explore-more-art-vec4 {
+  left: 23px;
+  top: 67px;
+  width: 5px;
+  height: 5px;
+}
+
+.explore-more-art-vec5 {
+  left: 10px;
+  top: 61px;
+  width: 7px;
+  height: 7px;
 }
 
 /* Floating search button (Figma) — absolutely positioned against

@@ -841,6 +841,10 @@ const els = {
   starterLibraryEntryBtn: document.querySelector("#starterLibraryEntryBtn"),
   homeVanligaFraserCard: document.querySelector("#homeVanligaFraserCard"),
   homeVanligaFraserBtn: document.querySelector("#homeVanligaFraserBtn"),
+  homeIdiomCard: document.querySelector("#homeIdiomCard"),
+  homeIdiomBtn: document.querySelector("#homeIdiomBtn"),
+  homeShadowingCard: document.querySelector("#homeShadowingCard"),
+  homeShadowingBtn: document.querySelector("#homeShadowingBtn"),
   homeProgressSignedOut: document.querySelector("#homeProgressSignedOut"),
   homeProgressStats: document.querySelector("#homeProgressStats"),
   homeSearchPanel: document.querySelector("#homeSearchPanel"),
@@ -4544,6 +4548,27 @@ function openVanligaFraserEntry() {
     chip.setAttribute("aria-selected", String(chip.dataset.fraserType === "phrase"));
   });
   activateView("fraserView");
+}
+
+// "Idiomtiska uttryck" home card (Figma, 2026-09-18) — same fraserView/
+// object_type data as openVanligaFraserEntry above, scoped to "expression"
+// instead of "phrase".
+function openIdiomtiskaUttryckEntry() {
+  state.fraserTypeFilter = "expression";
+  resetListLimit("fraser");
+  els.fraserTypeFilter?.querySelectorAll(".chip").forEach((chip) => {
+    chip.classList.toggle("active", chip.dataset.fraserType === "expression");
+    chip.setAttribute("aria-selected", String(chip.dataset.fraserType === "expression"));
+  });
+  activateView("fraserView");
+}
+
+// "Shadowing" home card (Figma, 2026-09-18) — opens the existing standalone
+// Shadowing module (#historyView) straight to its "Förbered" editor, same
+// panel openShadowingEditor()/editCurrentShadowingText() already use.
+function openHomeShadowingEntry() {
+  activateView("historyView");
+  openShadowingEditor();
 }
 
 function renderProfileView() {
@@ -11524,6 +11549,8 @@ function bindEvents() {
   });
   els.starterLibraryEntryCard?.addEventListener("click", openStarterLibraryEntry);
   els.homeVanligaFraserCard?.addEventListener("click", openVanligaFraserEntry);
+  els.homeIdiomCard?.addEventListener("click", openIdiomtiskaUttryckEntry);
+  els.homeShadowingCard?.addEventListener("click", openHomeShadowingEntry);
 
   // Floating search entry (Figma, 2026-09-18): toggles the existing search
   // box's visibility only — #searchInput/#searchBtn/runSearch etc. are all
