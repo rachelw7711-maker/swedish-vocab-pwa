@@ -443,26 +443,47 @@ body[data-active-view="profileView"] .topbar-auth-button {
   display: none;
 }
 
-/* Home-Logged In (Figma, node 1:2) has no header at all — unlike every
-   other signed-in view, which keeps the shared logo bar. Collapse the
-   app-shell's topbar row too, so content doesn't leave an empty gap where
-   the header used to be. Home-Logged Out (348:694) keeps the topbar, so
-   this only fires once .topbar-auth-button flips to signed-in. */
-body[data-active-view="homeView"]:has(.topbar-auth-button[data-signed-in="true"]) .topbar {
+/* Home page (2026-09-19, Rachel's "Apple Books" reference) — no header at
+   all in either auth state, unlike every other view, which keeps the
+   shared logo bar. Content starts right under the system status bar
+   instead. Signing in while already on Home is still reachable via the
+   Profil tab's existing signed-out card, so nothing is lost by dropping
+   the header's "Logga in" button here. */
+body[data-active-view="homeView"] .topbar {
   display: none;
 }
 
-body[data-active-view="homeView"]:has(.topbar-auth-button[data-signed-in="true"]) .app-shell {
-  grid-template-rows: 0 minmax(0, 1fr) calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+body[data-active-view="homeView"] .app-shell {
+  grid-template-rows: 0 minmax(0, 1fr) 0;
 }
 
-/* Home-Logged Out's topbar (Figma 348:865) — same fill as the page behind
-   it (#f2f2f2), not white; scoped to the home view so the shared topbar
-   keeps its existing white look everywhere else. */
-body[data-active-view="homeView"] .topbar {
-  background: #f2f2f2;
-  border-bottom-color: #e9e9ee;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+body[data-active-view="homeView"] main {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Home page's tabbar floats over the content instead of owning its own
+   grid row (Rachel's Apple Books reference, 2026-09-19) — content scrolls
+   underneath and shows blurred through it, rather than stopping above a
+   solid bar. Frosted-glass background replaces the opaque white pill used
+   everywhere else. */
+body[data-active-view="homeView"] .tabbar {
+  position: absolute;
+  grid-row: auto;
+  bottom: 0;
+  left: 0;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+body[data-active-view="homeView"] .home-page {
+  padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 28px);
+}
+
+body[data-active-view="homeView"] .home-search-fab {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 /* Home-Logged Out's "Logga in" pill (Figma 348:868/348:869) — scoped to
