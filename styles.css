@@ -459,6 +459,13 @@ body[data-active-view="homeView"] .app-shell {
 
 body[data-active-view="homeView"] main {
   padding-top: env(safe-area-inset-top);
+  /* .home-page's own #f2f2f2 background only fills its own content box —
+     main's default white/gradient background was still showing through
+     main's own padding (the safe-area gap above, and the 12px gutters on
+     either side), framing the gray content in a visible white border.
+     Filling main itself removes that border instead of just recoloring
+     the content sitting inside it. */
+  background: #f2f2f2;
 }
 
 /* Home page's tabbar floats over the content instead of owning its own
@@ -470,7 +477,12 @@ body[data-active-view="homeView"] .tabbar {
   position: absolute;
   grid-row: auto;
   bottom: 0;
+  /* left+right (not just left) so width:auto still resolves against both
+     edges and the existing margin(0 94px .. 22px) computes the same
+     Figma-exact 286px pill it did as a grid item — position:absolute with
+     only `left` set shrinks the pill to fit its content instead. */
   left: 0;
+  right: 0;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
