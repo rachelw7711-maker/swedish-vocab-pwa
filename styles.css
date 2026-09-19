@@ -887,7 +887,7 @@ body[data-active-view="homeView"] .topbar-auth-button[data-signed-in="false"] {
   position: relative;
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 36px;
   padding: 12px 8px 0;
   overflow: visible;
 }
@@ -6795,7 +6795,15 @@ dialog::backdrop {
 
 .home-section {
   display: grid;
-  gap: 10px;
+  gap: 18px;
+}
+
+/* Dagens ord → Kom ihåg is a tighter 20px gap in Figma (348:763/314:583),
+   not the ~36px used between the other sections; Kom ihåg's own
+   title-to-content gap is 13px, also smaller than the other sections' 18px. */
+.home-recall {
+  gap: 13px;
+  margin-top: -16px;
 }
 
 .home-section-title {
@@ -6820,7 +6828,7 @@ dialog::backdrop {
 }
 
 .home-progress-hint {
-  margin: 2px 0 0;
+  margin: 8px 0 0;
   color: var(--home-text-secondary);
   font-style: italic;
   font-size: 0.9rem;
@@ -6833,7 +6841,7 @@ dialog::backdrop {
 .home-progress-stats-row {
   display: flex;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 18px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-padding-inline: 2px;
@@ -6868,8 +6876,8 @@ dialog::backdrop {
   position: absolute;
   top: 14px;
   right: 12px;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
 }
 
@@ -6910,7 +6918,7 @@ dialog::backdrop {
   align-items: center;
   gap: 12px;
   padding: 18px;
-  border-radius: 20px;
+  border-radius: 24px;
   background: var(--home-surface);
   overflow: hidden;
   cursor: pointer;
@@ -6955,11 +6963,11 @@ dialog::backdrop {
 }
 
 .deep-reading-art {
-  flex: 0 0 110px;
-  align-self: end;
-  width: 110px;
+  flex: 0 0 157px;
+  align-self: start;
+  width: 157px;
   height: auto;
-  margin: -18px -18px -18px 0;
+  margin: 0 -18px -18px 0;
 }
 
 /* Dagens ord — the two cards, and the entry buttons/progress bars inside
@@ -6985,7 +6993,7 @@ dialog::backdrop {
   gap: 10px;
   text-align: left;
   border: 0;
-  border-radius: 18px;
+  border-radius: 20px;
   background: var(--home-card-bg);
   padding: 14px;
   cursor: pointer;
@@ -7038,7 +7046,7 @@ dialog::backdrop {
 
 .dagens-ord-progress-track {
   display: block;
-  height: 6px;
+  height: 5px;
   border-radius: 999px;
   background: var(--home-progress-track);
   overflow: hidden;
