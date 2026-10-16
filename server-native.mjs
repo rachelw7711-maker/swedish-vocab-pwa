@@ -1,8 +1,8 @@
 // Server logic for the native iOS app (2026-10-16, SprakLab_Native_iOS_Readiness_Review_v3
 // + product-owner decisions). Shared by the api/* Vercel functions:
-//   api/entries/generate.js   — AI word card: dedupe → auth/quota → generate → validate → save → id
-//   api/account/delete.js     — App Store account deletion (personal data only)
-//   api/shadowing/assess.js   — Azure pronunciation assessment (Talanalys)
+//   api/native.js action "generate-entry" — AI word card: dedupe → auth/quota → generate → validate → save → id
+//   api/native.js action "delete-account" — App Store account deletion (personal data only)
+//   api/native.js action "assess" — Azure pronunciation assessment (Talanalys)
 // plus the shared TTS cache used by api/shadowing/tts.js.
 //
 // Every paid call goes through enforceQuota() first (server-side limits, Q3/N7).
