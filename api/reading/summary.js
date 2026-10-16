@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { generateReadingSummary } from "../../server-reading.mjs";
+import { enforceQuota, normalizeLanguage } from "../../server-native.mjs";
 
 // See api/reading/analyze.js for why this needs to be a real file under
 // api/ rather than a route inside server.mjs.
@@ -48,7 +49,7 @@ export default async function handler(req, res) {
     }
 
     const userId = await readUserId(req);
-    const { textResourceId } = req.body || {};
+    const { textResourceId, nativeLanguage } = req.body || {};
     if (!clean(textResourceId)) {
       sendJson(res, 400, { error: "textResourceId saknas." });
       return;
@@ -57,7 +58,10 @@ export default async function handler(req, res) {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const summary = await generateReadingSummary({ supabaseAdmin, userId, textResourceId: clean(textResourceId) });
+    // Server-side AI quota (native iOS v1 hardening, 2026-10-16).
+    await enforceQuota(supabaseAdmin, userId, 5);
+    const summary = await generateReadingSummary({
+      nativeLanguage: normalizeLanguage(nativeLanguage), supabaseAdmin, userId, textResourceId: clean(textResourceId) });
     sendJson(res, 200, { summary });
   } catch (error) {
     console.error("[api/reading/summary]", error);

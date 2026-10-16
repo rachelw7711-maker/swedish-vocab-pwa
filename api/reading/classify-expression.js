@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { isAdmin } from "../../server-native.mjs";
 import { classifyReadingExpression } from "../../server-reading.mjs";
 
 // 2026-08-03: the reading results page's phrase/expression cards get two
@@ -50,12 +51,17 @@ export default async function handler(req, res) {
       return;
     }
 
-    await readUserId(req);
+    const callerId = await readUserId(req);
     const { expressionId, classification } = req.body || {};
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    // Public catalog changes are admin-only (native iOS v1 hardening, 2026-10-16).
+    if (!(await isAdmin(supabaseAdmin, callerId))) {
+      sendJson(res, 403, { error: "Endast administratörer kan ändra den gemensamma ordboken." });
+      return;
+    }
     const entry = await classifyReadingExpression({ supabaseAdmin, expressionId, classification });
     sendJson(res, 200, { entry });
   } catch (error) {

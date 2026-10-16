@@ -160,7 +160,7 @@ async function synthesizeWithElevenLabs(text, voice) {
   };
 }
 
-async function synthesizeSwedishSpeech(text, voice) {
+export async function synthesizeSwedishSpeech(text, voice) {
   if (AZURE_SPEECH_KEY && AZURE_SPEECH_REGION) {
     try {
       return await synthesizeWithAzure(text, voice);

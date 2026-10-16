@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { analyzeReadingResourceFast } from "../../server-reading.mjs";
+import { enforceQuota, normalizeLanguage } from "../../server-native.mjs";
 
 // Real Vercel serverless function — server.mjs's own /api/reading/analyze
 // route only ever runs when someone does `node server.mjs` locally.
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
     }
 
     const userId = await readUserId(req);
-    const { text, sourceType, glossary } = req.body || {};
+    const { text, sourceType, glossary, nativeLanguage } = req.body || {};
     const trimmed = clean(text);
     if (!trimmed) {
       sendJson(res, 400, { error: "Klistra in en text att analysera." });
@@ -70,7 +71,10 @@ export default async function handler(req, res) {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    // Server-side AI quota (native iOS v1 hardening, 2026-10-16).
+    await enforceQuota(supabaseAdmin, userId, 10);
     const { textResource, analysis, tier, cached, deepReady } = await analyzeReadingResourceFast({
+      nativeLanguage: normalizeLanguage(nativeLanguage),
       supabaseAdmin,
       userId,
       text: trimmed,

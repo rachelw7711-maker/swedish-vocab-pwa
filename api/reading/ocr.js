@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { extractTextFromImage, calculateCredits } from "../../server-reading.mjs";
+import { enforceQuota } from "../../server-native.mjs";
 
 // Real Vercel serverless function — see api/reading/analyze.js for why
 // production needs actual files under api/. This is the photo/camera
@@ -63,6 +64,7 @@ export default async function handler(req, res) {
       return;
     }
 
+    await enforceQuota(createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }), userId, 10);
     const { text, glossary, usage } = await extractTextFromImage({ imageDataUrl });
     if (!text) {
       sendJson(res, 200, { text: "", glossary: [], warning: "Ingen läsbar svensk text hittades i bilden." });

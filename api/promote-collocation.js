@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { isAdmin } from "../server-native.mjs";
 import { promoteCollocationToPhrase } from "../server-words.mjs";
 
 // Real Vercel serverless function — see api/reading/analyze.js. This is
@@ -48,10 +49,15 @@ export default async function handler(req, res) {
       sendJson(res, 500, { error: "Supabase är inte konfigurerat på servern." });
       return;
     }
-    await readUserId(req);
+    const callerId = await readUserId(req);
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    // Public catalog changes are admin-only (native iOS v1 hardening, 2026-10-16).
+    if (!(await isAdmin(supabaseAdmin, callerId))) {
+      sendJson(res, 403, { error: "Endast administratörer kan ändra den gemensamma ordboken." });
+      return;
+    }
     const { sourceWordId, phrase, meaning, exampleSv, cefrLevel } = req.body || {};
     const entry = await promoteCollocationToPhrase({ supabaseAdmin, sourceWordId, phrase, meaning, exampleSv, cefrLevel });
     sendJson(res, 200, { entry });

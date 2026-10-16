@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { analyzeReadingResourceDeep } from "../../server-reading.mjs";
+import { enforceQuota, normalizeLanguage } from "../../server-native.mjs";
 
 // Deep layer of the two-layer generation pipeline (2026-08-02) — the client
 // calls this right after /api/reading/analyze returns a fast-layer result
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
     }
 
     const userId = await readUserId(req);
-    const { textResourceId } = req.body || {};
+    const { textResourceId, nativeLanguage } = req.body || {};
     const id = clean(textResourceId);
     if (!id) {
       sendJson(res, 400, { error: "textResourceId saknas." });
@@ -63,7 +64,10 @@ export default async function handler(req, res) {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { analysis, tier } = await analyzeReadingResourceDeep({ supabaseAdmin, userId, textResourceId: id });
+    // Server-side AI quota (native iOS v1 hardening, 2026-10-16).
+    await enforceQuota(supabaseAdmin, userId, 20);
+    const { analysis, tier } = await analyzeReadingResourceDeep({
+      nativeLanguage: normalizeLanguage(nativeLanguage), supabaseAdmin, userId, textResourceId: id });
     sendJson(res, 200, { analysis, tier });
   } catch (error) {
     console.error("[api/reading/analyze-deep]", error);
