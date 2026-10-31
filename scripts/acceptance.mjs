@@ -10,31 +10,39 @@ import { readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-async function all(table, cols) {
+async function all(table, cols, order = ["id"]) {
   let out = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await db.from(table).select(cols).order("id").range(from, from + 999);
+    const { data, error } = await order.reduce((q, c) => q.order(c), db.from(table).select(cols)).range(from, from + 999);
     if (error) throw error;
     out = out.concat(data);
     if (data.length < 1000) return out;
   }
 }
-const objects = new Map((await all("learning_objects", "id, swedish, part_of_speech, object_type, status, pos_detail")).filter((o) => o.status !== "retired").map((o) => [o.id, o]));
+const objects = new Map((await all("learning_objects", "id, swedish, part_of_speech, object_type, status, pos_detail, comparison_type")).filter((o) => o.status !== "retired").map((o) => [o.id, o]));
 const forms = new Map();
 for (const f of await all("word_forms", "id, learning_object_id, form_type, form_value")) (forms.get(f.learning_object_id) ?? forms.set(f.learning_object_id, {}).get(f.learning_object_id))[f.form_type] = f.form_value;
 const openSuggestions = new Set((await all("content_suggestions", "id, learning_object_id, field, verdict, status")).filter((s) => s.status === "pending" && s.verdict !== "ok").map((s) => `${s.learning_object_id}|${s.field}`));
 
+// Not applicable as recorded in the database (AI: no such form; non-comparable adjectives),
+// which a scan of the data alone cannot see.
+const recordedNA = new Set((await all("resource_field_status", "learning_object_id, field, status", ["learning_object_id", "field"])).filter((r) => r.status === "not_applicable").map((r) => `${r.learning_object_id}|${r.field}`));
+const COMPARISON = new Set(["form:comparative", "form:superlative", "form:superlative_indefinite", "form:superlative_definite"]);
 const group = (o) => (o.object_type === "word" ? o.part_of_speech : o.object_type);
 const report = {};
 const bucket = (g) => (report[g] ??= { entries: new Set(), fields: 0, complete: 0, notApplicable: 0, review: 0, missing: 0, byField: {} });
-for (const s of readFileSync(opt("--status"), "utf8").trim().split("\n").map((l) => JSON.parse(l))) {
+const statuses = readFileSync(opt("--status"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+// A noun without a plural (uncountable) has no declension group either.
+const noPlural = new Set(statuses.filter((s) => s.field === "form:plural_indefinite" && s.status === "not_applicable").map((s) => s.learning_object_id));
+for (const s of statuses) {
   const o = objects.get(s.learning_object_id);
   if (!o) continue;
   const b = bucket(group(o));
   b.entries.add(o.id);
   // Group 4 for göra/sätta-type verbs is the school-grammar convention (SALDO files them as 2a/2b).
   const convention = s.field === "form:verb_group" && s.status === "mismatch" && s.detail?.stored === "4";
-  const kind = s.status === "not_applicable" ? "notApplicable" : convention ? "complete"
+  const na = s.status === "not_applicable" || (s.status === "missing" && (recordedNA.has(`${o.id}|${s.field}`) || (COMPARISON.has(s.field) && o.comparison_type === "non-comparable") || (s.field === "form:declension_group" && noPlural.has(o.id))));
+  const kind = na ? "notApplicable" : convention ? "complete"
     : s.status === "mismatch" || openSuggestions.has(`${o.id}|${s.field}`) || (s.status === "missing" && s.detail?.fill === "review") ? "review"
     : s.status === "missing" ? "missing" : "complete";
   b[kind]++;
