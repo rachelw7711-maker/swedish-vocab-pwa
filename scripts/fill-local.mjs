@@ -7,13 +7,17 @@
 //   node --env-file=.env scripts/fill-local.mjs [--status data/reports/field-status.ndjson]
 //        [--sql <file>]   write the fill and its rollback as SQL (review / local test DB)
 //        [--apply]        write through the Supabase service role (production needs the owner's go-ahead)
+//        [--only note|saldo]  one batch: definitions from note, or SALDO forms
+//        [--preview <file>]   one TSV line per value to be written (headword, field, value)
+//        [--skip a,b]     leave these fields out (e.g. groups while the numbering is undecided)
 //
 // Input is the scan's field-status file (scripts/scan-resources.mjs): rows with
 // status "missing" and detail.fill "local". Output: a plan summary on stdout,
-// data/reports/saldo-fill-plan.json, and with --sql <file> also <file> and
+// <status dir>/local-fill-plan[-<only>].json, and with --sql <file> also <file> and
 // <file minus .sql>-rollback.sql.
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { SALDO_SOURCE_ID } from "../server-lexicon.mjs";
 
@@ -25,11 +29,14 @@ const jobId = randomUUID();
 
 const plan = readFileSync(statusFile, "utf8").trim().split("\n").map((l) => JSON.parse(l))
   .filter((s) => s.status === "missing" && s.detail?.fill === "local" && s.detail.reference)
-  .map((s) => ({ id: s.learning_object_id, field: s.field, value: s.detail.reference }));
+  .map((s) => ({ id: s.learning_object_id, field: s.field, value: s.detail.reference }))
+  .filter((p) => !opt("--only") || (opt("--only") === "note") === (p.field === "swedish_explanation"))
+  .filter((p) => !(opt("--skip") || "").split(",").includes(p.field));
+const batchName = opt("--only") === "note" ? "Definitions from note" : opt("--only") === "saldo" ? "SALDO forms" : "Local fill";
 
 const byField = {};
 plan.forEach((p) => { byField[p.field] = (byField[p.field] || 0) + 1; });
-writeFileSync("data/reports/saldo-fill-plan.json", JSON.stringify({ jobId, createdAt: new Date().toISOString(), byField, plan }, null, 1));
+writeFileSync(`${dirname(statusFile)}/local-fill-plan${opt("--only") ? "-" + opt("--only") : ""}.json`, JSON.stringify({ jobId, createdAt: new Date().toISOString(), byField, plan }, null, 1));
 console.log(JSON.stringify({ jobId, fields: plan.length, entries: new Set(plan.map((p) => p.id)).size, byField }, null, 1));
 
 const forms = plan.filter((p) => p.field.startsWith("form:")).map((p) => ({ ...p, formType: p.field.slice(5) }));
@@ -39,20 +46,31 @@ const explanations = plan.filter((p) => p.field === "swedish_explanation");
 const sourceOf = (p) => (p.field === "swedish_explanation" ? "existing-note" : SALDO_SOURCE_ID);
 const ids = [...new Set(plan.map((p) => p.id))];
 
+if (opt("--preview")) {
+  const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const head = new Map();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await db.from("learning_objects").select("id, swedish, part_of_speech").in("id", ids.slice(i, i + 200));
+    if (error) throw error;
+    data.forEach((r) => head.set(r.id, r));
+  }
+  writeFileSync(opt("--preview"), "id\theadword\tpos\tfield\tnew_value\n" + plan.map((p) => [p.id, head.get(p.id)?.swedish, head.get(p.id)?.part_of_speech, p.field, p.value].join("\t")).join("\n") + "\n");
+}
+
 if (sqlFile) {
   const q = (v) => `'${String(v).replace(/'/g, "''")}'`;
   const values = (rows, fn) => rows.map(fn).join(",\n  ");
-  const sql = [`-- SALDO fill ${jobId}: ${plan.length} fields on ${ids.length} entries. Only empty fields are written.`, "begin;",
-    `insert into public.enrichment_jobs (id, kind, name, status, params) values (${q(jobId)}, 'local_fill', 'SALDO fill', 'done', ${q(JSON.stringify({ byField }))});`,
+  const sql = [`-- ${batchName} ${jobId}: ${plan.length} fields on ${ids.length} entries. Only empty fields are written.`, "begin;",
+    `insert into public.enrichment_jobs (id, kind, name, status, params) values (${q(jobId)}, 'local_fill', ${q(batchName)}, 'done', ${q(JSON.stringify({ byField }))});`,
     forms.length && `insert into public.word_forms (learning_object_id, form_type, form_value, sort_order) values\n  ${values(forms, (f) => `(${q(f.id)}, ${q(f.formType)}, ${q(f.value)}, 100)`)}\non conflict (learning_object_id, form_type) do nothing;`,
     ...passives.map((p) => `update public.learning_objects set passiv_s = ${q(p.value)} where id = ${q(p.id)} and coalesce(passiv_s, '') = '';`),
     ...countability.map((p) => `update public.learning_objects set countability = ${q(p.value)} where id = ${q(p.id)} and countability is null;`),
     ...explanations.map((p) => `update public.learning_objects set swedish_explanation = ${q(p.value)} where id = ${q(p.id)} and coalesce(swedish_explanation, '') = '';`),
     `insert into public.resource_field_status (learning_object_id, field, status, source, detail) values\n  ${values(plan, (p) => `(${q(p.id)}, ${q(p.field)}, ${q(p.field === "swedish_explanation" ? "present" : "verified")}, ${q(sourceOf(p))}, ${q(JSON.stringify({ filled_by: jobId }))})`)}\non conflict (learning_object_id, field) do update set status = 'verified', source = excluded.source, detail = excluded.detail, updated_at = now();`,
-    `insert into public.learning_object_sources (learning_object_id, source_id, role, fields, detail)\nselect id, ${q(SALDO_SOURCE_ID)}, 'forms', array_agg(field), jsonb_build_object('filled_by', ${q(jobId)}) from (values\n  ${values(plan.filter((p) => p.field !== "swedish_explanation"), (p) => `(${q(p.id)}::uuid, ${q(p.field)})`)}\n) v(id, field) group by id\non conflict (learning_object_id, source_id, role) do update set fields = (select array_agg(distinct f) from unnest(learning_object_sources.fields || excluded.fields) f), detail = learning_object_sources.detail || excluded.detail;`,
+    plan.some((p) => p.field !== "swedish_explanation") && `insert into public.learning_object_sources (learning_object_id, source_id, role, fields, detail)\nselect id, ${q(SALDO_SOURCE_ID)}, 'forms', array_agg(field), jsonb_build_object('filled_by', ${q(jobId)}) from (values\n  ${values(plan.filter((p) => p.field !== "swedish_explanation"), (p) => `(${q(p.id)}::uuid, ${q(p.field)})`)}\n) v(id, field) group by id\non conflict (learning_object_id, source_id, role) do update set fields = (select array_agg(distinct f) from unnest(learning_object_sources.fields || excluded.fields) f), detail = learning_object_sources.detail || excluded.detail;`,
     "commit;"].filter(Boolean).join("\n\n");
   writeFileSync(sqlFile, sql + "\n");
-  const rollback = ["-- Rollback for SALDO fill " + jobId + ": removes exactly the values it wrote (if still unchanged).", "begin;",
+  const rollback = [`-- Rollback for ${batchName} ` + jobId + ": removes exactly the values it wrote (if still unchanged).", "begin;",
     forms.length && `delete from public.word_forms w using (values\n  ${values(forms, (f) => `(${q(f.id)}::uuid, ${q(f.formType)}, ${q(f.value)})`)}\n) v(id, form_type, form_value) where w.learning_object_id = v.id and w.form_type = v.form_type and w.form_value = v.form_value;`,
     ...passives.map((p) => `update public.learning_objects set passiv_s = '' where id = ${q(p.id)} and passiv_s = ${q(p.value)};`),
     ...countability.map((p) => `update public.learning_objects set countability = null where id = ${q(p.id)} and countability = ${q(p.value)};`),
@@ -67,7 +85,7 @@ if (sqlFile) {
 if (args.includes("--apply")) {
   const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const must = ({ error }) => { if (error) throw error; };
-  must(await db.from("enrichment_jobs").insert({ id: jobId, kind: "local_fill", name: "SALDO fill", status: "running", params: { byField } }));
+  must(await db.from("enrichment_jobs").insert({ id: jobId, kind: "local_fill", name: batchName, status: "running", params: { byField } }));
   for (let i = 0; i < forms.length; i += 500) {
     must(await db.from("word_forms").upsert(forms.slice(i, i + 500).map((f) => ({ learning_object_id: f.id, form_type: f.formType, form_value: f.value, sort_order: 100 })),
       { onConflict: "learning_object_id,form_type", ignoreDuplicates: true }));

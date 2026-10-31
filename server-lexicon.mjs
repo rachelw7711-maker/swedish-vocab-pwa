@@ -183,7 +183,12 @@ export function compareWithSaldo(entry, rows) {
     same ??= (a, b) => a === b;
     const options = refs.filter(Boolean);
     if (!options.length) return;
-    if (!String(stored || "").trim()) { fields[name] = { status: "missing", stored: "", reference: options[0] }; return; }
+    if (!String(stored || "").trim()) {
+      // Homographs whose SALDO entries disagree ("vara" varit / varat) give no fill value.
+      const distinct = new Set(options.map((o) => variants(o)[0]));
+      fields[name] = distinct.size > 1 ? { status: "missing", stored: "", reference: options.join(" | "), ambiguous: true } : { status: "missing", stored: "", reference: options[0] };
+      return;
+    }
     if (undecidable(stored)) { fields[name] = { status: "present", stored, reference: options[0] }; return; }
     const ok = options.some((ref) => variants(stored).some((s) => variants(ref).some((r) => same(s, r))));
     fields[name] = { status: ok ? "verified" : "mismatch", stored, reference: options[0] };
@@ -218,7 +223,7 @@ export function compareWithSaldo(entry, rows) {
   if (entry.pos === "noun") {
     const saysUncountable = candidates.some((c) => c.countability === "uncountable");
     if (!entry.countability) {
-      if (saysUncountable) fields.countability = { status: "missing", stored: "", reference: "uncountable" };
+      if (saysUncountable) fields.countability = { status: "missing", stored: "", reference: "uncountable", ambiguous: !candidates.every((c) => c.countability === "uncountable") };
     } else {
       // SALDO without a plural ("ansökan") is not proof a noun is uncountable, so
       // a stored "countable" stays undecided rather than wrong.

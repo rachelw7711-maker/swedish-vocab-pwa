@@ -48,6 +48,19 @@ test("SALDO comparison: spelling variants agree, real errors are flagged", async
   assert.deepEqual(compareWithSaldo({ pos: "noun", forms: {} }, []), { found: false, fields: {} });  // unknown ≠ wrong
 });
 
+test("SALDO comparison: homographs that disagree give no fill value", async () => {
+  // "vara" (be: varit) and "vara" (last: varat) are both verbs.
+  const rows = await saldoEntries(null, "vara", "verb");
+  assert.ok(rows.length >= 2);
+  const { fields } = compareWithSaldo({ pos: "verb", forms: {} }, rows);
+  assert.equal(fields["form:supinum"].status, "missing");
+  assert.equal(fields["form:supinum"].ambiguous, true);
+  // One entry only: the missing form has a single reference.
+  const { fields: one } = compareWithSaldo({ pos: "verb", forms: {} }, await saldoEntries(null, "springa", "verb"));
+  assert.equal(one["form:supinum"].reference, "sprungit");
+  assert.ok(!one["form:supinum"].ambiguous);
+});
+
 test("expression keys unify inflection, placeholders and pronouns — not meaning", async () => {
   const k = (t) => expressionMatchKey(null, t);
   assert.equal(await k("tar hand om någon"), await k("ta hand om ngn"));

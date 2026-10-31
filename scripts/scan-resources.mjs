@@ -5,8 +5,11 @@
 //
 // --backup reads a JSON backup (Backups/…/*.json.gz) instead of the live database.
 // Every missing field is classified as
-//   local — SALDO (local reference data) can supply it: scripts/fill-local.mjs
-//   ai    — needs generated text: queued for scripts/enrich-batch.mjs
+//   local  — SALDO (local reference data) or the row's own note can supply it: scripts/fill-local.mjs
+//   review — SALDO has an answer but it can't be written unchecked: SALDO entries
+//            disagree (homographs), the entry already conflicts with SALDO elsewhere,
+//            or the field needs judgement (SALDO lists an s-passive for every verb)
+//   ai     — needs generated text: queued for scripts/enrich-batch.mjs
 // and stored forms are checked against SALDO (verified / mismatch).
 // Writes <out>/scan-report.json (counts) and <out>/field-status.ndjson (one line
 // per entry field, the rows of public.resource_field_status). --write-status also
@@ -14,7 +17,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { gunzipSync } from "node:zlib";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { useSaldoFiles, saldoEntries, compareWithSaldo, SALDO_CHECK_ONLY } from "../server-lexicon.mjs";
+import { useSaldoFiles, saldoEntries, compareWithSaldo, lemmatize, SALDO_CHECK_ONLY } from "../server-lexicon.mjs";
 import { requiredFields } from "../server-resources.mjs";
 
 const args = process.argv.slice(2);
@@ -24,11 +27,19 @@ const outDir = opt("--out") || "data/reports";
 mkdirSync(outDir, { recursive: true });
 
 const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+// Retries a request on a network error (long scans over REST meet the odd dropped connection).
+async function retry(run) {
+  for (let attempt = 1; ; attempt++) {
+    const result = await Promise.resolve().then(run).catch((error) => ({ error }));
+    if (!result.error || attempt === 4) return result;
+    await new Promise((r) => setTimeout(r, 1500 * attempt));
+  }
+}
 async function load(table, columns) {
   if (backupDir) return JSON.parse(gunzipSync(readFileSync(`${backupDir}/${table}.json.gz`)));
   let rows = [], from = 0;
   for (;;) {
-    const { data, error } = await db.from(table).select(columns).order("id").range(from, from + 999);
+    const { data, error } = await retry(() => db.from(table).select(columns).order("id").range(from, from + 999));
     if (error) throw error;
     rows = rows.concat(data);
     if (data.length < 1000) return rows;
@@ -42,6 +53,28 @@ function noteExplanation(note) {
   const m = String(note || "").match(/^Swedish explanation:[ \t]*(.+)$/m);
   const text = m ? m[1].trim() : "";
   return text.length >= 3 && !/behöver kontrolleras/i.test(text) ? text : "";
+}
+
+const ENGLISH = new Set("the and of to is are be for with it this that what how why do does you your my me not very great good nice cool okay ok thanks thank sorry hello hi bye welcome please yes no person something someone when where which who".split(" "));
+const SWEDISH = new Set("en ett och att som är det den på i av för med till om inte man har kan sig något någon".split(" "));
+function looksEnglish(text) {
+  const words = text.toLowerCase().match(/[a-z]+/g) || [];
+  const en = words.filter((w) => ENGLISH.has(w)).length, sv = words.filter((w) => SWEDISH.has(w)).length;
+  return en > sv && (en >= 2 || words.length <= 2);
+}
+
+// A note definition is moved as it stands only when it is plainly a Swedish definition.
+async function noteProblem(text, headword) {
+  if (/[\u3400-\u9fff]/.test(text)) return "contains_chinese";
+  if (!/[åäö]/i.test(text) && looksEnglish(text)) return "looks_english";
+  // Most words must be Swedish word forms SALDO knows ("Take care!", "women's underwear" are not).
+  const words = text.toLowerCase().replace(/\([^)]*\)/g, " ").match(/[a-zåäöéü]+/g) || [];
+  // Compounds SALDO doesn't list ("tankeförmåga") still count when they have å/ä/ö.
+  const known = (await Promise.all(words.map(async (w) => /[åäö]/.test(w) || (await lemmatize(null, w)).length))).filter(Boolean).length;
+  if (words.length && known / words.length < 0.6) return "not_swedish";
+  if (text.toLowerCase().replace(/[.!]$/, "") === String(headword).toLowerCase()) return "repeats_headword_only";
+  if (text.length < 4 || text.length > 300) return "length";
+  return "";
 }
 
 const started = Date.now();
@@ -92,10 +125,16 @@ for (const o of objects) {
     cov.entries++;
     if (rows.length) cov.found++;
     saldoFields = compareWithSaldo(entry, rows).fields;
+    // An entry that already disagrees with SALDO may be a different word (wrong part of
+    // speech, homograph): nothing more is filled from SALDO until it is reviewed.
+    const conflicted = Object.values(saldoFields).some((r) => r.status === "mismatch");
     for (const [field, r] of Object.entries(saldoFields)) {
       // A noun stored as uncountable has no plural on purpose.
       if (r.status === "missing" && /^form:plural_/.test(field) && o.countability === "uncountable") record(field, "not_applicable", "existing");
       else if (r.status === "missing" && SALDO_CHECK_ONLY.has(field)) record(field, "missing", null, { fill: "ai", reference: r.reference });
+      else if (r.status === "missing" && (r.ambiguous || conflicted || field === "passiv_s")) {
+        record(field, "missing", null, { fill: "review", reference: r.reference, reason: r.ambiguous ? "saldo_homographs_disagree" : conflicted ? "entry_conflicts_with_saldo" : "passive_needs_judgement" });
+      }
       else if (r.status === "missing") record(field, "missing", "saldo-morphology-2017", { fill: "local", reference: r.reference });
       else if (r.status === "mismatch") {
         record(field, "mismatch", "saldo-morphology-2017", { stored: r.stored, reference: r.reference });
@@ -109,8 +148,10 @@ for (const o of objects) {
     if (field in saldoFields) continue;
     const present = field.startsWith("form:") ? Boolean(entry.forms[field.slice(5)]) : Boolean(entry[field]);
     const fromNote = field === "swedish_explanation" && !present ? noteExplanation(o.note) : "";
+    const problem = fromNote ? await noteProblem(fromNote, o.swedish) : "";
     if (!present && /^form:plural_/.test(field) && o.countability === "uncountable") record(field, "not_applicable", "existing");
     else if (present) record(field, "present", "existing");
+    else if (problem) record(field, "missing", null, { fill: "review", reference: fromNote, reason: problem });
     else if (fromNote) record(field, "missing", "existing-note", { fill: "local", reference: fromNote });
     else record(field, "missing", null, { fill: "ai" });
   }
@@ -129,6 +170,7 @@ for (const line of statusLines) {
   if (s.status !== "missing") continue;
   const t = report.byType[typeById.get(s.learning_object_id)];
   if (s.detail?.fill === "local") t.missingLocal++;
+  else if (s.detail?.fill === "review") t.missingReview = (t.missingReview || 0) + 1;
   else { t.missingAi++; (entriesNeedingAi[typeById.get(s.learning_object_id)] ??= new Set()).add(s.learning_object_id); }
 }
 for (const [type, ids] of Object.entries(entriesNeedingAi)) report.byType[type].entriesNeedingAi = ids.size;
@@ -140,13 +182,13 @@ writeFileSync(`${outDir}/field-status.ndjson`, statusLines.join("\n") + "\n");
 if (args.includes("--write-status")) {
   const rows = statusLines.map((l) => JSON.parse(l)).map((s) => ({ ...s, updated_at: new Date().toISOString() }));
   for (let i = 0; i < rows.length; i += 1000) {
-    const { error } = await db.from("resource_field_status").upsert(rows.slice(i, i + 1000), { onConflict: "learning_object_id,field" });
+    const { error } = await retry(() => db.from("resource_field_status").upsert(rows.slice(i, i + 1000), { onConflict: "learning_object_id,field" }));
     if (error) throw error;
   }
   const ids = [...new Set(rows.map((r) => r.learning_object_id))];
   for (let i = 0; i < ids.length; i += 500) {
-    const { error } = await db.rpc("refresh_resource_summary", { p_ids: ids.slice(i, i + 500) });
+    const { error } = await retry(() => db.rpc("refresh_resource_summary", { p_ids: ids.slice(i, i + 500) }));
     if (error) throw error;
   }
 }
-console.log(JSON.stringify({ byType: Object.fromEntries(Object.entries(report.byType).map(([k, v]) => [k, { entries: v.entries, complete: v.complete, missingLocal: v.missingLocal, missingAi: v.missingAi, entriesNeedingAi: v.entriesNeedingAi, mismatches: v.mismatches }])), saldoCoverage: report.saldoCoverage, seconds: report.seconds }, null, 1));
+console.log(JSON.stringify({ byType: Object.fromEntries(Object.entries(report.byType).map(([k, v]) => [k, { entries: v.entries, complete: v.complete, missingLocal: v.missingLocal, missingReview: v.missingReview || 0, missingAi: v.missingAi, entriesNeedingAi: v.entriesNeedingAi, mismatches: v.mismatches }])), saldoCoverage: report.saldoCoverage, seconds: report.seconds }, null, 1));
