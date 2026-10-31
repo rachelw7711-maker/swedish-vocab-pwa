@@ -10,6 +10,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
+import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey } from "./server-resources.mjs";
+import { saldoEntries } from "./server-lexicon.mjs";
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -94,6 +97,7 @@ export async function enforceQuota(supabaseAdmin, userId, credits) {
 export async function logUsage(supabaseAdmin, entry) {
   const { error } = await supabaseAdmin.from("ai_usage_logs").insert({
     user_id: entry.userId || null,
+    text_resource_id: entry.textResourceId || null,
     feature: entry.feature,
     model: entry.model || "",
     input_tokens: entry.inputTokens || 0,
@@ -130,12 +134,14 @@ function wordCardSchema() {
     lemma: { type: "string" },
     pos: { type: "string", enum: POS_VALUES },
     pos_detail: { type: "string" },
+    cefr_level: { type: "string", enum: ["A1", "A2", "B1", "B2", "C1", "C2"] },
     meaning: { type: "string" },
     swedish_explanation: { type: "string" },
     forms: { type: "array", items: pair({ type: { type: "string", enum: ALL_FORM_TYPES }, value: { type: "string" } }) },
     transitivity: { type: "string", enum: ["transitive", "intransitive", "both", ""] },
     passive: { type: "string" },
-    examples: { type: "array", items: pair({ swedish: { type: "string" }, translation: { type: "string" } }) },
+    // minItems: without it the model returned no examples at all (seen 2026-10-31).
+    examples: { type: "array", minItems: 2, maxItems: 2, items: pair({ swedish: { type: "string" }, translation: { type: "string" } }) },
     collocations: { type: "array", items: pair({ phrase: { type: "string" }, meaning: { type: "string" }, example: { type: "string" } }) },
     related: { type: "array", items: pair({ word: { type: "string" }, meaning: { type: "string" } }) },
     memory_tip: { type: "string" },
@@ -168,10 +174,16 @@ async function callOpenAIJson({ schemaName, schema, system, user, maxOutputToken
 
 const normalizeKey = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
 
-async function findExistingEntry(supabaseAdmin, text) {
+// With a part of speech, only that headword + part of speech counts: a same-spelling
+// word of another class is a different entry (2026-10-31). Without one (free-text
+// search), any headword or inflected form does.
+async function findExistingEntry(supabaseAdmin, text, pos = null) {
   const key = normalizeKey(text);
-  const { data: direct } = await supabaseAdmin.from("learning_objects").select("id, status").ilike("swedish", key).neq("status", "retired").limit(1);
-  if (direct?.length) return direct[0].id;
+  let direct = supabaseAdmin.from("learning_objects").select("id, status").ilike("swedish", key).neq("status", "retired");
+  if (pos) direct = direct.eq("part_of_speech", pos);
+  const { data } = await direct.limit(1);
+  if (data?.length) return data[0].id;
+  if (pos) return null;
   const { data: form } = await supabaseAdmin.from("word_forms").select("learning_object_id").ilike("form_value", key).limit(1);
   return form?.[0]?.learning_object_id || null;
 }
@@ -185,17 +197,30 @@ async function ensureTranslation(supabaseAdmin, entryId, nativeLanguage) {
 /**
  * Returns { entryId, created } — reuses an existing public entry whenever one
  * exists (headword or inflected form), so a word is only ever paid for once.
+ * Reading analysis (2026-10-31) also calls this for its chosen keywords that have
+ * no entry yet: it passes the part of speech and the sense the text uses, its own
+ * source label, and no quota charge (the analysis itself is the charged action).
  */
-export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLanguage }) {
+export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLanguage, pos = null, sense = "", source = "ai search", chargeQuota = true, textResourceId = null }) {
   const text = String(word || "").trim();
   if (!text || text.length > 60 || !/^[\p{L}\s-]+$/u.test(text)) throw httpError(400, "Skriv ett svenskt ord eller uttryck.");
   const lang = normalizeLanguage(nativeLanguage);
+  const wantedPos = POS_VALUES.includes(pos) && pos !== "other" ? pos : null;
 
-  const existing = await findExistingEntry(supabaseAdmin, text);
+  // Shared resources first (basic and extended alike), then SALDO for the lemma:
+  // an inflected form or a pronoun/placeholder variant is never a new entry.
+  const isMultiWord = /\s/.test(text);
+  const resolved = isMultiWord ? null : await resolveWord(supabaseAdmin, text, wantedPos);
+  const existing = isMultiWord
+    ? (await findExistingExpression(supabaseAdmin, text))?.id || null
+    : resolved.entryId || (wantedPos ? null : await findExistingEntry(supabaseAdmin, text));
   if (existing && (await ensureTranslation(supabaseAdmin, existing, lang))) return { entryId: existing, created: false };
+  const reference = resolved?.saldo || null;
+  const headword = reference ? reference.baseform : text;
+  const headwordPos = reference ? resolved.pos : wantedPos;
 
-  // Concurrency guard: one in-flight generation per (text, language).
-  const key = `${normalizeKey(text)}|${lang}`;
+  // Concurrency guard: one in-flight generation per (lemma, part of speech, language).
+  const key = headwordPos ? `${normalizeKey(headword)}|${headwordPos}|${lang}` : `${normalizeKey(headword)}|${lang}`;
   const { data: lock } = await supabaseAdmin.from("generation_requests").select("*").eq("key", key).maybeSingle();
   if (lock?.status === "done" && lock.entry_id) return { entryId: lock.entry_id, created: false };
   if (lock?.status === "pending" && Date.now() - Date.parse(lock.updated_at) < 120_000) {
@@ -207,7 +232,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
   if (lockError) throw lockError;
 
   try {
-    await enforceQuota(supabaseAdmin, userId, CREDITS.word_generate);
+    if (chargeQuota) await enforceQuota(supabaseAdmin, userId, CREDITS.word_generate);
     const langName = languageName(lang);
     const { result, usage } = await callOpenAIJson({
       schemaName: "swedish_word_card_v2",
@@ -215,6 +240,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
       system: `You are a careful Swedish lexicographer writing a learner's dictionary entry for ${langName}-speaking learners. The UI is Swedish. Return exactly one entry for the Swedish input.
 - is_real_word: false if the input is not real Swedish (typo, name, other language). Then leave other fields minimal.
 - lemma: the dictionary base form (an inflected input like "förändrade" becomes "förändra"). For multi-word expressions keep the canonical learnable form (infinitive, "någon/något" placeholders).
+- cefr_level: the CEFR level at which learners typically meet this word or expression (A1–C2).
 - meaning: concise core meaning in ${langName} ONLY. swedish_explanation: one simple Swedish definition.
 - forms: full inflection for the part of speech using only the allowed form types (verbs include present_participle and perfect_participle when they exist; verb_group / declension_group as "1"–"5" when applicable). Empty for expressions.
 - passive: the s-passive for verbs when natural (e.g. "påverkas"), else "".
@@ -222,23 +248,43 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 - collocations: 3–5 high-frequency fixed combinations with ${langName} meaning and a Swedish example.
 - related: 3–6 word-family members or related words with ${langName} meanings.
 - memory_tip: a short ${langName} mnemonic, or "".
-Never mix the two languages inside one field. If uncertain about a sense, prefer the most common one.`,
-      user: text,
+Never mix the two languages inside one field. If uncertain about a sense, prefer the most common one.
+If the input names a part of speech and the sense a text uses, write the entry for exactly that part of speech and give that sense first.`,
+      user: [
+        text,
+        wantedPos && `Part of speech: ${wantedPos}`,
+        wantedPos && sense && `Sense used in the text: ${sense}`,
+        saldoPromptLine(reference, headwordPos),
+      ].filter(Boolean).join("\n"),
     });
     const cost = ((usage.input_tokens || 0) / 1e6) * 0.75 + ((usage.output_tokens || 0) / 1e6) * 4.5;
-    await logUsage(supabaseAdmin, { userId, feature: "word_generate", model: MODEL, inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, credits: CREDITS.word_generate, cost });
+    await logUsage(supabaseAdmin, {
+      userId, textResourceId, feature: chargeQuota ? "word_generate" : "reading_word_card", model: MODEL,
+      inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, credits: chargeQuota ? CREDITS.word_generate : 0, cost,
+    });
 
     if (!result.is_real_word || !String(result.lemma || "").trim() || !String(result.meaning || "").trim()) {
       throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
     }
-    const lemma = String(result.lemma).trim();
+    const pos = POS_VALUES.includes(result.pos) ? result.pos : "other";
+    // SALDO's lemma wins over the model's spelling when the part of speech agrees.
+    const lemma = reference && pos === headwordPos ? reference.baseform : String(result.lemma).trim();
+    const isPhrase = /\s/.test(lemma);
+    // Forms, s-passive and countability come from SALDO whenever it has the word.
+    const saldoRows = isPhrase ? [] : await saldoEntries(supabaseAdmin, lemma, pos);
+    const fromSaldo = saldoCardFields(saldoRows[0], pos);
+    const forms = fromSaldo?.forms.length ? fromSaldo.forms : (result.forms || []).filter((f) => f.value && ALL_FORM_TYPES.includes(f.type));
+    const passive = fromSaldo ? fromSaldo.passive : result.passive || "";
+    const matchKey = isPhrase ? await expressionMatchKey(supabaseAdmin, lemma) : null;
 
-    // The lemma may already exist even if the inflected input didn't match.
-    let entryId = await findExistingEntry(supabaseAdmin, lemma);
+    // Re-check before saving: the lemma may exist even if the input didn't match —
+    // as the same part of speech (a same-spelling word of another class gets its own
+    // entry), or as a phrase / expression in either module.
+    let entryId = isPhrase
+      ? (await findExistingExpression(supabaseAdmin, lemma, matchKey))?.id || null
+      : (await resolveWord(supabaseAdmin, lemma, pos)).entryId;
     if (!entryId) {
       entryId = randomUUID();
-      const pos = POS_VALUES.includes(result.pos) ? result.pos : "other";
-      const isPhrase = /\s/.test(lemma);
       const { error: insertError } = await supabaseAdmin.from("learning_objects").insert({
         id: entryId,
         swedish: lemma,
@@ -246,28 +292,30 @@ Never mix the two languages inside one field. If uncertain about a sense, prefer
         pos_detail: result.pos_detail || "",
         object_type: isPhrase ? "phrase" : "word",
         category: isPhrase ? "common_phrase" : null,
+        cefr_level: result.cefr_level || null,
         chinese: lang === "zh" ? result.meaning : "",
         swedish_explanation: result.swedish_explanation || "",
-        example_sv: (result.examples || []).map((e) => e.swedish).join("\n"),
+        example_sv: (result.examples || []).map((e) => String(e.swedish || "").trim()).filter(Boolean).join("\n"),
         transitivity: result.transitivity || null,
-        passiv_s: result.passive || "",
-        source: "ai search",
+        passiv_s: passive,
+        countability: fromSaldo?.countability || null,
+        source,
         status: "ai_generated",
       });
       if (insertError) {
         // Lost a race with another insert of the same (swedish, pos): reuse it.
-        const raced = await findExistingEntry(supabaseAdmin, lemma);
+        const raced = isPhrase ? (await findExistingExpression(supabaseAdmin, lemma, matchKey))?.id : await findExistingEntry(supabaseAdmin, lemma, pos);
         if (!raced) throw insertError;
         entryId = raced;
       } else {
-        const forms = (result.forms || []).filter((f) => f.value && ALL_FORM_TYPES.includes(f.type));
+        if (matchKey) await setMatchKey(supabaseAdmin, entryId, matchKey);
         if (forms.length) {
           await supabaseAdmin.from("word_forms").upsert(
             forms.map((f, i) => ({ learning_object_id: entryId, form_type: f.type, form_value: f.value, sort_order: i })),
             { onConflict: "learning_object_id,form_type" },
           );
         }
-        for (const [i, ex] of (result.examples || []).entries()) {
+        for (const [i, ex] of (result.examples || []).filter((e) => String(e.swedish || "").trim()).entries()) {
           const { data: exRow } = await supabaseAdmin.from("learning_object_examples")
             .insert({ learning_object_id: entryId, example_swedish: ex.swedish, sort_order: i }).select("id").single();
           if (exRow && ex.translation) {
@@ -281,6 +329,12 @@ Never mix the two languages inside one field. If uncertain about a sense, prefer
             collocations.map((c, i) => ({ learning_object_id: entryId, phrase_text: c.phrase, sort_order: i })),
           );
         }
+        const examples = (result.examples || []).filter((e) => String(e.swedish || "").trim());
+        await recordEntryStatus(supabaseAdmin, entryId, {
+          type: isPhrase ? "phrase" : "word", pos, forms: Object.fromEntries(forms.map((f) => [f.type, f.value])),
+          passiv_s: passive, countability: fromSaldo?.countability || null, [`meaning_${lang}`]: true,
+          example: examples.length > 0, swedish_explanation: Boolean(result.swedish_explanation), cefr_level: Boolean(result.cefr_level),
+        }, { saldoRows });
       }
     }
 

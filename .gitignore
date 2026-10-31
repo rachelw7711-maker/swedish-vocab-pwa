@@ -78,3 +78,8 @@ public/audio/shadowing/*
 *.ogg
 !audio/shadowing/.gitkeep
 !public/audio/shadowing/.gitkeep
+
+# Local copies of licensed reference data (SALDO etc.) — rebuilt by scripts/build-saldo-index.mjs
+data/reference/
+data/enrichment/
+data/reports/

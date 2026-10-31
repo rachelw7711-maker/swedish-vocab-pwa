@@ -4,6 +4,8 @@
 // cache -> user word state -> main dictionary -> AI, AI always last, and
 // only for words genuinely missing from the dictionary.
 import { createHash, randomUUID } from "node:crypto";
+import { generateWordEntry } from "./server-native.mjs";
+import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
@@ -36,7 +38,6 @@ const MAX_KEY_COLLOCATIONS = 6;
 const MAX_KEY_IDIOMS = 4;
 const MAX_KEY_SENTENCES = 5;
 const MAX_LANGUAGE_PATTERNS = 4;
-const MAX_BATCH_GENERATE = 15;
 
 // 规范§14.3 point table. Credits are a user-facing abstraction over real
 // token cost (规范§14: "平台对用户展示 AI Learning Credits，不直接展示
@@ -281,12 +282,6 @@ async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage = "zh") 
   return found;
 }
 
-async function fetchUserWordState(supabaseAdmin, userId, wordIds) {
-  if (!userId || !wordIds.length) return new Map();
-  const { data } = await supabaseAdmin.from("user_words").select("word_id, mastered, review_stage").eq("user_id", userId).in("word_id", wordIds);
-  return new Map((data || []).map((row) => [row.word_id, row]));
-}
-
 // 规范§7.1/§7.2 ranking: value to the reader over raw frequency. Proper
 // nouns/short function words were already filtered in extractCandidateTokens
 // (stopwords) — this layer scores what's left.
@@ -322,7 +317,7 @@ const HIGH_VALUE_CONNECTIVES = new Set([
 // filters below — Swedish month names are lowercase so the proper-noun
 // capitalization heuristic can't catch them, and words like "idag"/"nu" are
 // far too basic to earn a vocabulary slot on their own. If one of these is
-// genuinely doing something idiomatic in the text, extractKeyExpressions
+// genuinely doing something idiomatic in the text, selectReadingContent
 // (which reads the whole text independently, not this candidate list) still
 // catches it as a phrase — this only stops the bare word from competing for
 // a Viktiga ord slot.
@@ -333,7 +328,10 @@ const LOW_VALUE_TIME_WORDS = new Set([
   "idag", "igår", "imorgon", "nu", "sedan", "snart", "nyss", "strax",
 ]);
 
-function rankFoundWords(found, freq, firstSeenCapitalized, userWordState, limit) {
+// The pool is shared by everyone who reads this text, so it is never filtered by
+// one reader's mastered words — each reader's own mastered words are swapped for
+// other candidates on their device (2026-10-30).
+function rankFoundWords(found, freq, firstSeenCapitalized, limit) {
   const excludedPos = new Set(["preposition", "conjunction", "pronoun", "numeral", "interjection"]);
   const candidates = [...found.entries()]
     .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !excludedPos.has(word.pos))
@@ -343,12 +341,7 @@ function rankFoundWords(found, freq, firstSeenCapitalized, userWordState, limit)
     .filter(([token]) => HIGH_VALUE_CONNECTIVES.has(token) || !firstSeenCapitalized.get(token) || freq.get(token) > 1)
     .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !word.frequency_rank || word.frequency_rank > VERY_COMMON_FREQUENCY_RANK)
     .filter(([token]) => !LOW_VALUE_TIME_WORDS.has(token))
-    .map(([token, word]) => {
-      const state = userWordState.get(word.id);
-      const alreadyMastered = state?.mastered || (state?.review_stage ?? 0) >= 5;
-      return { token, word, occurrences: freq.get(token) || 1, alreadyMastered };
-    })
-    .filter((c) => !c.alreadyMastered);
+    .map(([token, word]) => ({ token, word, occurrences: freq.get(token) || 1 }));
 
   // Dedupe by underlying word id: two surface forms of the same base word
   // (e.g. "ledighet" and "ledigheten" both resolving via word_forms to the
@@ -380,121 +373,47 @@ function rankFoundWords(found, freq, firstSeenCapitalized, userWordState, limit)
   return deduped.slice(0, limit);
 }
 
-// AI Worth Learning scoring (2026-07-30, 桌面AI语义评分.pages, approved by
-// Rachel same day) — the DB-mechanical filter above already does the "90%"
-// (POS/proper-noun/frequency/dedup/already-mastered exclusion); this is the
-// final "10%" AI layer on top. AI never decides how many words survive
-// (targetCount stays DB/config-controlled) — it only ranks a candidate pool
-// larger than the target by how genuinely worth learning each word is IN
-// THIS ARTICLE specifically, not how "important" it is in the abstract.
-// Skipped entirely (no AI call) when there's no real surplus to rank.
-const WORTH_LEARNING_DIMENSIONS = `1. Does it genuinely help understand THIS article — a word central to this article's specific meaning/topic scores higher than one that's merely present?
-2. Transfer value — will this word likely reappear across many other articles (connective/discourse words like "däremot", "dessutom", "samtidigt" score very high here)?
+// AI Worth Learning ranking (2026-07-30, 桌面AI语义评分.pages, approved by
+// Rachel same day) — the DB-mechanical filter above does the "90%"
+// (POS/proper-noun/frequency/dedup exclusion); the AI orders what's left by how
+// genuinely worth learning each word is IN THIS ARTICLE. Since 2026-10-30 this
+// runs inside selectReadingContent's single call and the AI may also add words the
+// dictionary doesn't have; since 2026-10-31 it is a relative order, not a 0-100 score.
+const WORTH_LEARNING_DIMENSIONS = `1. Does it genuinely help understand THIS article — a word central to this article's specific meaning/topic ranks above one that's merely present?
+2. Transfer value — will this word likely reappear across many other articles (connective/discourse words like "däremot", "dessutom", "samtidigt" rank very high here)?
 3. Is it a genuine native-speaker expression or collocation-forming word, not just a plain dictionary entry?
 4. Is it a common "reading obstacle" word — one learners typically recognize on sight but keep forgetting (often abstract nouns, adverbs) — these should be prioritized?
 5. Does it easily expand into a useful word family (e.g. a verb with common related noun/adjective/participle forms)?
 
-Calibration — score by how much a word actually determines whether the reader understands the article, NOT by how common, short, or grammatically "simple" it looks:
-- "och", "väldigt" → very low (1-20). Generic, replaceable, contributes almost nothing specific.
-- "regering" → moderate (40-60) if the article is genuinely about government/policy; otherwise low.
-- "däremot", "trots", "dessutom" → very high (80-100), even though they're short, frequent, and CEFR A2-B1. A connective word that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands the article correctly — never downgrade a word just because it "looks too simple" or "too common" to be worth learning.
-- A phrasal/idiomatic verb sense (e.g. "lägga ner", "komma fram till") → very high (80-100) — these carry far more meaning than any single component word.
-Do not let surface simplicity or high frequency pull a score down — score purely on how much understanding of THIS article depends on this specific word.
+Calibration — rank by how much a word actually determines whether the reader understands the article, NOT by how common, short, or grammatically "simple" it looks:
+- "och", "väldigt" → bottom of the list or left out. Generic, replaceable, contributes almost nothing specific.
+- "regering" → middle of the list if the article is genuinely about government/policy; otherwise low.
+- "däremot", "trots", "dessutom" → near the top, even though they're short, frequent, and CEFR A2-B1. A connective word that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands the article correctly — never downgrade a word just because it "looks too simple" or "too common" to be worth learning.
+- A phrasal/idiomatic verb sense (e.g. "lägga ner", "komma fram till") → near the top — these carry far more meaning than any single component word.
+Do not let surface simplicity or high frequency push a word down — rank purely on how much understanding of THIS article depends on this specific word.
 
-Category exclusions (V2.1 阅读AI提取规则 §四, 2026-08-11) — score very low (1-10) regardless of capitalization or frequency if the word is:
+Category exclusions (V2.1 阅读AI提取规则 §四, 2026-08-11) — leave the word out regardless of capitalization or frequency if it is:
 - A person name, place name, or country/nationality name (e.g. "Jonas", "Catrin", "Stockholm", "Darfur").
 - A month or weekday name, a specific date, or a plain cardinal/ordinal number used as a quantity (e.g. "december", "måndag", "2019", "femton", "15:e").
 - A very common deictic time word (e.g. "idag", "nu", "sedan") that isn't doing anything unusual here.
-Exception: if the name/date/number carries real idiomatic weight in this specific text (e.g. it's part of a fixed expression like "på tu man hand"), that belongs in Fraser & Uttryck as a phrase — score the isolated word low here regardless, the expression is a separate extraction.`;
+Exception: if the name/date/number carries real idiomatic weight in this specific text (e.g. it's part of a fixed expression like "på tu man hand"), that belongs in Fraser & Uttryck as a phrase — leave the isolated word out here regardless, the expression is a separate extraction.`;
 
-async function scoreVocabularyWorthLearning(candidates, cleanedText, targetCount) {
-  if (candidates.length <= targetCount) {
-    return { scored: candidates, usage: null };
-  }
-  const schema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      scores: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: { word: { type: "string" }, score: { type: "integer" } },
-          required: ["word", "score"],
-        },
-      },
-    },
-    required: ["scores"],
-  };
-  const wordList = candidates.map((c) => c.word.swedish).join(", ");
-  const { result, usage } = await callOpenAI({
-    schemaName: "vocabulary_worth_learning",
-    schema,
-    maxOutputTokens: 1500,
-    systemPrompt: `You score how "worth learning" each candidate Swedish word is for a learner, specifically in the context of the article given — not how important the word is in general. Score every word 0-100 using these five dimensions together:\n${WORTH_LEARNING_DIMENSIONS}\nScore every candidate word given, even low-scoring ones — never omit one. Return integer scores only, matching each word exactly as given.`,
-    userPrompt: `Article:\n${cleanedText}\n\nCandidate words: ${wordList}`,
-  });
-  const scoreByWord = new Map((result.scores || []).map((s) => [String(s.word || "").toLowerCase(), s.score]));
-  const scored = candidates
-    .map((c) => ({ ...c, worthLearningScore: scoreByWord.get(c.word.swedish.toLowerCase()) ?? 0 }))
-    .sort((a, b) => b.worthLearningScore - a.worthLearningScore);
-  return { scored, usage };
-}
+// One bundled call per article (2026-10-30): keywords (ordered dictionary
+// candidates + words the AI adds itself), collocations, idioms, key sentences,
+// language patterns, each list best first (the text's CEFR level comes from the
+// fast layer). Fraser (collocations) and Uttryck
+// (idioms) keep separate criteria since they're genuinely different things. The
+// learner's own level is NOT sent: the result is shared by every reader of the
+// text and each reader's device orders it for their level.
+const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"];
+const READING_POS = ["verb", "noun", "adjective", "adverb", "pronoun", "preposition", "conjunction", "numeral", "interjection", "other"];
 
-// 规范§8 — batched generation for genuinely missing words, one AI call for
-// up to MAX_BATCH_GENERATE words at once, never one call per word.
-async function batchGenerateMissingWords(missingTokens, nativeLanguage = "zh") {
-  if (!missingTokens.length) return [];
-  const batch = missingTokens.slice(0, MAX_BATCH_GENERATE);
-  const langName = languageName(nativeLanguage);
-  const schema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      words: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            swedish: { type: "string" },
-            pos: { type: "string", enum: ["verb", "noun", "adjective", "adverb", "pronoun", "preposition", "other"] },
-            chinese: { type: "string" },
-            swedish_explanation: { type: "string" },
-            forms: { type: "string" },
-            example: { type: "string" },
-            is_real_word: { type: "boolean" },
-          },
-          required: ["swedish", "pos", "chinese", "swedish_explanation", "forms", "example", "is_real_word"],
-        },
-      },
-    },
-    required: ["words"],
-  };
-  const { result, usage } = await callOpenAI({
-    schemaName: "batch_missing_words",
-    schema,
-    maxOutputTokens: 4000,
-    systemPrompt:
-      `You are a Swedish dictionary editor for ${langName}-speaking learners. For each token given, determine its dictionary base form (lemma) and return a minimal but correct entry: swedish (the lemma, not the inflected form as it appeared), pos, chinese (a concise ${langName} meaning), swedish_explanation (simple Swedish definition), forms (one 'form_type: value' per line — for verbs: infinitiv/presens/preteritum/supinum; for nouns: genus/singular_indefinite/singular_definite/plural_indefinite/plural_definite; for adjectives: base_form/neuter_form/plural_form), example (one natural Swedish sentence). If a token is not a real Swedish word (OCR noise, a name, a typo), set is_real_word to false and leave other fields minimal.`,
-    userPrompt: `Tokens (may be inflected forms — return each as its dictionary lemma):\n${batch.join(", ")}`,
-  });
-  return { words: (result.words || []).filter((w) => w.is_real_word), usage };
-}
-
-// 规范§9.2 + 阅读模块设计想法-专业review-2026-07-27.md §5/§6 — one bundled
-// call (not one per concept) returns collocations, idioms, AND key
-// sentences together. Fraser (collocations) and Uttryck (idioms) get
-// separate criteria since they're genuinely different things — lumping
-// them into one "expressions" list (the old behavior) let the model pick
-// either without really distinguishing "combinable phrase" from "idiomatic,
-// possibly non-literal expression". Key sentences are a third, independent
-// output (not just the source_sentence attached to a word/phrase) — the
-// most Shadowing-worthy sentences in the article.
-async function extractKeyExpressions(cleanedText, tier, glossary = [], vocabularyWords = [], nativeLanguage = "zh") {
+async function selectReadingContent(cleanedText, tier, glossary = [], vocabularyPool = [], nativeLanguage = "zh") {
   const langName = languageName(nativeLanguage);
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
+  const [vocabMin, vocabMax] = tierConfig.keyVocabulary;
+  // A few more than are shown, so each reader's mastered words can be swapped out.
+  const vocabCandidates = vocabMax + Math.ceil(vocabMax / 2);
   const [collocMin, collocMax] = tierConfig.keyCollocations;
   const [idiomMin, idiomMax] = tierConfig.keyIdioms;
   const [sentMin, sentMax] = tierConfig.keySentences;
@@ -513,6 +432,19 @@ async function extractKeyExpressions(cleanedText, tier, glossary = [], vocabular
     type: "object",
     additionalProperties: false,
     properties: {
+      vocabulary: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            swedish: { type: "string" },
+            pos: { type: "string", enum: READING_POS },
+            meaning: { type: "string" },
+          },
+          required: ["swedish", "pos", "meaning"],
+        },
+      },
       collocations: { type: "array", items: expressionSchema },
       idioms: { type: "array", items: expressionSchema },
       key_sentences: {
@@ -543,34 +475,32 @@ async function extractKeyExpressions(cleanedText, tier, glossary = [], vocabular
         },
       },
     },
-    required: ["collocations", "idioms", "key_sentences", "language_patterns"],
+    required: ["vocabulary", "collocations", "idioms", "key_sentences", "language_patterns"],
   };
   const glossaryNote = glossary.length
-    ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${glossary.map((g) => g.word).join(", ")}. Do not select any of these as a collocation or idiom — the book already did that job. Spend the collocation/idiom slots on other things the glossary didn't cover.`
+    ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${glossary.map((g) => g.word).join(", ")}. Do not select any of these as a keyword, collocation or idiom — the book already did that job.`
     : "";
-  // V2.1 阅读AI提取规则 §六/§十七 (2026-08-11): the vocabulary step already ran
-  // and picked these words in isolation — cross-module dedup means the
-  // isolated word should lose to a genuine fixed expression built around it.
-  // analyzeReadingResourceDeep removes the word programmatically whenever it
-  // turns up inside a collocation/idiom returned here, so it's safe (and
-  // encouraged) to still extract that expression even though the word is
-  // "already covered".
-  const vocabNote = vocabularyWords.length
-    ? `\n\nThese words were already selected as standalone key vocabulary for this article: ${vocabularyWords.join(", ")}. If one of them is really only valuable as part of a fixed expression, extract that expression as a collocation or idiom below — don't skip it just because the word is "already covered" (the isolated word will be dropped programmatically in favor of your expression). Conversely, when choosing key_sentences and language_patterns, don't select one only to re-teach a point already fully covered by this vocabulary list or by a collocation/idiom you're returning in this same response — only include it if it adds real comprehension value beyond what's already covered.`
-    : "";
+  const candidateList = vocabularyPool.length
+    ? vocabularyPool.map((c) => `${c.word.swedish} (${c.word.pos || "?"}${c.word.cefr_level ? `, ${c.word.cefr_level}` : ""})`).join(", ")
+    : "(none)";
   const { result, usage } = await callOpenAI({
-    schemaName: "key_expressions_and_sentences",
+    schemaName: "reading_selection",
     schema,
-    maxOutputTokens: 3000,
-    systemPrompt: `You extract four things from a Swedish text for a ${langName}-speaking learner, each with its own criteria — never invent content, everything must actually appear in the text. Every field named *_zh below (meaning_zh, source_sentence_zh, translation_zh) must be written entirely in ${langName} regardless of its name — write in ${langName}, never in Chinese unless ${langName} is Chinese, and never let a stray Swedish or ${langName} word drift into a field written in the other language.
+    maxOutputTokens: 5000,
+    systemPrompt: `You select what is worth learning in a Swedish text for a ${langName}-speaking learner — never invent content, everything must actually appear in the text. Every field named *_zh below (meaning_zh, source_sentence_zh, translation_zh) and every "meaning" must be written entirely in ${langName} regardless of its name — never in Chinese unless ${langName} is Chinese, and never let a stray Swedish or ${langName} word drift into a field written in the other language.
 
-1. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious. Words that merely happen to sit next to each other in the sentence are not a collocation — the real test is: would a learner want to memorize this exact combination as one unit? If not, don't extract it.
+Every list below is ordered from most to least worth learning IN THIS TEXT: how much understanding the text's topic and core content depends on the item comes first. Difficulty is only a secondary hint (the dictionary level is given for listed candidates); never leave out an item the text's meaning depends on just because it looks easy or common.
 
-2. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
+1. vocabulary: up to ${vocabCandidates} single words worth learning, best first — typically ${vocabMin}-${vocabMax} of them are shown, so return fewer if fewer genuinely earn a place; do not pad. The user message lists dictionary candidates found in the text as "lemma (part of speech, CEFR)"; pick from them (keep the lemma and part of speech exactly as given) and you may ALSO add other words from the text that are genuinely worth learning even if not listed — give their dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. Use these dimensions together:
+${WORTH_LEARNING_DIMENSIONS}
 
-Both collocations and idioms must be normalized to a reusable "learnable form", never copied as the sentence's own accidental inflected fragment: verbs go to infinitive, and use "någon"/"något" as a placeholder for an open object/subject slot the learner would fill in themselves. E.g. if the text has "gick inte ihop med" or "hade skänkt bort", extract "gå ihop med något" / "skänka bort något" — not the sentence's own conjugated fragment. Also merge near-duplicate surface variants of the same underlying expression into one canonical entry (e.g. "gå ihop med", "gick inte ihop", "går ihop med" are the same knowledge point — return it once).
+2. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious. Words that merely happen to sit next to each other in the sentence are not a collocation — the real test is: would a learner want to memorize this exact combination as one unit? If not, don't extract it.
 
-3. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences with real comprehension/language-learning value — NOT sentences that matter to the plot. Select a sentence only when at least one of these applies, in priority order:
+3. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
+
+Both must be normalized to a reusable "learnable form", never copied as the sentence's own accidental inflected fragment: verbs go to infinitive, and use "någon"/"något" as a placeholder for an open object/subject slot the learner would fill in themselves. E.g. if the text has "gick inte ihop med" or "hade skänkt bort", extract "gå ihop med något" / "skänka bort något" — not the sentence's own conjugated fragment. Also merge near-duplicate surface variants of the same underlying expression into one canonical entry (e.g. "gå ihop med", "gick inte ihop", "går ihop med" are the same knowledge point — return it once). If a word is really only valuable as part of a fixed expression, extract that expression (the isolated word will be dropped programmatically in favor of your expression).
+
+4. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences with real comprehension/language-learning value — NOT sentences that matter to the plot. Select a sentence only when at least one of these applies, in priority order:
    a. (highest priority) The words are individually simple, but the sentence as a whole is hard to understand — e.g. a non-literal phrase, an idiom, or a combination whose meaning isn't the sum of its parts.
    b. Complex structure: multiple clauses, embedded subordinate clauses, unusual word order, or long-distance dependencies between sentence parts.
    c. Ellipsis: a meaningful chunk of the sentence is grammatically omitted and must be inferred.
@@ -578,14 +508,15 @@ Both collocations and idioms must be normalized to a reusable "learnable form", 
    e. Unclear reference or implied meaning — a pronoun or demonstrative (det/sådant/allt det där) that's genuinely hard to resolve without context.
    f. Tone, attitude, or a rhetorical question that changes the sentence's real meaning beyond its literal words.
    g. The sentence models a high-value, directly-reusable expression structure.
-   Do NOT select a sentence merely because: it's plot-important, it's the article's first sentence, it contains exactly one unfamiliar word (that word belongs in Viktiga ord, not here), its word order is perfectly ordinary, its structure is very basic, or it's a simple factual statement with no extra comprehension difficulty. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, written in ${langName} (like meaning_zh/translation_zh elsewhere) — it must explain the ACTUAL comprehension mechanism, never a generic label alone like "clause structure" or "rhetorical question". Required depth — for the Swedish sentence "Trots att det inte var december än hade affärerna redan börjat julskylta.", a reason at this level of specific detail (written in ${langName}, this is just illustrating the depth/specificity expected): "trots att introduces a concessive clause; än here means 'yet/still'; hade börjat is past perfect, marking that this had already started before the story's current point in time" — not a bare label like "past perfect".
+   Do NOT select a sentence merely because: it's plot-important, it's the article's first sentence, it contains exactly one unfamiliar word (that word belongs in the vocabulary, not here), its word order is perfectly ordinary, its structure is very basic, or it's a simple factual statement with no extra comprehension difficulty. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, written in ${langName} (like meaning_zh/translation_zh elsewhere) — it must explain the ACTUAL comprehension mechanism, never a generic label alone like "clause structure" or "rhetorical question". Required depth — for the Swedish sentence "Trots att det inte var december än hade affärerna redan börjat julskylta.", a reason at this level of specific detail (written in ${langName}, this is just illustrating the depth/specificity expected): "trots att introduces a concessive clause; än here means 'yet/still'; hade börjat is past perfect, marking that this had already started before the story's current point in time" — not a bare label like "past perfect". Don't select one only to re-teach a point already fully covered by a keyword, collocation or idiom you're returning.
 
-4. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). The test: can the learner directly substitute their own words into this pattern and reuse it in a new spoken or written sentence? If not, don't extract it — e.g. "när + bisats", "subjekt + verb", or "adjektiv + substantiv" are all far too basic/broad to have real learning value as a "pattern", even though they're technically patterns. Give the pattern name, its meaning in Chinese, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
+5. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). The test: can the learner directly substitute their own words into this pattern and reuse it in a new spoken or written sentence? If not, don't extract it — e.g. "när + bisats", "subjekt + verb", or "adjektiv + substantiv" are all far too basic/broad to have real learning value as a "pattern", even though they're technically patterns. Give the pattern name, its meaning in ${langName}, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
 
-Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}${vocabNote}`,
-    userPrompt: cleanedText,
+Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}`,
+    userPrompt: `Text:\n${cleanedText}\n\nDictionary candidates: ${candidateList}`,
   });
   return {
+    vocabulary: (result.vocabulary || []).slice(0, vocabCandidates),
     collocations: (result.collocations || []).slice(0, MAX_KEY_COLLOCATIONS),
     idioms: (result.idioms || []).slice(0, MAX_KEY_IDIOMS),
     keySentences: (result.key_sentences || []).slice(0, MAX_KEY_SENTENCES),
@@ -594,25 +525,103 @@ Every source_sentence/sentence must be quoted exactly from the text. Return empt
   };
 }
 
-// 阅读模块设计想法-专业review-2026-07-27.md §5/§10.2 — mirrors what
-// batchGenerateMissingWords already does for words: when a discovered
+// The AI's ordered keywords, matched to dictionary entries by exact lemma AND part
+// of speech (a same-spelling word of another class is a different entry). Words
+// the dictionary doesn't have keep word_id null here (the shown ones get a full
+// entry in ensureKeywordEntries). The meaning is always the one for THIS text; the
+// CEFR level is the dictionary's own (none for words it doesn't have).
+async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, freq) {
+  const key = (swedish, pos) => `${String(swedish || "").toLowerCase()}|${pos || ""}`;
+  const known = new Map();
+  pool.forEach((c) => known.set(key(c.word.swedish, c.word.pos), { word: c.word, occurrences: c.occurrences }));
+  const unknownLemmas = [...new Set(scored.filter((v) => !known.has(key(v.swedish, v.pos))).map((v) => v.swedish))];
+  if (unknownLemmas.length) {
+    const { data: rows } = await supabaseAdmin
+      .from("learning_objects")
+      .select("id, swedish, part_of_speech, cefr_level")
+      .eq("object_type", "word")
+      .in("swedish", unknownLemmas);
+    (rows || []).forEach((row) => {
+      const k = key(row.swedish, row.part_of_speech);
+      if (!known.has(k)) known.set(k, { word: { id: row.id, swedish: row.swedish, pos: row.part_of_speech, cefr_level: row.cefr_level }, occurrences: freq.get(row.swedish.toLowerCase()) || 1 });
+    });
+  }
+  const seen = new Set();
+  const candidates = [];
+  for (const v of scored) {
+    const match = known.get(key(v.swedish, v.pos));
+    const dedupeKey = match ? match.word.id : key(v.swedish, v.pos);
+    if (seen.has(dedupeKey) || !String(v.swedish || "").trim()) continue;
+    seen.add(dedupeKey);
+    candidates.push({
+      word_id: match?.word.id || null,
+      swedish: match?.word.swedish || v.swedish,
+      pos: match?.word.pos || v.pos,
+      chinese: v.meaning || match?.word.chinese || "",
+      cefr_level: match?.word.cefr_level || null,
+      occurrences: match?.occurrences || freq.get(String(v.swedish).toLowerCase()) || 1,
+    });
+  }
+  return candidates;
+}
+
+// 阅读模块设计想法-专业review-2026-07-27.md §5/§10.2 — when a discovered
 // collocation/idiom doesn't exist in Fraser/Uttryck yet, create it rather
-// than just leaving the link empty. Unlike missing words, no second AI
-// call is needed — extractKeyExpressions already generated the phrase text/
+// than just leaving the link empty (reading keeps enriching the library;
+// confirmed 2026-10-30). No second AI
+// call is needed — selectReadingContent already generated the phrase text/
 // meaning/example in the same call, this just persists it. New entries get
 // status "ai_generated" (same convention as auto-generated words — see
 // spraklab-ai-review-gate-reminder memory: this review gate isn't enforced
 // yet, so these are immediately visible like everything else).
-async function resolveExpressionEntries(supabaseAdmin, items, { objectType, category, nativeLanguage = "zh" }) {
-  if (!items.length) return items;
-  const texts = items.map((item) => item.expression_text);
-  const { data: existing } = await supabaseAdmin.from("learning_objects").select("id, swedish").in("object_type", ["phrase", "expression"]).in("swedish", texts);
-  const byText = new Map((existing || []).map((row) => [row.swedish.toLowerCase(), row.id]));
+// Every shown keyword gets a full dictionary entry (2026-10-31): reused when the
+// shared dictionary has one with this lemma + part of speech in this language,
+// otherwise generated once with the regular word-card generation and saved for
+// everyone. Only the shown keywords — the other candidates get one only when a
+// reader asks. A failure leaves that keyword without an entry rather than failing
+// the analysis.
+async function ensureKeywordEntries(supabaseAdmin, keywords, { userId, textResourceId, nativeLanguage }) {
+  const ids = keywords.map((k) => k.word_id).filter(Boolean);
+  const translated = new Set();
+  if (ids.length) {
+    const { data } = await supabaseAdmin.from("learning_object_translations").select("learning_object_id, meaning")
+      .in("learning_object_id", ids).eq("native_language", nativeLanguage);
+    (data || []).filter((r) => r.meaning).forEach((r) => translated.add(r.learning_object_id));
+  }
+  return Promise.all(keywords.map(async (k) => {
+    if (k.word_id && translated.has(k.word_id)) return k;
+    try {
+      const { entryId } = await generateWordEntry({
+        supabaseAdmin, userId, word: k.swedish, nativeLanguage, pos: k.pos, sense: k.chinese,
+        source: "ai reading", chargeQuota: false, textResourceId,
+      });
+      return { ...k, word_id: entryId };
+    } catch (error) {
+      console.warn("[Reading] keyword entry not created", k.swedish, error.message);
+      return k;
+    }
+  }));
+}
 
-  const toCreate = items.filter((item) => !byText.has(item.expression_text.toLowerCase()));
+export async function resolveExpressionEntries(supabaseAdmin, items, { objectType, category, nativeLanguage = "zh" }) {
+  if (!items.length) return items;
+  // Dedup across both modules on the normalised key (inflected first verb,
+  // någon/ngn, mig/sig …): a collocation already stored as an expression (or the
+  // other way round) is reused and also listed in this module.
+  const module = moduleOf(objectType);
+  const resolved = await Promise.all(items.map(async (item) => {
+    const matchKey = await expressionMatchKey(supabaseAdmin, item.expression_text);
+    const existing = await findExistingExpression(supabaseAdmin, item.expression_text, matchKey);
+    if (existing && existing.object_type !== objectType) await addModule(supabaseAdmin, existing.id, module);
+    return { item, matchKey, id: existing?.id || null };
+  }));
+
+  const byKey = new Map(resolved.filter((r) => r.id).map((r) => [r.matchKey, r.id]));
+  const toCreate = [];
+  for (const r of resolved) if (!r.id && !toCreate.some((c) => c.matchKey === r.matchKey)) toCreate.push(r);
   if (toCreate.length) {
     const now = new Date().toISOString();
-    const rows = toCreate.map((item) => ({
+    const rows = toCreate.map(({ item }) => ({
       id: randomUUID(),
       swedish: item.expression_text,
       part_of_speech: "other",
@@ -638,16 +647,24 @@ async function resolveExpressionEntries(supabaseAdmin, items, { objectType, cate
     }));
     const { data: inserted, error: insertError } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish");
     if (!insertError && inserted) {
-      const translationRows = inserted.map((row) => {
-        const source = toCreate.find((item) => item.expression_text.toLowerCase() === row.swedish.toLowerCase());
-        return { learning_object_id: row.id, native_language: nativeLanguage, meaning: source?.meaning_zh || "", updated_at: now };
-      });
-      if (translationRows.length) await supabaseAdmin.from("learning_object_translations").insert(translationRows);
-      inserted.forEach((row) => byText.set(row.swedish.toLowerCase(), row.id));
+      for (const row of inserted) {
+        const created = toCreate.find((c) => c.item.expression_text.toLowerCase() === row.swedish.toLowerCase());
+        if (!created) continue;
+        byKey.set(created.matchKey, row.id);
+        await setMatchKey(supabaseAdmin, row.id, created.matchKey);
+        await supabaseAdmin.from("learning_object_translations").insert({ learning_object_id: row.id, native_language: nativeLanguage, meaning: created.item.meaning_zh || "", updated_at: now });
+        // Collected from a text: meaning and example only — the rest is recorded as missing.
+        await recordEntryStatus(supabaseAdmin, row.id, { type: module, pos: "other", [`meaning_${nativeLanguage}`]: Boolean(created.item.meaning_zh), example: Boolean(created.item.source_sentence) });
+      }
+    }
+    // Lost a race (same spelling inserted meanwhile): re-check before linking.
+    for (const c of toCreate.filter((c) => !byKey.has(c.matchKey))) {
+      const raced = await findExistingExpression(supabaseAdmin, c.item.expression_text, c.matchKey);
+      if (raced) byKey.set(c.matchKey, raced.id);
     }
   }
 
-  return items.map((item) => ({ ...item, expression_id: byText.get(item.expression_text.toLowerCase()) || null }));
+  return resolved.map(({ item, matchKey }) => ({ ...item, expression_id: byKey.get(matchKey) || null }));
 }
 
 // 2026-08-03, Rachel's decision: reading-analysis phrases already get
@@ -777,8 +794,9 @@ async function generateFastLayer(cleanedText, tier, nativeLanguage = "zh") {
       summary_sv: { type: "string" },
       summary_zh: { type: "string" },
       key_points: { type: "array", items: { type: "string" } },
+      text_cefr: { type: "string", enum: CEFR_LEVELS },
     },
-    required: ["headline_zh", "summary_sv", "summary_zh", "key_points"],
+    required: ["headline_zh", "summary_sv", "summary_zh", "key_points", "text_cefr"],
   };
   return callOpenAI({
     schemaName: "reading_fast_layer",
@@ -788,7 +806,8 @@ async function generateFastLayer(cleanedText, tier, nativeLanguage = "zh") {
 
 1. headline_zh: one short ${langName} sentence naming what the article is about.
 2. summary_sv/summary_zh: ${minSentences}-${maxSentences} sentences (max 5) each, covering only the main topic, core content, and key conclusion — no background info, no grammar explanation. summary_sv stays 100% in Swedish; summary_zh is 100% in ${langName}. These are two independent texts, not one text shown twice — never let a word or phrase from one leak into the other (e.g. summary_sv must never contain a stray ${langName} word or vice versa), even where they express the same idea.
-3. key_points: exactly 3 short ${langName} bullet points (fewer only if the text is too short/simple to genuinely support 3 distinct ones) naming the most important pieces of CONTENT in the article — what a reader should watch for or take away. These are about content, never about grammar or language structure (that's a separate feature elsewhere in the app) — do not describe a grammatical construction here.`,
+3. key_points: exactly 3 short ${langName} bullet points (fewer only if the text is too short/simple to genuinely support 3 distinct ones) naming the most important pieces of CONTENT in the article — what a reader should watch for or take away. These are about content, never about grammar or language structure (that's a separate feature elsewhere in the app) — do not describe a grammatical construction here.
+4. text_cefr: the text's overall CEFR difficulty (A1-C2), judged from its vocabulary, sentence structure and content.`,
     userPrompt: cleanedText,
   });
 }
@@ -885,6 +904,7 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
       summary_sv: result.summary_sv,
       summary_zh: result.summary_zh,
       key_points: result.key_points || [],
+      text_cefr: CEFR_LEVELS.includes(result.text_cefr) ? result.text_cefr : null,
       summary_generated_at: new Date().toISOString(),
     })
     .select()
@@ -906,17 +926,26 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
 // lookup). Returns the updated (current-language) text_analysis row.
 async function explainExistingSelectionInLanguage({ supabaseAdmin, userId, textResource, existingAnalysis, sourceAnalysis, nativeLanguage }) {
   const langName = languageName(nativeLanguage);
-  const expressions = sourceAnalysis.selected_expressions || [];
+  // Analyses since 2026-10-30 carry scored candidates: explain all of them (the
+  // shown ones are a subset), keywords included — their meanings are per text, so
+  // a dictionary lookup isn't enough. Older analyses only have the shown items.
+  const hasCandidates = Array.isArray(sourceAnalysis.candidate_vocabulary);
+  const expressions = (hasCandidates ? sourceAnalysis.candidate_expressions : sourceAnalysis.selected_expressions) || [];
+  const vocabulary = hasCandidates ? sourceAnalysis.candidate_vocabulary : [];
   const sentences = sourceAnalysis.key_sentences || [];
   const patterns = sourceAnalysis.language_patterns || [];
   const usageLogEntries = [];
 
-  let explained = { expressions: [], sentences: [], patterns: [] };
-  if (expressions.length || sentences.length || patterns.length) {
+  let explained = { vocabulary: [], expressions: [], sentences: [], patterns: [] };
+  if (vocabulary.length || expressions.length || sentences.length || patterns.length) {
     const schema = {
       type: "object",
       additionalProperties: false,
       properties: {
+        vocabulary: {
+          type: "array",
+          items: { type: "object", additionalProperties: false, properties: { meaning: { type: "string" } }, required: ["meaning"] },
+        },
         expressions: {
           type: "array",
           items: { type: "object", additionalProperties: false, properties: { meaning: { type: "string" }, source_sentence_translation: { type: "string" } }, required: ["meaning", "source_sentence_translation"] },
@@ -930,9 +959,10 @@ async function explainExistingSelectionInLanguage({ supabaseAdmin, userId, textR
           items: { type: "object", additionalProperties: false, properties: { meaning: { type: "string" } }, required: ["meaning"] },
         },
       },
-      required: ["expressions", "sentences", "patterns"],
+      required: ["vocabulary", "expressions", "sentences", "patterns"],
     };
     const userPrompt = JSON.stringify({
+      vocabulary: vocabulary.map((v) => ({ swedish: v.swedish, pos: v.pos, meaning_in_other_language: v.chinese })),
       expressions: expressions.map((e) => ({ expression_text: e.expression_text, source_sentence: e.source_sentence })),
       sentences: sentences.map((s) => ({ sentence: s.sentence })),
       patterns: patterns.map((p) => ({ pattern: p.pattern, source_sentence: p.source_sentence })),
@@ -941,8 +971,9 @@ async function explainExistingSelectionInLanguage({ supabaseAdmin, userId, textR
       schemaName: "explain_existing_selection",
       schema,
       maxOutputTokens: 2000,
-      systemPrompt: `A Swedish text has already been analyzed and these expressions/sentences/patterns were already selected as worth learning by a previous pass — you are NOT selecting or filtering anything here, only explaining each one for a ${langName}-speaking learner, one output entry per input entry, same order, same count.
+      systemPrompt: `A Swedish text has already been analyzed and these words/expressions/sentences/patterns were already selected as worth learning by a previous pass — you are NOT selecting or filtering anything here, only explaining each one for a ${langName}-speaking learner, one output entry per input entry, same order, same count.
 
+For each entry in "vocabulary": meaning = a short ${langName} meaning of the word in the same sense as meaning_in_other_language (that is the sense this text uses).
 For each entry in "expressions": meaning = a concise ${langName} translation/explanation of the expression; source_sentence_translation = a ${langName} translation of its source_sentence.
 For each entry in "sentences": translation = a ${langName} translation of the sentence; reason = a ${langName} explanation of why this sentence is worth studying — the actual comprehension mechanism (grammar point, idiom, ambiguity, tense relationship, etc.), never a generic label alone.
 For each entry in "patterns": meaning = a concise ${langName} explanation of the pattern.`,
@@ -954,7 +985,7 @@ For each entry in "patterns": meaning = a concise ${langName} explanation of the
 
   // Vocabulary meaning fallback: a plain corpus lookup, no AI needed — the
   // word_id references are reused as-is (language-independent facts).
-  const wordIds = (sourceAnalysis.selected_vocabulary || []).map((v) => v.word_id).filter(Boolean);
+  const wordIds = hasCandidates ? [] : (sourceAnalysis.selected_vocabulary || []).map((v) => v.word_id).filter(Boolean);
   const meaningByWordId = new Map();
   if (wordIds.length) {
     const { data: rows } = await supabaseAdmin
@@ -967,12 +998,17 @@ For each entry in "patterns": meaning = a concise ${langName} explanation of the
     });
   }
 
-  const selectedVocabulary = (sourceAnalysis.selected_vocabulary || []).map((v) => ({ ...v, chinese: meaningByWordId.get(v.word_id) ?? v.chinese }));
-  const selectedExpressions = expressions.map((e, index) => ({
+  const vocabularyMeaning = new Map(vocabulary.map((v, index) => [`${v.swedish}|${v.pos}`, explained.vocabulary?.[index]?.meaning]));
+  const translateWord = (v) => ({ ...v, chinese: vocabularyMeaning.get(`${v.swedish}|${v.pos}`) || meaningByWordId.get(v.word_id) || v.chinese });
+  const explainedByText = new Map(expressions.map((e, index) => [e.expression_text, explained.expressions[index]]));
+  const translateExpression = (e) => ({
     ...e,
-    meaning_zh: explained.expressions[index]?.meaning || "",
-    source_sentence_zh: explained.expressions[index]?.source_sentence_translation || "",
-  }));
+    meaning_zh: explainedByText.get(e.expression_text)?.meaning || "",
+    source_sentence_zh: explainedByText.get(e.expression_text)?.source_sentence_translation || "",
+  });
+  const selectedVocabulary = await ensureKeywordEntries(supabaseAdmin, (sourceAnalysis.selected_vocabulary || []).map(translateWord),
+    { userId, textResourceId: textResource.id, nativeLanguage });
+  const selectedExpressions = (sourceAnalysis.selected_expressions || []).map(translateExpression);
   const selectedSentences = sentences.map((s, index) => ({
     ...s,
     translation_zh: explained.sentences[index]?.translation || "",
@@ -985,6 +1021,9 @@ For each entry in "patterns": meaning = a concise ${langName} explanation of the
     .update({
       selected_vocabulary: selectedVocabulary,
       selected_expressions: selectedExpressions,
+      candidate_vocabulary: hasCandidates ? vocabulary.map(translateWord) : null,
+      candidate_expressions: hasCandidates ? expressions.map(translateExpression) : null,
+      text_cefr: sourceAnalysis.text_cefr ?? null,
       key_sentences: selectedSentences,
       language_patterns: selectedPatterns,
       status: "ready",
@@ -1076,121 +1115,63 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
 
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const vocabularyLimit = Math.min(tierConfig.keyVocabulary[1], MAX_KEY_VOCABULARY);
+  const collocationLimit = Math.min(tierConfig.keyCollocations[1], MAX_KEY_COLLOCATIONS);
+  const idiomLimit = Math.min(tierConfig.keyIdioms[1], MAX_KEY_IDIOMS);
 
   const { freq, firstSeenCapitalized } = extractCandidateTokens(cleaned);
   // 缺口2 (2026-07-30): words the textbook's own margin glossary already
-  // explains never compete for the 5-15 key-vocabulary slots or trigger a
-  // missing-word generation call — the book already did that job for free.
+  // explains never compete for the 5-15 key-vocabulary slots — the book
+  // already did that job for free.
   const glossaryWords = new Set((glossary || []).map((g) => String(g.word || "").toLowerCase()).filter(Boolean));
   const tokens = [...freq.keys()].filter((t) => !glossaryWords.has(t));
   const found = await matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage);
-  const userWordState = await fetchUserWordState(supabaseAdmin, userId, [...found.values()].map((w) => w.id));
+  // A pool of dictionary candidates (2x the shown count) for the AI to score; the
+  // AI may add words the dictionary doesn't have.
+  const pool = rankFoundWords(found, freq, firstSeenCapitalized, vocabularyLimit * 2);
 
-  let ranked = rankFoundWords(found, freq, firstSeenCapitalized, userWordState, vocabularyLimit * 2);
+  const selection = await selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage);
+  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_selection", model: MODEL, usage: selection.usage, cacheHit: false });
 
-  // Only tokens genuinely absent from the dictionary are gap candidates —
-  // 规范§8 "仅收集数据库中完全不存在的词".
-  const missingTokens = tokens
-    .filter((t) => !found.has(t) && !firstSeenCapitalized.get(t))
-    .sort((a, b) => (freq.get(b) || 0) - (freq.get(a) || 0))
-    .slice(0, MAX_BATCH_GENERATE);
-
-  let generatedWords = [];
-  if (missingTokens.length && ranked.length < vocabularyLimit) {
-    const { words, usage } = await batchGenerateMissingWords(missingTokens, nativeLanguage);
-    logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "missing_word_batch", model: MODEL, usage, cacheHit: false });
-    if (words.length) {
-      const rows = words.map((w) => ({
-        swedish: w.swedish,
-        part_of_speech: w.pos,
-        object_type: "word",
-        // learning_objects.chinese must stay actually-Chinese — see the
-        // matching comment in resolveExpressionEntries. A word first
-        // generated while reading in a non-zh language only gets a
-        // translation-row meaning below.
-        chinese: nativeLanguage === "zh" ? w.chinese : "",
-        swedish_explanation: w.swedish_explanation,
-        forms: w.forms,
-        example: w.example,
-        status: "ai_generated",
-      }));
-      const { data: inserted, error: insertErr } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish, part_of_speech, chinese, cefr_level, frequency_rank");
-      if (!insertErr && inserted) {
-        generatedWords = inserted;
-        inserted.forEach((row) => {
-          const source = words.find((w) => w.swedish.toLowerCase() === row.swedish.toLowerCase());
-          found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: source?.chinese || row.chinese, cefr_level: row.cefr_level, frequency_rank: row.frequency_rank });
-        });
-        // 2026-09-01 structure-cleanup fix: this path never wrote a
-        // learning_object_translations row at all (chinese only ever landed
-        // on the legacy learning_objects.chinese column), unlike every other
-        // word-creation path in the app. Worked by accident for zh (chinese
-        // falls back to that legacy column), but left these words with no
-        // translation row for a future multi-language read path to find.
-        const translationRows = inserted.map((row) => {
-          const source = words.find((w) => w.swedish.toLowerCase() === row.swedish.toLowerCase());
-          return { learning_object_id: row.id, native_language: nativeLanguage, meaning: source?.chinese || "", updated_at: new Date().toISOString() };
-        });
-        if (translationRows.length) {
-          const { error: translationErr } = await supabaseAdmin.from("learning_object_translations").insert(translationRows);
-          if (translationErr) console.warn("[Reading] Failed to insert translation rows for generated words.", translationErr);
-        }
-      }
-    }
-    // Keep a real surplus pool (still 2x) here too — the AI Worth Learning
-    // step right below needs candidates beyond vocabularyLimit to actually
-    // rank; capping to vocabularyLimit here would leave it nothing to do.
-    ranked = rankFoundWords(found, freq, firstSeenCapitalized, userWordState, vocabularyLimit * 2);
-  }
-
-  const { scored: scoredVocabulary, usage: worthLearningUsage } = await scoreVocabularyWorthLearning(ranked, cleaned, vocabularyLimit);
-  if (worthLearningUsage) {
-    logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "vocab_worth_learning", model: MODEL, usage: worthLearningUsage, cacheHit: false });
-  }
-  ranked = scoredVocabulary.slice(0, vocabularyLimit);
-
-  const rawSelectedVocabulary = ranked.map((c) => ({
-    word_id: c.word.id,
-    swedish: c.word.swedish,
-    // Rachel, 2026-08-10: the reading word list's collapsed card needs to
-    // show ordklass + native-language meaning right away, but a just-
-    // generated missing word isn't in the client's own (session-start) word
-    // snapshot yet — carry both fields on the entry itself so the frontend
-    // never has to depend on that snapshot being fresh.
-    pos: c.word.pos,
-    chinese: c.word.chinese,
-    occurrences: c.occurrences,
-    worth_learning_score: c.worthLearningScore ?? null,
-  }));
-
-  const { collocations, idioms, keySentences, languagePatterns, usage: exprUsage } = await extractKeyExpressions(cleaned, tier, glossary, rawSelectedVocabulary.map((v) => v.swedish), nativeLanguage);
-  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "key_expressions", model: MODEL, usage: exprUsage, cacheHit: false });
-  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
-  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
-  const selectedExpressions = [
-    ...resolvedCollocations.map((e) => ({ ...e, category: "collocation" })),
-    ...resolvedIdioms.map((e) => ({ ...e, category: "idiom" })),
-  ].map((e, index) => ({ ...e, sort_order: index }));
+  const scoredVocabulary = (await resolveVocabularyCandidates(supabaseAdmin, selection.vocabulary, pool, freq))
+    .filter((v) => !glossaryWords.has(v.swedish.toLowerCase()));
+  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, selection.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
+  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, selection.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
+  const asExpression = (category) => (e) => ({ ...e, category });
+  const collocationCandidates = resolvedCollocations.map(asExpression("collocation"));
+  const idiomCandidates = resolvedIdioms.map(asExpression("idiom"));
+  // Shown by default: the best ones, as many as the length tier shows; the rest
+  // stay as candidates for each reader's own ordering.
+  const selectedExpressions = [...collocationCandidates.slice(0, collocationLimit), ...idiomCandidates.slice(0, idiomLimit)]
+    .map((e, index) => ({ ...e, sort_order: index }));
+  const candidateExpressions = [...collocationCandidates, ...idiomCandidates];
 
   // V2.1 阅读AI提取规则 §六/§十七 (2026-08-11): "完整表达优先于孤立单词" — if a
-  // word selected above turns up as a component of a collocation/idiom
-  // extractKeyExpressions just returned, drop the isolated word in favor of
-  // the complete expression rather than showing both for the same point.
+  // word turns up as a component of a shown collocation/idiom, drop the isolated
+  // word in favor of the complete expression rather than showing both.
   const phraseWordSet = new Set();
   selectedExpressions.forEach((e) => {
     (e.expression_text || "").match(/[a-zA-ZåäöÅÄÖ]+/g)?.forEach((w) => phraseWordSet.add(w.toLowerCase()));
   });
-  const selectedVocabulary = rawSelectedVocabulary
-    .filter((v) => !phraseWordSet.has(v.swedish.toLowerCase()))
-    .map((v, index) => ({ ...v, sort_order: index }));
-  const selectedSentences = keySentences.map((s, index) => ({ ...s, sort_order: index }));
-  const selectedPatterns = languagePatterns.map((p, index) => ({ ...p, sort_order: index }));
+  const openVocabulary = scoredVocabulary.filter((v) => !phraseWordSet.has(v.swedish.toLowerCase()));
+  const withEntries = await ensureKeywordEntries(supabaseAdmin, openVocabulary.slice(0, vocabularyLimit), { userId, textResourceId: textResource.id, nativeLanguage });
+  // A shown keyword always has a full entry: one that couldn't get one (e.g. a
+  // misspelt lemma the word-card generation rejects) gives its place to the next
+  // candidate that already has an entry, or the list is just shorter.
+  const rest = openVocabulary.slice(vocabularyLimit);
+  const shownVocabulary = withEntries.filter((v) => v.word_id);
+  shownVocabulary.push(...rest.filter((v) => v.word_id).slice(0, vocabularyLimit - shownVocabulary.length));
+  const candidateVocabulary = [...shownVocabulary, ...withEntries.filter((v) => !v.word_id), ...rest.filter((v) => !shownVocabulary.includes(v))];
+  const selectedVocabulary = shownVocabulary.map((v, index) => ({ ...v, sort_order: index }));
+  const selectedSentences = selection.keySentences.map((s, index) => ({ ...s, sort_order: index }));
+  const selectedPatterns = selection.languagePatterns.map((p, index) => ({ ...p, sort_order: index }));
 
   const { data: analysisRow, error: analysisError } = await supabaseAdmin
     .from("text_analysis")
     .update({
       selected_vocabulary: selectedVocabulary,
       selected_expressions: selectedExpressions,
+      candidate_vocabulary: candidateVocabulary,
+      candidate_expressions: candidateExpressions,
       key_sentences: selectedSentences,
       language_patterns: selectedPatterns,
       status: "ready",
