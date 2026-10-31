@@ -136,6 +136,8 @@ function wordCardSchema() {
     pos_detail: { type: "string" },
     cefr_level: { type: "string", enum: ["A1", "A2", "B1", "B2", "C1", "C2"] },
     meaning: { type: "string" },
+    // English meaning as well, so cards made in another language never need an English backfill.
+    meaning_en: { type: "string" },
     swedish_explanation: { type: "string" },
     forms: { type: "array", items: pair({ type: { type: "string", enum: ALL_FORM_TYPES }, value: { type: "string" } }) },
     transitivity: { type: "string", enum: ["transitive", "intransitive", "both", ""] },
@@ -241,7 +243,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 - is_real_word: false if the input is not real Swedish (typo, name, other language). Then leave other fields minimal.
 - lemma: the dictionary base form (an inflected input like "förändrade" becomes "förändra"). For multi-word expressions keep the canonical learnable form (infinitive, "någon/något" placeholders).
 - cefr_level: the CEFR level at which learners typically meet this word or expression (A1–C2).
-- meaning: concise core meaning in ${langName} ONLY. swedish_explanation: one simple Swedish definition.
+- meaning: concise core meaning in ${langName} ONLY. meaning_en: the same meaning, concise, in English. swedish_explanation: one simple Swedish definition.
 - forms: full inflection for the part of speech using only the allowed form types (verbs include present_participle and perfect_participle when they exist; verb_group / declension_group as "1"–"5" when applicable). Empty for expressions.
 - passive: the s-passive for verbs when natural (e.g. "påverkas"), else "".
 - examples: 2 natural Swedish sentences with ${langName} translations.
@@ -332,7 +334,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         const examples = (result.examples || []).filter((e) => String(e.swedish || "").trim());
         await recordEntryStatus(supabaseAdmin, entryId, {
           type: isPhrase ? "phrase" : "word", pos, forms: Object.fromEntries(forms.map((f) => [f.type, f.value])),
-          passiv_s: passive, countability: fromSaldo?.countability || null, [`meaning_${lang}`]: true,
+          passiv_s: passive, countability: fromSaldo?.countability || null, meaning_en: Boolean(String(result.meaning_en || "").trim()), [`meaning_${lang}`]: true,
           example: examples.length > 0, swedish_explanation: Boolean(result.swedish_explanation), cefr_level: Boolean(result.cefr_level),
         }, { saldoRows });
       }
@@ -348,6 +350,12 @@ If the input names a part of speech and the sense a text uses, write the entry f
       related_words: (result.related || []).map((r) => `${r.word} | ${r.meaning}`).join("\n"),
       updated_at: new Date().toISOString(),
     }, { onConflict: "learning_object_id,native_language" });
+
+    // English row when the card was made in another language (never replaces an existing meaning).
+    if (lang !== "en" && String(result.meaning_en || "").trim()) {
+      await supabaseAdmin.from("learning_object_translations")
+        .upsert({ learning_object_id: entryId, native_language: "en", meaning: String(result.meaning_en).trim(), updated_at: new Date().toISOString() }, { onConflict: "learning_object_id,native_language", ignoreDuplicates: true });
+    }
 
     await supabaseAdmin.from("generation_requests").update({ status: "done", entry_id: entryId, updated_at: new Date().toISOString() }).eq("key", key);
     return { entryId, created: true };
