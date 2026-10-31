@@ -145,9 +145,23 @@ function wordCardSchema() {
     // minItems: without it the model returned no examples at all (seen 2026-10-31).
     examples: { type: "array", minItems: 2, maxItems: 2, items: pair({ swedish: { type: "string" }, translation: { type: "string" } }) },
     collocations: { type: "array", items: pair({ phrase: { type: "string" }, meaning: { type: "string" }, example: { type: "string" } }) },
-    related: { type: "array", items: pair({ word: { type: "string" }, meaning: { type: "string" } }) },
+    related: { type: "array", items: pair({ word: { type: "string" }, meaning: { type: "string" }, pos: { type: "string", enum: RELATED_POS } }) },
     memory_tip: { type: "string" },
   });
+}
+
+// Part of speech of a related word, kept as the trailing note the apps already read:
+// "gräddig | 奶油般的（形容词）", "gräddig | creamy (adjective)".
+const RELATED_POS = ["noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction", "numeral", "interjection", "other"];
+const POS_NOTE = {
+  zh: { noun: "名词", verb: "动词", adjective: "形容词", adverb: "副词", pronoun: "代词", preposition: "介词", conjunction: "连词", numeral: "数词", interjection: "感叹词" },
+  en: { noun: "noun", verb: "verb", adjective: "adjective", adverb: "adverb", pronoun: "pronoun", preposition: "preposition", conjunction: "conjunction", numeral: "numeral", interjection: "interjection" },
+};
+function relatedMeaning(r, lang) {
+  const meaning = String(r.meaning || "").trim();
+  const note = (POS_NOTE[lang] || POS_NOTE.en)[r.pos];
+  if (!note || /[（(][^（(]*[）)]\s*$/.test(meaning)) return meaning;
+  return lang === "zh" ? `${meaning}（${note}）` : `${meaning} (${note})`;
 }
 
 async function callOpenAIJson({ schemaName, schema, system, user, maxOutputTokens = 2500 }) {
@@ -248,7 +262,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 - passive: the s-passive for verbs when natural (e.g. "påverkas"), else "".
 - examples: 2 natural Swedish sentences with ${langName} translations.
 - collocations: 3–5 high-frequency fixed combinations with ${langName} meaning and a Swedish example.
-- related: 3–6 word-family members or related words with ${langName} meanings.
+- related: 3–6 word-family members or related words with ${langName} meanings and each word's part of speech (pos; "other" for multi-word expressions).
 - memory_tip: a short ${langName} mnemonic, or "".
 Never mix the two languages inside one field. If uncertain about a sense, prefer the most common one.
 If the input names a part of speech and the sense a text uses, write the entry for exactly that part of speech and give that sense first.`,
@@ -347,7 +361,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
       meaning: result.meaning,
       learning_tip: result.memory_tip || "",
       collocations: (result.collocations || []).map((c) => [c.phrase, c.meaning, c.example].filter(Boolean).join(" | ")).join("\n"),
-      related_words: (result.related || []).map((r) => `${r.word} | ${r.meaning}`).join("\n"),
+      related_words: (result.related || []).map((r) => `${r.word} | ${relatedMeaning(r, lang)}`).join("\n"),
       updated_at: new Date().toISOString(),
     }, { onConflict: "learning_object_id,native_language" });
 
