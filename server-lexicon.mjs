@@ -149,7 +149,7 @@ export function cardFieldsFromSaldo(row, pos) {
 
 // Stored group labels came in many spellings ("grupp 1", "första gruppen", "2a" …).
 // For verbs "irregular" is group 4 (starka och oregelbundna verb).
-function normalizeGroup(value, kind) {
+export function normalizeGroup(value, kind) {
   const v = key(value);
   if (!v) return "";
   if (/oregel|irregular|不规则/.test(v)) return kind === "verb_group" ? "4" : "irregular";
@@ -159,11 +159,11 @@ function normalizeGroup(value, kind) {
   return digit === "2" && sub ? `2${sub[1] || sub[2]}` : digit;
 }
 
-const GENUS = { en: "en", "en-ord": "en", utrum: "en", ett: "ett", "ett-ord": "ett", neutrum: "ett" };
+export const GENUS = { en: "en", "en-ord": "en", utrum: "en", ett: "ett", "ett-ord": "ett", neutrum: "ett" };
 const NO_FORM = /^(—|-|–|saknas|ingen|none|n\/a)?$/i;
 // First variant, without an article or a trailing note ("en fjärdedel", "skällas；多见于 …").
 const bare = (value) => key(String(value || "").split(/[；;(（]/)[0]).replace(/^(en|ett) /, "").trim();
-const variants = (value) => String(value || "").split(/\s*\/\s*|\s*,\s*/).map(bare).filter(Boolean);
+export const variants = (value) => String(value || "").split(/\s*\/\s*|\s*,\s*/).map(bare).filter(Boolean);
 
 /**
  * Field-by-field check of a stored entry against SALDO.
