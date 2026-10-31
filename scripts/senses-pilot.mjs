@@ -192,6 +192,47 @@ async function sql() {
   console.log(JSON.stringify({ batch, calls: s.calls, usage: s.usage, usd: +usd(s.usage).toFixed(4) }));
 }
 
-const commands = { plan, run, sql };
+// Control run (2026-11-01): the same entries with low reasoning, a shorter input (no
+// Swedish explanation) and the rules the pilot review showed were missing. Saves to
+// lowtest.json; never writes SQL. One pass, no retries; every billed call is counted.
+const lowInstructions = `Group the stored glosses of Swedish dictionary entries into senses for A1–B2 learners.
+- A sense is a distinct Swedish meaning or use. Near-synonymous glosses are one sense. Most entries have one sense.
+- Use only meanings in the stored glosses; add none.
+- Meanings of the same word class are senses of this entry, even if unrelated (fil: sour milk / computer file / tool).
+- A gloss that is another word class (adjective use on a noun, pronoun use, interjection) or a particle verb (slå upp) is not a sense: put it in other_entry_glosses.
+- Most common sense first. meaning_zh / meaning_en reuse the stored wording; near-synonyms of one sense joined by "; ". No sense may repeat a gloss of another.
+- example_ids: stored examples that clearly show the sense; each at most once.
+- new_example: only for a sense with no example_ids and only if the entry has 2+ senses: a natural A2–B1 Swedish sentence with the word in that sense, plus Chinese and English translations; else all "".`;
+const lowSchema = JSON.parse(JSON.stringify(schema));
+const lowSense = lowSchema.properties.entries.items.properties.senses.items;
+for (const k of ["definition_sv", "usage_note_sv", "register"]) delete lowSense.properties[k];
+lowSense.required = ["meaning_zh", "meaning_en", "example_ids", "new_example"];
+delete lowSchema.properties.entries.items.properties.note;
+lowSchema.properties.entries.items.required = ["id", "senses", "other_entry_glosses"];
+
+async function lowtest() {
+  const s = load();
+  const out = { model: MODEL, effort: "low", calls: [], usage: { input: 0, cached: 0, output: 0, reasoning: 0 }, results: {} };
+  for (let i = 0; i < s.entries.length; i += 10) {
+    const batch = s.entries.slice(i, i + 10);
+    const input = JSON.stringify(batch.map((e) => ({ id: e.id, w: e.swedish, pos: e.pos, zh: e.zh, en: e.en,
+      ex: e.examples.map((x) => ({ id: x.id, sv: x.sv })), same_spelling: e.otherEntries })));
+    const r = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: MODEL, instructions: lowInstructions, input, reasoning: { effort: "low" }, max_output_tokens: 8000, text: { format: { type: "json_schema", name: "senses", strict: true, schema: lowSchema } } }) });
+    const data = await r.json();
+    const u = data.usage || {};
+    out.usage.input += u.input_tokens || 0; out.usage.cached += u.input_tokens_details?.cached_tokens || 0;
+    out.usage.output += u.output_tokens || 0; out.usage.reasoning += u.output_tokens_details?.reasoning_tokens || 0;
+    out.calls.push({ status: data.status, usage: u, incomplete: data.incomplete_details || null, error: data.error || null });
+    if (data.status === "completed") {
+      const text = (data.output || []).flatMap((o) => o.content || []).map((c) => c.text || "").join("");
+      for (const item of JSON.parse(text).entries) out.results[item.id] = item;
+    }
+    writeFileSync(`${dir}/lowtest.json`, JSON.stringify(out, null, 1));
+  }
+  console.log(JSON.stringify({ calls: out.calls.map((c) => c.status), usage: out.usage, usd: +usd(out.usage).toFixed(4), results: Object.keys(out.results).length }));
+}
+
+const commands = { plan, run, sql, lowtest };
 if (!commands[command]) { console.error("usage: senses-pilot.mjs plan|run|sql --job <id>"); process.exit(1); }
 await commands[command]();
