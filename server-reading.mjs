@@ -250,7 +250,8 @@ async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage = "zh") 
   const pickMeaning = (row) => {
     if (nativeLanguage === "zh") return row.chinese;
     const translated = (row.learning_object_translations || []).find((t) => t.native_language === nativeLanguage);
-    return translated?.meaning || row.chinese;
+    // The chinese column is Chinese only: never a fallback for another language (2026-11-01).
+    return translated?.meaning || "";
   };
   const selectCols = "id, swedish, part_of_speech, chinese, cefr_level, frequency_rank, learning_object_translations(meaning, native_language)";
 
@@ -994,12 +995,13 @@ For each entry in "patterns": meaning = a concise ${langName} explanation of the
       .in("id", wordIds);
     (rows || []).forEach((row) => {
       const translated = (row.learning_object_translations || []).find((t) => t.native_language === nativeLanguage);
-      meaningByWordId.set(row.id, nativeLanguage === "zh" ? row.chinese : (translated?.meaning || row.chinese));
+      meaningByWordId.set(row.id, nativeLanguage === "zh" ? row.chinese : (translated?.meaning || ""));
     });
   }
 
   const vocabularyMeaning = new Map(vocabulary.map((v, index) => [`${v.swedish}|${v.pos}`, explained.vocabulary?.[index]?.meaning]));
-  const translateWord = (v) => ({ ...v, chinese: vocabularyMeaning.get(`${v.swedish}|${v.pos}`) || meaningByWordId.get(v.word_id) || v.chinese });
+  // v.chinese is the source analysis' meaning (another language): kept only for Chinese.
+  const translateWord = (v) => ({ ...v, chinese: vocabularyMeaning.get(`${v.swedish}|${v.pos}`) || meaningByWordId.get(v.word_id) || (nativeLanguage === "zh" ? v.chinese : "") });
   const explainedByText = new Map(expressions.map((e, index) => [e.expression_text, explained.expressions[index]]));
   const translateExpression = (e) => ({
     ...e,
