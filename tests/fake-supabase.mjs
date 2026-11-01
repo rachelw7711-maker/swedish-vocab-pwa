@@ -17,7 +17,7 @@ export function fakeSupabase(tables = {}) {
           const keys = conflict ? conflict.split(",") : ["id"];
           const existing = rows().find((r) => keys.every((k) => r[k] !== undefined && r[k] === item[k]));
           if (existing) { if (op === "upsert") Object.assign(existing, item); else return { data: null, error: { message: "duplicate" } }; }
-          else rows().push({ ...item });
+          else { const row = { ...item, id: item.id ?? `${table}-${rows().length + 1}` }; rows().push(row); Object.assign(item, row); }
         }
         return { data: list, error: null };
       }

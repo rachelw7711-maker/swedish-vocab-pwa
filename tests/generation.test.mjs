@@ -20,10 +20,10 @@ before(async () => {
 beforeEach(() => { aiCalls = 0; });
 
 const baseCard = (over) => ({
-  is_real_word: true, lemma: "", pos: "noun", pos_detail: "", cefr_level: "B1", meaning: "发酵", swedish_explanation: "när något jäser",
+  is_real_word: true, lemma: "", pos: "noun", pos_detail: "", cefr_level: "B1", meaning_zh: "发酵", meaning_en: "fermentation", swedish_explanation: "när något jäser",
   forms: [{ type: "plural_indefinite", value: "jäsningar-FEL" }], transitivity: "", passive: "",
-  examples: [{ swedish: "Jäsningen tar tid.", translation: "发酵需要时间。" }, { swedish: "Jäsning ger smak.", translation: "发酵带来风味。" }],
-  collocations: [], related: [], memory_tip: "", ...over,
+  examples: [{ swedish: "Jäsningen tar tid.", zh: "发酵需要时间。", en: "Fermentation takes time." }, { swedish: "Jäsning ger smak.", zh: "发酵带来风味。", en: "Fermentation gives flavour." }],
+  collocations: [], related: [], memory_tip_zh: "", memory_tip_en: "", ...over,
 });
 const db = () => fakeSupabase({
   learning_objects: [{ id: "w-utveckla", swedish: "utveckla", part_of_speech: "verb", object_type: "word", status: "published" }],
@@ -52,11 +52,47 @@ test("a new word is stored under SALDO's lemma with SALDO's forms, then reused",
   assert.equal(aiCalls, 1);
 });
 
+test("a card made in one language also gets the other language's examples, tip, collocations and related words", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning", memory_tip_zh: "jäsa=发酵", memory_tip_en: "jäsa = ferment",
+    collocations: [{ phrase: "naturlig jäsning", zh: "自然发酵", en: "natural fermentation", example: "Brödet får naturlig jäsning." }],
+    related: [{ word: "jäsa", zh: "发酵", en: "ferment", pos: "verb" }] });
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "en", pos: "noun", chargeQuota: false });
+  const row = (l) => d.tables.learning_object_translations.find((t) => t.learning_object_id === entryId && t.native_language === l);
+  assert.equal(row("zh").meaning, "发酵");
+  assert.equal(row("en").meaning, "fermentation");
+  assert.equal(row("zh").learning_tip, "jäsa=发酵");
+  assert.equal(row("en").learning_tip, "jäsa = ferment");
+  assert.equal(row("zh").collocations, "naturlig jäsning | 自然发酵 | Brödet får naturlig jäsning.");
+  assert.equal(row("en").collocations, "naturlig jäsning | natural fermentation | Brödet får naturlig jäsning.");
+  assert.equal(row("zh").related_words, "jäsa | 发酵（动词）");
+  assert.equal(row("en").related_words, "jäsa | ferment (verb)");
+  const exIds = d.tables.learning_object_examples.filter((e) => e.learning_object_id === entryId).map((e) => e.id);
+  const tr = d.tables.learning_object_example_translations.filter((t) => exIds.includes(t.example_id));
+  assert.equal(exIds.length, 2);
+  assert.deepEqual(tr.map((t) => t.native_language).sort(), ["en", "en", "zh", "zh"]);
+  assert.ok(exIds.every((id) => id && tr.filter((t) => t.example_id === id).length === 2));
+  assert.equal(d.tables.learning_objects.find((o) => o.id === entryId).chinese, "发酵");
+});
+
+test("an existing entry missing one language keeps every field it already has", async () => {
+  const d = db();
+  d.tables.learning_object_translations.push({ id: 9, learning_object_id: "w-utveckla", native_language: "en", meaning: "", learning_tip: "keep me" });
+  card = baseCard({ lemma: "utveckla", pos: "verb", meaning_zh: "开发（新）", meaning_en: "develop", memory_tip_zh: "新提示", memory_tip_en: "new tip", forms: [] });
+  await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "utveckla", nativeLanguage: "en", pos: "verb", chargeQuota: false });
+  const zh = d.tables.learning_object_translations.find((t) => t.learning_object_id === "w-utveckla" && t.native_language === "zh");
+  const en = d.tables.learning_object_translations.find((t) => t.learning_object_id === "w-utveckla" && t.native_language === "en");
+  assert.equal(zh.meaning, "发展");          // existing Chinese meaning untouched
+  assert.equal(zh.learning_tip, "新提示");    // empty field filled
+  assert.equal(en.meaning, "develop");
+  assert.equal(en.learning_tip, "keep me");   // existing English tip untouched
+});
+
 test("a same-spelling word of another part of speech gets its own entry", async () => {
   const d = db();
   d.tables.learning_objects.push({ id: "w-fast-adj", swedish: "fast", part_of_speech: "adjective", object_type: "word", status: "published" });
   d.tables.learning_object_translations.push({ id: 2, learning_object_id: "w-fast-adj", native_language: "zh", meaning: "牢固的" });
-  card = baseCard({ lemma: "fast", pos: "conjunction", meaning: "虽然", forms: [] });
+  card = baseCard({ lemma: "fast", pos: "conjunction", meaning_zh: "虽然", meaning_en: "although", forms: [] });
   const conj = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "fast", nativeLanguage: "zh", pos: "conjunction", chargeQuota: false });
   assert.equal(conj.created, true);
   assert.notEqual(conj.entryId, "w-fast-adj");

@@ -135,18 +135,20 @@ function wordCardSchema() {
     pos: { type: "string", enum: POS_VALUES },
     pos_detail: { type: "string" },
     cefr_level: { type: "string", enum: ["A1", "A2", "B1", "B2", "C1", "C2"] },
-    meaning: { type: "string" },
-    // English meaning as well, so cards made in another language never need an English backfill.
+    // Both explanation languages in one call (2026-11-01): a card made in one language
+    // used to leave the other language's examples, tip, collocations and related words empty.
+    meaning_zh: { type: "string" },
     meaning_en: { type: "string" },
     swedish_explanation: { type: "string" },
     forms: { type: "array", items: pair({ type: { type: "string", enum: ALL_FORM_TYPES }, value: { type: "string" } }) },
     transitivity: { type: "string", enum: ["transitive", "intransitive", "both", ""] },
     passive: { type: "string" },
     // minItems: without it the model returned no examples at all (seen 2026-10-31).
-    examples: { type: "array", minItems: 2, maxItems: 2, items: pair({ swedish: { type: "string" }, translation: { type: "string" } }) },
-    collocations: { type: "array", items: pair({ phrase: { type: "string" }, meaning: { type: "string" }, example: { type: "string" } }) },
-    related: { type: "array", items: pair({ word: { type: "string" }, meaning: { type: "string" }, pos: { type: "string", enum: RELATED_POS } }) },
-    memory_tip: { type: "string" },
+    examples: { type: "array", minItems: 2, maxItems: 2, items: pair({ swedish: { type: "string" }, zh: { type: "string" }, en: { type: "string" } }) },
+    collocations: { type: "array", items: pair({ phrase: { type: "string" }, zh: { type: "string" }, en: { type: "string" }, example: { type: "string" } }) },
+    related: { type: "array", items: pair({ word: { type: "string" }, zh: { type: "string" }, en: { type: "string" }, pos: { type: "string", enum: RELATED_POS } }) },
+    memory_tip_zh: { type: "string" },
+    memory_tip_en: { type: "string" },
   });
 }
 
@@ -158,7 +160,7 @@ const POS_NOTE = {
   en: { noun: "noun", verb: "verb", adjective: "adjective", adverb: "adverb", pronoun: "pronoun", preposition: "preposition", conjunction: "conjunction", numeral: "numeral", interjection: "interjection" },
 };
 function relatedMeaning(r, lang) {
-  const meaning = String(r.meaning || "").trim();
+  const meaning = String(r[lang] || "").trim();
   const note = (POS_NOTE[lang] || POS_NOTE.en)[r.pos];
   if (!note || /[（(][^（(]*[）)]\s*$/.test(meaning)) return meaning;
   return lang === "zh" ? `${meaning}（${note}）` : `${meaning} (${note})`;
@@ -202,6 +204,17 @@ async function findExistingEntry(supabaseAdmin, text, pos = null) {
   if (pos) return null;
   const { data: form } = await supabaseAdmin.from("word_forms").select("learning_object_id").ilike("form_value", key).limit(1);
   return form?.[0]?.learning_object_id || null;
+}
+
+// Fills one explanation-language row; a field that already has content is kept.
+async function fillTranslation(supabaseAdmin, entryId, lang, fields) {
+  const { data: row } = await supabaseAdmin.from("learning_object_translations").select("id, meaning, learning_tip, collocations, related_words")
+    .eq("learning_object_id", entryId).eq("native_language", lang).maybeSingle();
+  const missing = Object.fromEntries(Object.entries(fields).filter(([k, v]) => String(v || "").trim() && !String(row?.[k] || "").trim()));
+  if (!Object.keys(missing).length) return;
+  const now = new Date().toISOString();
+  if (row) await supabaseAdmin.from("learning_object_translations").update({ ...missing, updated_at: now }).eq("id", row.id);
+  else await supabaseAdmin.from("learning_object_translations").insert({ learning_object_id: entryId, native_language: lang, ...missing, updated_at: now });
 }
 
 async function ensureTranslation(supabaseAdmin, entryId, nativeLanguage) {
@@ -249,22 +262,21 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 
   try {
     if (chargeQuota) await enforceQuota(supabaseAdmin, userId, CREDITS.word_generate);
-    const langName = languageName(lang);
     const { result, usage } = await callOpenAIJson({
       schemaName: "swedish_word_card_v2",
       schema: wordCardSchema(),
-      system: `You are a careful Swedish lexicographer writing a learner's dictionary entry for ${langName}-speaking learners. The UI is Swedish. Return exactly one entry for the Swedish input.
+      system: `You are a careful Swedish lexicographer writing a learner's dictionary entry for Chinese- and English-speaking learners (the requested explanation language is ${languageName(lang)}). The UI is Swedish. Return exactly one entry for the Swedish input.
 - is_real_word: false if the input is not real Swedish (typo, name, other language). Then leave other fields minimal.
 - lemma: the dictionary base form (an inflected input like "förändrade" becomes "förändra"). For multi-word expressions keep the canonical learnable form (infinitive, "någon/något" placeholders).
 - cefr_level: the CEFR level at which learners typically meet this word or expression (A1–C2).
-- meaning: concise core meaning in ${langName} ONLY. meaning_en: the same meaning, concise, in English. swedish_explanation: one simple Swedish definition.
+- meaning_zh: concise core meaning in Simplified Chinese. meaning_en: the same meaning, concise, in English. swedish_explanation: one simple Swedish definition.
 - forms: full inflection for the part of speech using only the allowed form types (verbs include present_participle and perfect_participle when they exist; verb_group / declension_group as "1"–"5" when applicable). Empty for expressions.
 - passive: the s-passive for verbs when natural (e.g. "påverkas"), else "".
-- examples: 2 natural Swedish sentences with ${langName} translations.
-- collocations: 3–5 high-frequency fixed combinations with ${langName} meaning and a Swedish example.
-- related: 3–6 word-family members or related words with ${langName} meanings and each word's part of speech (pos; "other" for multi-word expressions).
-- memory_tip: a short ${langName} mnemonic, or "".
-Never mix the two languages inside one field. If uncertain about a sense, prefer the most common one.
+- examples: 2 natural Swedish sentences, each with a Chinese (zh) and an English (en) translation of the whole sentence.
+- collocations: 3–5 high-frequency fixed combinations with Chinese (zh) and English (en) meanings and a Swedish example.
+- related: 3–6 word-family members or related words with Chinese (zh) and English (en) meanings and each word's part of speech (pos; "other" for multi-word expressions).
+- memory_tip_zh / memory_tip_en: the same short mnemonic in Chinese and in English, or "" for both.
+Every zh field is Chinese only and every en field English only. If uncertain about a sense, prefer the most common one.
 If the input names a part of speech and the sense a text uses, write the entry for exactly that part of speech and give that sense first.`,
       user: [
         text,
@@ -279,7 +291,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
       inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, credits: chargeQuota ? CREDITS.word_generate : 0, cost,
     });
 
-    if (!result.is_real_word || !String(result.lemma || "").trim() || !String(result.meaning || "").trim()) {
+    if (!result.is_real_word || !String(result.lemma || "").trim() || !String(result[`meaning_${lang}`] || "").trim()) {
       throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
     }
     const pos = POS_VALUES.includes(result.pos) ? result.pos : "other";
@@ -313,7 +325,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         object_type: isPhrase ? "phrase" : "word",
         category: isPhrase ? "common_phrase" : null,
         cefr_level: result.cefr_level || null,
-        chinese: lang === "zh" ? result.meaning : "",
+        chinese: String(result.meaning_zh || "").trim(),
         swedish_explanation: result.swedish_explanation || "",
         example_sv: (result.examples || []).map((e) => String(e.swedish || "").trim()).filter(Boolean).join("\n"),
         transitivity: result.transitivity || null,
@@ -338,10 +350,8 @@ If the input names a part of speech and the sense a text uses, write the entry f
         for (const [i, ex] of (result.examples || []).filter((e) => String(e.swedish || "").trim()).entries()) {
           const { data: exRow } = await supabaseAdmin.from("learning_object_examples")
             .insert({ learning_object_id: entryId, example_swedish: ex.swedish, sort_order: i }).select("id").single();
-          if (exRow && ex.translation) {
-            await supabaseAdmin.from("learning_object_example_translations")
-              .insert({ example_id: exRow.id, native_language: lang, translation: ex.translation });
-          }
+          const translations = [...LANGUAGES].filter((l) => String(ex[l] || "").trim()).map((l) => ({ example_id: exRow?.id, native_language: l, translation: ex[l].trim() }));
+          if (exRow && translations.length) await supabaseAdmin.from("learning_object_example_translations").insert(translations);
         }
         const collocations = (result.collocations || []).filter((c) => c.phrase);
         if (collocations.length) {
@@ -352,27 +362,21 @@ If the input names a part of speech and the sense a text uses, write the entry f
         const examples = (result.examples || []).filter((e) => String(e.swedish || "").trim());
         await recordEntryStatus(supabaseAdmin, entryId, {
           type: isPhrase ? "phrase" : "word", pos, forms: Object.fromEntries(forms.map((f) => [f.type, f.value])),
-          passiv_s: passive, countability: fromSaldo?.countability || null, meaning_en: Boolean(String(result.meaning_en || "").trim()), [`meaning_${lang}`]: true,
+          passiv_s: passive, countability: fromSaldo?.countability || null,
+          meaning_zh: Boolean(String(result.meaning_zh || "").trim()), meaning_en: Boolean(String(result.meaning_en || "").trim()),
           example: examples.length > 0, swedish_explanation: Boolean(result.swedish_explanation), cefr_level: Boolean(result.cefr_level),
         }, { saldoRows });
       }
     }
 
-    // Explanation-language row (also fills a missing language for an existing entry).
-    await supabaseAdmin.from("learning_object_translations").upsert({
-      learning_object_id: entryId,
-      native_language: lang,
-      meaning: result.meaning,
-      learning_tip: result.memory_tip || "",
-      collocations: (result.collocations || []).map((c) => [c.phrase, c.meaning, c.example].filter(Boolean).join(" | ")).join("\n"),
-      related_words: (result.related || []).map((r) => `${r.word} | ${relatedMeaning(r, lang)}`).join("\n"),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "learning_object_id,native_language" });
-
-    // English row when the card was made in another language (never replaces an existing meaning).
-    if (lang !== "en" && String(result.meaning_en || "").trim()) {
-      await supabaseAdmin.from("learning_object_translations")
-        .upsert({ learning_object_id: entryId, native_language: "en", meaning: String(result.meaning_en).trim(), updated_at: new Date().toISOString() }, { onConflict: "learning_object_id,native_language", ignoreDuplicates: true });
+    // Both explanation-language rows; for an existing entry only its empty fields are filled.
+    for (const l of LANGUAGES) {
+      await fillTranslation(supabaseAdmin, entryId, l, {
+        meaning: String(result[`meaning_${l}`] || "").trim(),
+        learning_tip: String(result[`memory_tip_${l}`] || "").trim(),
+        collocations: (result.collocations || []).filter((c) => c.phrase).map((c) => [c.phrase, c[l], c.example].filter(Boolean).join(" | ")).join("\n"),
+        related_words: (result.related || []).filter((r) => r.word).map((r) => `${r.word} | ${relatedMeaning(r, l)}`).join("\n"),
+      });
     }
 
     await supabaseAdmin.from("generation_requests").update({ status: "done", entry_id: entryId, updated_at: new Date().toISOString() }).eq("key", key);
