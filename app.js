@@ -2146,12 +2146,15 @@ function repairMissingBuiltInContent(word, builtInBySwedish) {
   if (candidates.length === 0) return word;
   const source = candidates.find((item) => item.pos === word.pos) || candidates[0];
   const patch = {};
-  if (shouldUseBuiltInText(word.chinese, source.chinese)) patch.chinese = source.chinese;
+  // The built-in data is Chinese: its meaning, related words and collocations fill gaps in
+  // Chinese mode only (2026-11-01).
+  const zh = state.nativeLanguage === "zh";
+  if (zh && shouldUseBuiltInText(word.chinese, source.chinese)) patch.chinese = source.chinese;
   if (shouldUseBuiltInText(word.english, source.english)) patch.english = source.english;
   if (shouldUseBuiltInText(word.forms, source.forms)) patch.forms = source.forms;
   if (shouldUseBuiltInText(word.example, source.example)) patch.example = source.example;
-  if (shouldUseBuiltInText(word.related_words, source.related_words)) patch.related_words = source.related_words;
-  if (collocationsNeedChineseMeaning(word.collocations) && !collocationsNeedChineseMeaning(source.collocations)) {
+  if (zh && shouldUseBuiltInText(word.related_words, source.related_words)) patch.related_words = source.related_words;
+  if (zh && collocationsNeedChineseMeaning(word.collocations) && !collocationsNeedChineseMeaning(source.collocations)) {
     patch.collocations = source.collocations;
   }
   return Object.keys(patch).length ? normalizeWord({ ...word, ...patch, updated_at: Date.now() }) : word;
@@ -2279,12 +2282,14 @@ function buildBuiltInWordsBySwedish() {
 function repairWordContent(word, builtInBySwedish) {
   const candidates = builtInBySwedish.get(clean(word.swedish).toLowerCase()) || [];
   const source = candidates.find((item) => item.pos === word.pos) || candidates[0] || null;
+  // Built-in meaning, related words and collocations are Chinese: Chinese mode only.
+  const zhSource = state.nativeLanguage === "zh" ? source : null;
   const patched = normalizeWord({
     ...word,
     chinese: hasMeaningfulText(word.chinese)
       ? word.chinese
-      : hasMeaningfulText(source?.chinese)
-        ? source.chinese
+      : hasMeaningfulText(zhSource?.chinese)
+        ? zhSource.chinese
         : NEEDS_REVIEW_PLACEHOLDER,
     english: hasMeaningfulText(word.english)
       ? word.english
@@ -2301,8 +2306,8 @@ function repairWordContent(word, builtInBySwedish) {
       : hasMeaningfulText(source?.example)
         ? stripChineseExampleTranslation(source.example)
         : makeFallbackExample(word),
-    collocations: normalizeCollocationsText(word.collocations, word, source?.collocations || ""),
-    related_words: normalizeRelatedWordsText(word.related_words, source?.related_words || ""),
+    collocations: normalizeCollocationsText(word.collocations, word, zhSource?.collocations || ""),
+    related_words: normalizeRelatedWordsText(word.related_words, zhSource?.related_words || ""),
     updated_at: hasMeaningfulText(word.example) ||
       hasMeaningfulText(word.chinese) ||
       hasMeaningfulText(word.english) ||

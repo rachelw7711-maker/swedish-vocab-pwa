@@ -139,8 +139,11 @@ function readUserWordMetadata(userRow = {}) {
 // duplicate of the same logic (SprakLab-Audit-Report.md §4.3). Adding a
 // new progress field: update it here, in app.js's PROGRESS_FIELD_NAMES,
 // and in app.js's normalizeWord/progressSnapshotForWord.
-function normalizeWord(row, userRow = null, translationRow = null) {
+function normalizeWord(row, userRow = null, translationRow = null, nativeLanguage = DEFAULT_NATIVE_LANGUAGE) {
   const wordId = clean(row.id || row.word_id);
+  // The legacy columns on learning_objects hold Chinese only, so they are a fallback in
+  // Chinese mode alone; English mode never shows Chinese (2026-11-01).
+  const legacy = (value) => (nativeLanguage === "zh" ? clean(value) : "");
   const userMetadata = readUserWordMetadata(userRow);
   const bookNames = normalizeBookNames(firstDefined(userRow?.book_names, userRow?.bookNames, userMetadata.book_names));
   const note = row.note || "";
@@ -167,7 +170,7 @@ function normalizeWord(row, userRow = null, translationRow = null) {
     // Chinese meaning now lives in learning_object_translations (native
     // language 'zh'); fall back to the legacy `chinese` column if no
     // translation row was fetched/found yet, so older data keeps working.
-    chinese: clean(translationRow?.meaning) || clean(row.chinese),
+    chinese: clean(translationRow?.meaning) || legacy(row.chinese),
     // 2026-09-01 structure cleanup: these five were being read straight off
     // learning_objects (via the `...row` spread below) with no native-
     // language awareness at all — a word's memory tip/grammar note/
@@ -176,10 +179,10 @@ function normalizeWord(row, userRow = null, translationRow = null) {
     // first, legacy-column-fallback pattern as `chinese` above; the legacy
     // columns stay as the zh-only fallback for now (see the migration's
     // comment for why they aren't dropped yet).
-    memory_tip: clean(translationRow?.learning_tip) || clean(row.memory_tip),
-    grammar_note: clean(translationRow?.grammar_note) || clean(row.grammar_note),
-    meaning_note: clean(translationRow?.meaning_note) || clean(row.meaning_note),
-    example_zh: clean(translationRow?.example_translation) || clean(row.example_zh),
+    memory_tip: clean(translationRow?.learning_tip) || legacy(row.memory_tip),
+    grammar_note: clean(translationRow?.grammar_note) || legacy(row.grammar_note),
+    meaning_note: clean(translationRow?.meaning_note) || legacy(row.meaning_note),
+    example_zh: clean(translationRow?.example_translation) || legacy(row.example_zh),
     // "english" is a historical misnomer kept as the JS-facing property
     // name for now to avoid touching every app.js call site in this pass
     // (see Reviews/词条数据结构设计草案…md) — the field has always held a
@@ -191,8 +194,8 @@ function normalizeWord(row, userRow = null, translationRow = null) {
     english: clean(row.swedish_explanation) || readNoteSection(note, "Swedish explanation"),
     forms: clean(row.forms) || readNoteSection(note, "Forms"),
     example: clean(row.example) || clean(row.example_sv),
-    collocations: clean(translationRow?.collocations) || clean(row.collocations) || readNoteSection(note, "Collocations"),
-    related_words: clean(translationRow?.related_words) || clean(row.related_words) || clean(row.relatedWords) || readNoteSection(note, "Related words"),
+    collocations: clean(translationRow?.collocations) || legacy(row.collocations) || (nativeLanguage === "zh" ? readNoteSection(note, "Collocations") : ""),
+    related_words: clean(translationRow?.related_words) || legacy(row.related_words) || legacy(row.relatedWords) || (nativeLanguage === "zh" ? readNoteSection(note, "Related words") : ""),
     tags: Array.isArray(row.tags) && row.tags.length
       ? row.tags
       : clean(readNoteSection(note, "Tags") || row.level).split(",").map(clean).filter(Boolean),
@@ -514,7 +517,7 @@ export async function loadRemoteLibrarySnapshot(nativeLanguage = DEFAULT_NATIVE_
 
   const userRowsByWordId = new Map(sanitizedUserWordRows.map((row) => [clean(row.word_id), row]));
   const translationRowsByWordId = new Map(translationRows.map((row) => [clean(row.learning_object_id), row]));
-  const words = wordRows.map((word) => normalizeWord(word, userRowsByWordId.get(clean(word.id)), translationRowsByWordId.get(clean(word.id))));
+  const words = wordRows.map((word) => normalizeWord(word, userRowsByWordId.get(clean(word.id)), translationRowsByWordId.get(clean(word.id)), nativeLanguage));
   const books = unique(sanitizedUserWordRows.flatMap((row) => [row.notebook, ...normalizeBookNames(row.book_names)]));
 
   return {
@@ -549,7 +552,7 @@ export async function loadPhraseObjects(nativeLanguage = DEFAULT_NATIVE_LANGUAGE
     },
   );
   const translationRowsById = new Map(translationRows.map((row) => [clean(row.learning_object_id), row]));
-  return rows.map((row) => normalizeWord(row, null, translationRowsById.get(clean(row.id))));
+  return rows.map((row) => normalizeWord(row, null, translationRowsById.get(clean(row.id)), nativeLanguage));
 }
 
 // Single-entry lookup by id, for the Läsning reading-page's "查看完整表达卡"
@@ -567,7 +570,7 @@ export async function loadWordOrPhraseById(id, nativeLanguage = DEFAULT_NATIVE_L
     .eq("learning_object_id", cleanId)
     .eq("native_language", nativeLanguage)
     .maybeSingle();
-  return normalizeWord(data, null, translationRow);
+  return normalizeWord(data, null, translationRow, nativeLanguage);
 }
 
 // "Promote" one collocation line from a word's Fraser section into its own
@@ -811,7 +814,8 @@ export async function loadWordExamples(learningObjectId, nativeLanguage = DEFAUL
     const translationRow = (row.learning_object_example_translations || []).find((t) => t.native_language === nativeLanguage);
     return {
       example_swedish: row.example_swedish,
-      example_chinese: clean(translationRow?.translation) || clean(row.example_chinese),
+      // example_chinese is the legacy Chinese column: a fallback in Chinese mode only.
+      example_chinese: clean(translationRow?.translation) || (nativeLanguage === "zh" ? clean(row.example_chinese) : ""),
       sort_order: row.sort_order,
     };
   });
