@@ -190,6 +190,117 @@ export async function extractTextFromImage({ imageDataUrl }) {
   return { text: text.trim(), glossary, usage: data.usage || {} };
 }
 
+// Native iOS photo / camera import (2026-11-01): the phone reads the page itself (Vision
+// OCR, free) and sends its numbered lines with their positions plus a small copy of the
+// photo. The model only sorts those lines — article body (in reading order), the
+// textbook's own word list, or other page content (page numbers, headers, exercises,
+// captions) — and never returns text of its own, so the body is exactly what the phone
+// read. Glossary entries are checked to be verbatim pieces of the lines they cite.
+const LAYOUT_SYSTEM = `You sort the OCR lines of a photographed Swedish page. You get the photo and its lines, numbered, with their position (x, y, w, h as fractions of the page, origin top left).
+
+Return:
+- body: the line numbers of the main article or story text (its title and headings included), in reading order (follow the columns of the page).
+- glossary: only if the page prints its own word list next to or below the text (each entry a word or phrase with the book's short explanation, often in a margin column, a box or a footnote list). One item per entry: lines = the line numbers it uses, word = the word or phrase exactly as printed, definition = the explanation exactly as printed. Copy both character for character from those lines; leave out only separators between them (a dash, colon, equals sign or the gap between columns). Never write, correct, translate or complete anything. The word list's own heading (Ordlista, Ord, Glosor, Ordförklaringar …) is not part of an entry: put it in other.
+- other: line numbers of everything else (page numbers, running headers, chapter labels, captions, exercises and questions, notes, advertising, text from a facing page).
+
+Every line number goes in exactly one of the three. Most pages have no word list: then glossary is empty.`;
+
+export function sanitizeOcrLines(lines) {
+  return (Array.isArray(lines) ? lines : []).slice(0, 400).map((l) => ({
+    text: String(l?.text || "").replace(/\s+/g, " ").trim().slice(0, 300),
+    x: Number(l?.x) || 0, y: Number(l?.y) || 0, w: Number(l?.w) || 0, h: Number(l?.h) || 0,
+  }));
+}
+
+const squash = (s) => String(s || "").replace(/\s+/g, " ").trim();
+
+// Turns the model's answer into { body: [line numbers], glossary: [{word, definition}] }.
+// Lines the answer leaves out are kept in the body (nothing read is silently lost); a
+// glossary item whose word or definition is not verbatim in its lines keeps the lines'
+// own text as the word, with no definition.
+export function assemblePageLayout(lines, parsed) {
+  const n = lines.length;
+  const valid = (i) => Number.isInteger(i) && i >= 0 && i < n;
+  const used = new Set();
+  const glossary = [];
+  for (const g of Array.isArray(parsed?.glossary) ? parsed.glossary : []) {
+    const ids = [...new Set((g.lines || []).filter(valid))].filter((i) => !used.has(i)).sort((a, b) => a - b);
+    if (!ids.length) continue;
+    ids.forEach((i) => used.add(i));
+    let joined = squash(ids.map((i) => lines[i].text).join(" "));
+    const word = squash(g.word);
+    const definition = squash(g.definition);
+    // An entry starts with its word: text cited before it (a list heading) is dropped.
+    if (word && joined.indexOf(word) > 0) joined = joined.slice(joined.indexOf(word));
+    if (word && definition && joined.startsWith(word) && joined.endsWith(definition) && word.length + definition.length <= joined.length) {
+      glossary.push({ word, definition });
+    } else if (joined) {
+      glossary.push({ word: joined, definition: "" });
+    }
+  }
+  const other = new Set((parsed?.other || []).filter(valid));
+  const body = [];
+  for (const i of parsed?.body || []) if (valid(i) && !used.has(i) && !other.has(i)) { used.add(i); body.push(i); }
+  for (let i = 0; i < n; i++) if (!used.has(i) && !other.has(i) && lines[i].text) { used.add(i); body.push(i); }
+  return { body, glossary };
+}
+
+export async function classifyPageLines({ imageDataUrl, lines }) {
+  if (!OPENAI_API_KEY) {
+    const error = new Error("OPENAI_API_KEY saknas på servern.");
+    error.status = 500;
+    throw error;
+  }
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      body: { type: "array", items: { type: "integer" } },
+      glossary: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: { lines: { type: "array", items: { type: "integer" } }, word: { type: "string" }, definition: { type: "string" } },
+          required: ["lines", "word", "definition"],
+        },
+      },
+      other: { type: "array", items: { type: "integer" } },
+    },
+    required: ["body", "glossary", "other"],
+  };
+  const numbered = lines.map((l, i) => `${i}\t[${[l.x, l.y, l.w, l.h].map((v) => v.toFixed(3)).join(", ")}]\t${l.text}`).join("\n");
+  const content = [{ type: "input_text", text: `OCR lines (number, [x, y, w, h], text):\n${numbered}` }];
+  if (imageDataUrl) content.push({ type: "input_image", image_url: imageDataUrl });
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { authorization: `Bearer ${OPENAI_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL,
+      reasoning: { effort: "low" },
+      max_output_tokens: 6000,
+      text: { format: { type: "json_schema", name: "page_layout", strict: true, schema } },
+      input: [{ role: "system", content: LAYOUT_SYSTEM }, { role: "user", content }],
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.error?.message || "OpenAI API request failed.");
+    error.status = response.status;
+    throw error;
+  }
+  return { ...assemblePageLayout(lines, JSON.parse(extractOutputText(data))), usage: data.usage || {} };
+}
+
+// Textbook word list as sent by a client: [{word, definition}] strings only, verbatim.
+export function sanitizeGlossary(glossary) {
+  return (Array.isArray(glossary) ? glossary : [])
+    .filter((g) => g && typeof g === "object")
+    .map((g) => ({ word: squash(g.word).slice(0, 200), definition: squash(g.definition).slice(0, 500) }))
+    .filter((g) => g.word)
+    .slice(0, 80);
+}
+
 export function cleanText(raw) {
   return String(raw || "")
     .replace(new RegExp(String.fromCharCode(0), "g"), "")
@@ -835,6 +946,10 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
     .maybeSingle();
 
   let textResource = existingResource;
+  if (textResource && glossary.length && !(textResource.textbook_glossary || []).length) {
+    await supabaseAdmin.from("text_resources").update({ textbook_glossary: glossary }).eq("id", textResource.id);
+    textResource = { ...textResource, textbook_glossary: glossary };
+  }
   if (!textResource) {
     const { data: inserted, error: insertError } = await supabaseAdmin
       .from("text_resources")

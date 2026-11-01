@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { analyzeReadingResourceFast } from "../../server-reading.mjs";
+import { analyzeReadingResourceFast, sanitizeGlossary } from "../../server-reading.mjs";
 import { enforceQuota, normalizeLanguage } from "../../server-native.mjs";
 
 // Real Vercel serverless function — server.mjs's own /api/reading/analyze
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
       userId,
       text: trimmed,
       sourceType: sourceType || "paste",
-      glossary: Array.isArray(glossary) ? glossary : [],
+      glossary: sanitizeGlossary(glossary),
     });
     sendJson(res, 200, { textResource, analysis, tier, cached, deepReady });
   } catch (error) {

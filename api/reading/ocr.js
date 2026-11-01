@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { extractTextFromImage, calculateCredits } from "../../server-reading.mjs";
+import { extractTextFromImage, classifyPageLines, sanitizeOcrLines, calculateCredits } from "../../server-reading.mjs";
 import { enforceQuota } from "../../server-native.mjs";
 
 // Real Vercel serverless function — see api/reading/analyze.js for why
@@ -53,7 +53,34 @@ export default async function handler(req, res) {
     }
 
     const userId = await readUserId(req);
-    const { imageDataUrl } = req.body || {};
+    const { imageDataUrl, lines } = req.body || {};
+    // Native iOS: the phone has already read the page; only sort its lines (body /
+    // textbook word list / other). The photo is optional context for the layout.
+    if (Array.isArray(lines)) {
+      const ocrLines = sanitizeOcrLines(lines);
+      if (!ocrLines.some((l) => l.text)) {
+        sendJson(res, 200, { body: [], glossary: [] });
+        return;
+      }
+      const image = clean(imageDataUrl).startsWith("data:image/") && imageDataUrl.length <= MAX_IMAGE_BYTES * 1.4 ? imageDataUrl : null;
+      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      await enforceQuota(admin, userId, calculateCredits("ocr"));
+      const { body, glossary, usage } = await classifyPageLines({ imageDataUrl: image, lines: ocrLines });
+      const inputTokens = usage.input_tokens || 0;
+      const outputTokens = usage.output_tokens || 0;
+      await admin.from("ai_usage_logs").insert({
+        user_id: userId,
+        feature: "ocr_layout",
+        model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        credits_used: calculateCredits("ocr"),
+        actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
+        cache_hit: false,
+      });
+      sendJson(res, 200, { body, glossary });
+      return;
+    }
     if (!clean(imageDataUrl) || !imageDataUrl.startsWith("data:image/")) {
       sendJson(res, 400, { error: "Ingen giltig bild mottagen." });
       return;
