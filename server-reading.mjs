@@ -563,10 +563,10 @@ export function distinctExpressions(collocations = [], idioms = [], glossary = [
 
 const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"];
 // Why a keyword earns its place (the AI labels each one). A word the dictionary rates A1
-// is kept only as a connective or for a specific use in this text: as a topic word or a
-// "new word" it is one every reader of the text already knows (2026-11-01).
+// is one every reader of the text already knows: it is kept only when it is one of the
+// connectives that steer a sentence's meaning (trots, däremot …) — the AI's own label
+// let "alltid", "igen" and "lära" through as "specific use" (2026-11-01).
 const VOCABULARY_REASONS = ["topic", "specific_use", "connective", "new_word"];
-const BASIC_WORD_REASONS = new Set(["connective", "specific_use"]);
 
 // A keyword the AI added itself must occur in the text in some form (its stem): one
 // that doesn't was made up ("åtgärd" for a text without it).
@@ -586,20 +586,7 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
   // No extra candidates beyond what the length tier shows: asking for more invited
   // padding with basic words (2026-11-01).
   const vocabCandidates = vocabMax;
-  const collocMax = tierConfig.keyCollocations[1];
-  const idiomMax = tierConfig.keyIdioms[1];
   const [sentMin, sentMax] = tierConfig.keySentences;
-  const expressionSchema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      expression_text: { type: "string" },
-      meaning_zh: { type: "string" },
-      source_sentence: { type: "string" },
-      source_sentence_zh: { type: "string" },
-    },
-    required: ["expression_text", "meaning_zh", "source_sentence", "source_sentence_zh"],
-  };
   const schema = {
     type: "object",
     additionalProperties: false,
@@ -618,9 +605,6 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
           required: ["swedish", "pos", "meaning", "reason"],
         },
       },
-      expressions_found: { type: "array", items: { type: "string" } },
-      collocations: { type: "array", items: expressionSchema },
-      idioms: { type: "array", items: expressionSchema },
       key_sentences: {
         type: "array",
         items: {
@@ -649,7 +633,7 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
         },
       },
     },
-    required: ["vocabulary", "expressions_found", "collocations", "idioms", "key_sentences", "language_patterns"],
+    required: ["vocabulary", "key_sentences", "language_patterns"],
   };
   const glossaryNote = glossary.length
     ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${[...glossaryForms(glossary)].join(", ")}. Do not select any of these words or phrases (in any inflected form) on their own as a keyword, collocation or idiom — the book already did that job. A longer expression that merely contains one of them (e.g. a verb + noun combination around it) may still be taken if it passes its own test.`
@@ -665,18 +649,10 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
 
 Every list below is ordered from most to least worth learning IN THIS TEXT: how much understanding the text's topic and core content depends on the item comes first. Difficulty is only a secondary hint (the dictionary level is given for listed candidates). There is no target number for any list — the text decides: a plain text may have only a few items, a dense one more. Never add an item to reach a number.
 
-1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists dictionary candidates found in the text as "lemma (part of speech, CEFR)"; pick from them (keep the lemma and part of speech exactly as given) and you may ALSO add other words from the text that are genuinely worth learning even if not listed — give their dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. Use these dimensions together:
+1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists dictionary candidates found in the text as "lemma (part of speech, CEFR)"; pick from them (keep the lemma and part of speech exactly as given) and you may ALSO add other words from the text that are genuinely worth learning even if not listed — give their dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. A word that is only there as part of a fixed phrase ("exempel" in "till exempel", "eget" in "på mitt eget sätt") is not a keyword — fixed phrases are chosen in a separate step. Use these dimensions together:
 ${WORTH_LEARNING_DIMENSIONS}
 
-expressions_found: first go through the text sentence by sentence and list every multi-word expression in it that could pass the test of list 2 or 3 below, in its learnable form. An expression is a reusable unit of a few words (usually 2-5), never a whole clause or sentence. Easy to overlook, so check for them: a light verb with a noun (göra/ta/ha/få/spela/sätta/komma + noun, where the verb adds little and the pair means one thing), fixed "x och y" pairs, and set linking phrases. Then fill lists 2 and 3 from it, best first: take every one that passes, up to each maximum — return few or none when the text has few, but do not leave out real ones.
-
-2. collocations (Fasta fraser, at most ${collocMax}): fixed combinations whose meaning can be worked out from the words, but whose word choice is fixed and has to be learned as a unit — verb + particle/preposition ("ta hand om", "vara beroende av"), verb + noun ("fatta ett beslut"), adjective + preposition ("stolt över"), fixed prepositional or linking phrases ("i samband med", "till skillnad från"). Test: writing it themselves, would a learner likely pick the wrong preposition, particle or verb? Words that merely sit next to each other are not a collocation.
-
-3. idioms (Idiomatiska uttryck, at most ${idiomMax}): expressions whose meaning is NOT just the sum of the words, or set expressions a learner could not build from the parts — figurative or non-literal ("gå i taket", "ta det lugnt"), set phrases with a discourse, attitude or emphasis function ("för all del", "på sätt och vis"), fixed pairs and formulas ("hit och dit"). A literal free combination never belongs here.
-
-Each expression goes in EXACTLY ONE of lists 2 and 3, never both — use the two tests to decide, and if it passes both, put it where its test fits most clearly. Phrases so basic every reader of this text knows them ("till exempel", "varje dag", "på morgonen") belong in neither.
-
-Both must be normalized to a reusable "learnable form", never copied as the sentence's own accidental inflected fragment: verbs go to infinitive, and use "någon"/"något" as a placeholder for an open object/subject slot the learner would fill in themselves. E.g. if the text has "gick inte ihop med" or "hade skänkt bort", extract "gå ihop med något" / "skänka bort något" — not the sentence's own conjugated fragment. Also merge near-duplicate surface variants of the same underlying expression into one canonical entry (e.g. "gå ihop med", "gick inte ihop", "går ihop med" are the same knowledge point — return it once). If a word is really only valuable as part of a fixed expression, extract that expression (the isolated word will be dropped programmatically in favor of your expression).
+Fixed phrases and idioms are chosen in a separate step (selectExpressions), not here.
 
 4. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences with real comprehension/language-learning value — NOT sentences that matter to the plot. Select a sentence only when at least one of these applies, in priority order:
    a. (highest priority) The words are individually simple, but the sentence as a whole is hard to understand — e.g. a non-literal phrase, an idiom, or a combination whose meaning isn't the sum of its parts.
@@ -686,21 +662,151 @@ Both must be normalized to a reusable "learnable form", never copied as the sent
    e. Unclear reference or implied meaning — a pronoun or demonstrative (det/sådant/allt det där) that's genuinely hard to resolve without context.
    f. Tone, attitude, or a rhetorical question that changes the sentence's real meaning beyond its literal words.
    g. The sentence models a high-value, directly-reusable expression structure.
-   Do NOT select a sentence merely because: it's plot-important, it's the article's first sentence, it contains exactly one unfamiliar word (that word belongs in the vocabulary, not here), its word order is perfectly ordinary, its structure is very basic, or it's a simple factual statement with no extra comprehension difficulty. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, written in ${langName} (like meaning_zh/translation_zh elsewhere) — it must explain the ACTUAL comprehension mechanism, never a generic label alone like "clause structure" or "rhetorical question". Required depth — for the Swedish sentence "Trots att det inte var december än hade affärerna redan börjat julskylta.", a reason at this level of specific detail (written in ${langName}, this is just illustrating the depth/specificity expected): "trots att introduces a concessive clause; än here means 'yet/still'; hade börjat is past perfect, marking that this had already started before the story's current point in time" — not a bare label like "past perfect". Don't select one only to re-teach a point already fully covered by a keyword, collocation or idiom you're returning.
+   Do NOT select a sentence merely because: it's plot-important, it's the article's first sentence, it contains exactly one unfamiliar word (that word belongs in the vocabulary, not here), its word order is perfectly ordinary, its structure is very basic, or it's a simple factual statement with no extra comprehension difficulty. Every sentence returned here must genuinely be worth practicing aloud, so mark shadowing_suitable=true for all of them; return fewer (even zero) rather than padding with plot-important-but-linguistically-plain sentences. "reason" is shown directly to the learner in the app UI, written in ${langName} (like meaning_zh/translation_zh elsewhere) — it must explain the ACTUAL comprehension mechanism, never a generic label alone like "clause structure" or "rhetorical question". Required depth — for the Swedish sentence "Trots att det inte var december än hade affärerna redan börjat julskylta.", a reason at this level of specific detail (written in ${langName}, this is just illustrating the depth/specificity expected): "trots att introduces a concessive clause; än here means 'yet/still'; hade börjat is past perfect, marking that this had already started before the story's current point in time" — not a bare label like "past perfect". Don't select one only to re-teach a point already fully covered by a keyword you're returning or by a fixed phrase or idiom in it.
 
-5. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT overlap with collocations/idioms above (those are word/phrase-level; this is sentence-construction-level). The test: can the learner directly substitute their own words into this pattern and reuse it in a new spoken or written sentence? If not, don't extract it — e.g. "när + bisats", "subjekt + verb", or "adjektiv + substantiv" are all far too basic/broad to have real learning value as a "pattern", even though they're technically patterns. Give the pattern name, its meaning in ${langName}, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
+5. language_patterns (0-4, never more than 4): notable SENTENCE-LEVEL constructions worth noticing — a subordinating conjunction + clause type, a word-order phenomenon, a tense used in a distinctive way (e.g. "trots att + bisats" meaning "even though..."). This is NOT a grammar lesson (don't explain verb conjugation tables or general tense rules — any generic AI chatbot already does that) and it must NOT be a fixed phrase or idiom (those are word/phrase-level, chosen separately; this is sentence-construction-level). The test: can the learner directly substitute their own words into this pattern and reuse it in a new spoken or written sentence? If not, don't extract it — e.g. "när + bisats", "subjekt + verb", or "adjektiv + substantiv" are all far too basic/broad to have real learning value as a "pattern", even though they're technically patterns. Give the pattern name, its meaning in ${langName}, and quote one example sentence from the text verbatim. Return fewer (even zero) rather than padding — most short/simple texts genuinely have 0-2 of these, not 4.
 
 Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}`,
     userPrompt: `Text:\n${cleanedText}\n\nDictionary candidates: ${candidateList}`,
   });
-  const expressions = distinctExpressions(result.collocations || [], result.idioms || [], glossary);
   return {
     vocabulary: (result.vocabulary || []).slice(0, vocabCandidates),
-    expressionsFound: result.expressions_found || [],
-    collocations: expressions.collocations.slice(0, MAX_KEY_COLLOCATIONS),
-    idioms: expressions.idioms.slice(0, MAX_KEY_IDIOMS),
     keySentences: (result.key_sentences || []).slice(0, MAX_KEY_SENTENCES),
     languagePatterns: (result.language_patterns || []).slice(0, MAX_LANGUAGE_PATTERNS),
+    usage,
+  };
+}
+
+// Fasta fraser and Idiomatiska uttryck in a call of their own (2026-11-01, "plan C"):
+// bundled with the keywords, the model skipped most expressions ("spela roll", "när det
+// gäller" 0 of 5 runs); on its own, going through the numbered sentences one by one and
+// judging every candidate, it found them in 4-5 of 5 runs at about the same speed (the
+// two calls run side by side). Every candidate gets the same three-step decision, so the
+// two lists follow one rule rather than a list of special cases.
+const EXPRESSION_PLACEHOLDERS = new Set(["någon", "något", "några", "någons", "sig", "sin", "sitt", "sina", "en", "ett"]);
+const normalizeSpace = (text) => String(text || "").replace(/\s+/g, " ").trim().toLowerCase();
+
+export function splitSentences(text) {
+  return String(text || "").replace(/\s+/g, " ").split(/(?<=[.!?])\s+(?=[-–A-ZÅÄÖ])/).map((s) => s.trim()).filter(Boolean);
+}
+
+// An expression is kept only if it is written in Swedish letters (one came back with a
+// Cyrillic "а"), its sentence is quoted from the text, and a word of it (not a "någon"/
+// "sig" placeholder) is in that sentence — so nothing is taken that the text doesn't have.
+export function expressionInText(e, text) {
+  const expression = String(e?.expression_text || "").trim();
+  if (!/^[\p{Script=Latin}\s'’\-\/]+$/u.test(expression) || expression.split(/\s+/).length < 2) return false;
+  const sentence = normalizeSpace(e.source_sentence);
+  if (!sentence || !normalizeSpace(text).includes(sentence)) return false;
+  const tokens = sentence.match(/\p{L}+/gu) || [];
+  return expression.toLowerCase().split(/[\s\/]+/)
+    .filter((w) => w.length > 1 && !EXPRESSION_PLACEHOLDERS.has(w))
+    .some((w) => tokens.some((t) => t.startsWith(w.slice(0, Math.max(3, w.length - 2)))));
+}
+
+// The scan's verdict decides the list (one rule for every expression: not what the words
+// say → Idiomatiska uttryck; what they say, but fixed words → Fasta fraser), whichever
+// list the model put it in. One the scan didn't judge, judged "neither", or not in the
+// text is left out — so an expression can't land in both lists or in the wrong one.
+export function expressionCategory(c) {
+  if (c?.verdict === "idiom") return "idiom";
+  if (c?.verdict === "fast_fras") return "collocation";
+  return null;
+}
+
+export function sortExpressions(result, text) {
+  const judged = new Map();
+  for (const s of result?.scan || []) {
+    for (const c of s.candidates || []) {
+      const key = expressionKey(c.expression);
+      if (key && !judged.has(key)) judged.set(key, c);
+    }
+  }
+  const collocations = [];
+  const idioms = [];
+  const placed = new Set();
+  for (const e of [...(result?.collocations || []), ...(result?.idioms || [])]) {
+    const key = expressionKey(e.expression_text);
+    if (placed.has(key) || !expressionInText(e, text)) continue;
+    placed.add(key);
+    const category = expressionCategory(judged.get(expressionKey(e.expression_text)));
+    if (category === "idiom") idioms.push(e);
+    else if (category === "collocation") collocations.push(e);
+  }
+  return { collocations, idioms };
+}
+
+export async function selectExpressions(cleanedText, tier, glossary = [], nativeLanguage = "zh") {
+  const langName = languageName(nativeLanguage);
+  const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
+  const collocMax = tierConfig.keyCollocations[1];
+  const idiomMax = tierConfig.keyIdioms[1];
+  const sentences = splitSentences(cleanedText);
+  const candidate = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      expression: { type: "string" },
+      word_for_word: { type: "string" },
+      meaning_here: { type: "string" },
+      verdict: { type: "string", enum: ["idiom", "fast_fras", "neither"] },
+    },
+    required: ["expression", "word_for_word", "meaning_here", "verdict"],
+  };
+  const pick = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      expression_text: { type: "string" },
+      meaning_zh: { type: "string" },
+      source_sentence: { type: "string" },
+      source_sentence_zh: { type: "string" },
+    },
+    required: ["expression_text", "meaning_zh", "source_sentence", "source_sentence_zh"],
+  };
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      scan: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: { sentence: { type: "integer" }, candidates: { type: "array", items: candidate } },
+          required: ["sentence", "candidates"],
+        },
+      },
+      collocations: { type: "array", items: pick },
+      idioms: { type: "array", items: pick },
+    },
+    required: ["scan", "collocations", "idioms"],
+  };
+  const glossaryList = [...glossaryForms(glossary)].join(", ");
+  const { result, usage } = await callOpenAI({
+    schemaName: "reading_expressions",
+    schema,
+    maxOutputTokens: 8000,
+    systemPrompt: `You find the multi-word expressions in a Swedish text that a ${langName}-speaking learner should learn as units. Never invent anything: every expression must occur in the text. meaning_zh, source_sentence_zh and word_for_word are written entirely in ${langName} regardless of their names.
+
+Step 1 — scan: go through the numbered sentences in order, one entry per sentence (a sentence with no candidates gets an empty list). For each sentence list every multi-word combination in it that might be a fixed unit, in its learnable form: verbs in the infinitive, "någon"/"något" for an open slot ("hade skänkt bort huset" → "skänka bort något"). Check especially: a light verb with a noun (göra/ta/ha/få/spela/sätta/komma/hålla + noun), verb + particle or preposition, adjective + preposition, set linking phrases, fixed "x och y" pairs. An expression is a few words (usually 2-5), never a whole clause.
+
+For every candidate, the same steps in this order:
+1. word_for_word: translate it word by word into ${langName}, each word in its most ordinary sense.
+2. meaning_here: what it actually means in this sentence, in ${langName}.
+3. verdict — compare the two:
+   - "idiom" (Idiomatiska uttryck) when word_for_word does NOT say what meaning_here says: figurative expressions ("gå i taket" = get furious), set phrases with a discourse, attitude or emphasis function ("för all del", "rättare sagt", "med andra ord"), fixed pairs ("hit och dit"), and a light verb + noun whose pair means something neither word says ("ta illa upp" = be offended, "slå igenom" = become known).
+   - "fast_fras" (Fasta fraser) when word_for_word already gives the meaning, but the word choice is fixed — a learner writing it would likely pick the wrong verb, preposition or particle ("ta hand om", "vara beroende av", "fatta ett beslut", "stolt över", "i samband med", "när det gäller").
+   - "neither" for a literal free combination (a verb with its ordinary object or adverb: "försöka igen", "köra bil", "lära sig något"), a phrase so basic every reader knows it ("till exempel", "varje år"), a combination only about this text's own content (a place, event, name or subject: "åka till Berlin", "vinna VM"), or something the textbook's own word list already explains on its own${glossaryList ? `: ${glossaryList}` : ""} (a longer expression around such a word is judged on its own).
+
+Step 2 — choose: collocations = "fast_fras" candidates, idioms = "idiom" candidates, each expression once and in exactly one list, best first (most useful to learn for this text first), at most ${collocMax} collocations and ${idiomMax} idioms. Return fewer, even none, if fewer pass — never add one to reach a number. expression_text exactly as in the scan; meaning_zh = its meaning as used here; source_sentence = the sentence quoted exactly from the text, without its [number]; source_sentence_zh = its translation.`,
+    userPrompt: sentences.map((sentence, index) => `[${index + 1}] ${sentence}`).join("\n"),
+  });
+  const sorted = sortExpressions(result, cleanedText);
+  const { collocations, idioms } = distinctExpressions(sorted.collocations, sorted.idioms, glossary);
+  return {
+    collocations: collocations.slice(0, Math.min(collocMax, MAX_KEY_COLLOCATIONS)),
+    idioms: idioms.slice(0, Math.min(idiomMax, MAX_KEY_IDIOMS)),
     usage,
   };
 }
@@ -733,7 +839,7 @@ export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, f
     const dedupeKey = match ? match.word.id : key(v.swedish, v.pos);
     if (seen.has(dedupeKey) || !String(v.swedish || "").trim()) continue;
     if (!occursInText(v.swedish, freq)) continue;
-    if (match?.word.cefr_level === "A1" && v.reason && !BASIC_WORD_REASONS.has(v.reason)) continue;
+    if (match?.word.cefr_level === "A1" && !HIGH_VALUE_CONNECTIVES.has(match.word.swedish.toLowerCase())) continue;
     seen.add(dedupeKey);
     candidates.push({
       word_id: match?.word.id || null,
@@ -1316,13 +1422,17 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   // AI may add words the dictionary doesn't have.
   const pool = rankFoundWords(found, freq, firstSeenCapitalized, vocabularyLimit * 2);
 
-  const selection = await selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage);
+  const [selection, expressions] = await Promise.all([
+    selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage),
+    selectExpressions(cleaned, tier, glossary, nativeLanguage),
+  ]);
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_selection", model: MODEL, usage: selection.usage, cacheHit: false });
+  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_expressions", model: MODEL, usage: expressions.usage, cacheHit: false });
 
   const scoredVocabulary = (await resolveVocabularyCandidates(supabaseAdmin, selection.vocabulary, pool, freq))
     .filter((v) => !glossaryWords.has(v.swedish.toLowerCase()));
-  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, selection.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
-  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, selection.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
+  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, expressions.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
+  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, expressions.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
   const asExpression = (category) => (e) => ({ ...e, category });
   const collocationCandidates = resolvedCollocations.map(asExpression("collocation"));
   const idiomCandidates = resolvedIdioms.map(asExpression("idiom"));
