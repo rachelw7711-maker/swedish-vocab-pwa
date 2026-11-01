@@ -11,7 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey } from "./server-resources.mjs";
-import { saldoEntries } from "./server-lexicon.mjs";
+import { saldoEntries, perfectParticipleDeclension } from "./server-lexicon.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
@@ -290,6 +290,10 @@ If the input names a part of speech and the sense a text uses, write the entry f
     const saldoRows = isPhrase ? [] : await saldoEntries(supabaseAdmin, lemma, pos);
     const fromSaldo = saldoCardFields(saldoRows[0], pos);
     const forms = fromSaldo?.forms.length ? fromSaldo.forms : (result.forms || []).filter((f) => f.value && ALL_FORM_TYPES.includes(f.type));
+    // The card shows the perfect participle as en / ett / plural; the other two only from SALDO.
+    const participle = pos === "verb" && forms.find((f) => f.type === "perfect_participle")?.value;
+    const declined = participle && await perfectParticipleDeclension(supabaseAdmin, lemma, participle);
+    if (declined) forms.push({ type: "perfect_participle_ett", value: declined.ett }, { type: "perfect_participle_plural", value: declined.plural });
     const passive = fromSaldo ? fromSaldo.passive : result.passive || "";
     const matchKey = isPhrase ? await expressionMatchKey(supabaseAdmin, lemma) : null;
 

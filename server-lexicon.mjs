@@ -95,6 +95,27 @@ export async function saldoEntries(supabaseAdmin, lemma, pos = null) {
   return rows.filter((r) => key(r.baseform) === key(lemma) && (!wanted || wanted.includes(r.pos)));
 }
 
+const PARTICLES = new Set(["upp", "ut", "av", "om", "in", "på", "till", "fram", "bort", "ner", "över", "igenom", "undan", "åt", "efter", "ihop", "isär", "tillbaka", "loss", "med", "emot", "förbi", "runt", "iväg", "under"]);
+
+/**
+ * Ett form and plural of a verb's perfect participle ("skriven" → skrivet, skrivna), from
+ * SALDO's own forms for that verb; a particle verb takes its base verb's forms with the
+ * particle in front (växa upp: uppvuxen → uppvuxet, uppvuxna). Null unless SALDO gives
+ * exactly this participle and one ett form and one plural — nothing is derived.
+ */
+export async function perfectParticipleDeclension(supabaseAdmin, verb, participle) {
+  const words = String(verb || "").trim().toLowerCase().split(/\s+/);
+  const prefix = words.length === 1 ? "" : words.length === 2 && PARTICLES.has(words[1]) ? words[1] : null;
+  if (prefix === null || !participle) return null;
+  for (const row of await saldoEntries(supabaseAdmin, words[0], "verb")) {
+    const [u, n, p] = ["pret_part indef sg u nom", "pret_part indef sg n nom", "pret_part indef pl nom"].map((m) => row.forms?.[m] || []);
+    if (u.length === 1 && prefix + u[0] === key(participle) && n.length === 1 && p.length === 1) {
+      return { ett: prefix + n[0], plural: prefix + p[0] };
+    }
+  }
+  return null;
+}
+
 /** Possible { lemma, pos } for a word as it appears in text ("utvecklade" → utveckla/verb). */
 export async function lemmatize(supabaseAdmin, token) {
   const rows = await lemgramsForForms(supabaseAdmin, [token]);
