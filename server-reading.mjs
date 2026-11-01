@@ -347,7 +347,7 @@ function normalizeToken(token) {
   return token.toLowerCase();
 }
 
-function extractCandidateTokens(cleanedText) {
+export function extractCandidateTokens(cleanedText) {
   const rawTokens = cleanedText.match(/[a-zA-ZåäöÅÄÖ]+(?:-[a-zA-ZåäöÅÄÖ]+)?/g) || [];
   const freq = new Map();
   const firstSeenCapitalized = new Map();
@@ -363,7 +363,7 @@ function extractCandidateTokens(cleanedText) {
 
 // 规范§3/§8: check user's own word state, then the main dictionary, before
 // ever considering AI. Batches the lookup instead of one query per token.
-async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage = "zh") {
+export async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage = "zh") {
   const found = new Map(); // token -> { id, swedish, pos, chinese, cefr_level, frequency_rank }
   if (!tokens.length) return found;
 
@@ -456,7 +456,7 @@ const LOW_VALUE_TIME_WORDS = new Set([
 // The pool is shared by everyone who reads this text, so it is never filtered by
 // one reader's mastered words — each reader's own mastered words are swapped for
 // other candidates on their device (2026-10-30).
-function rankFoundWords(found, freq, firstSeenCapitalized, limit) {
+export function rankFoundWords(found, freq, firstSeenCapitalized, limit) {
   const excludedPos = new Set(["preposition", "conjunction", "pronoun", "numeral", "interjection"]);
   const candidates = [...found.entries()]
     .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !excludedPos.has(word.pos))
@@ -515,7 +515,8 @@ Calibration — rank by how much a word actually determines whether the reader u
 - "regering" → middle of the list if the article is genuinely about government/policy; otherwise low.
 - "däremot", "trots", "dessutom" → near the top, even though they're short, frequent, and CEFR A2-B1. A connective word that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands the article correctly — never downgrade a word just because it "looks too simple" or "too common" to be worth learning.
 - A phrasal/idiomatic verb sense (e.g. "lägga ner", "komma fram till") → near the top — these carry far more meaning than any single component word.
-Do not let surface simplicity or high frequency push a word down — rank purely on how much understanding of THIS article depends on this specific word.
+- A basic everyday word used in its ordinary sense (e.g. "barn", "mamma", "hus", "dag", "ofta", "aldrig", "göra", "tycka", "gå", "bra", "stor") → leave it out, even if it occurs often or the story is about it: a reader who can read this text already knows it, so it teaches nothing here.
+Simplicity alone neither qualifies nor disqualifies a word: a short connective that steers a sentence's meaning belongs near the top, a basic content word in its everyday sense does not belong at all. How often a word occurs in the text is never a reason to include it.
 
 Category exclusions (V2.1 阅读AI提取规则 §四, 2026-08-11) — leave the word out regardless of capitalization or frequency if it is:
 - A person name, place name, or country/nationality name (e.g. "Jonas", "Catrin", "Stockholm", "Darfur").
@@ -530,17 +531,63 @@ Exception: if the name/date/number carries real idiomatic weight in this specifi
 // (idioms) keep separate criteria since they're genuinely different things. The
 // learner's own level is NOT sent: the result is shared by every reader of the
 // text and each reader's device orders it for their level.
+// The textbook prints its own word list as dictionary-style entries ("turnera, turnerar",
+// "en succé, -er", "uthållig"); the base forms in them, lowercased, so a keyword or
+// expression the book already explains is not offered again. (Matching the printed
+// entry as a whole, as before, never matched "uppmuntra, uppmuntrar" to "uppmuntra".)
+export function glossaryForms(glossary = []) {
+  const forms = new Set();
+  for (const g of glossary || []) {
+    for (const part of String(g?.word || "").split(",")) {
+      const form = part.trim().toLowerCase().replace(/^(en|ett|att)\s+/, "");
+      if (form && !form.startsWith("-")) forms.add(form);
+    }
+  }
+  return forms;
+}
+
+const expressionKey = (text) => String(text || "").toLowerCase().replace(/[^\p{L}\s]/gu, " ").replace(/\s+/g, " ").trim();
+
+// One expression is one knowledge point: shown once, in the first list that has it
+// (Fasta fraser before Idiomatiska uttryck), and not when the book's word list has it.
+export function distinctExpressions(collocations = [], idioms = [], glossary = []) {
+  const seen = new Set([...glossaryForms(glossary)].map(expressionKey));
+  const keep = (list) => list.filter((e) => {
+    const key = expressionKey(e.expression_text);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { collocations: keep(collocations), idioms: keep(idioms) };
+}
+
 const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// Why a keyword earns its place (the AI labels each one). A word the dictionary rates A1
+// is kept only as a connective or for a specific use in this text: as a topic word or a
+// "new word" it is one every reader of the text already knows (2026-11-01).
+const VOCABULARY_REASONS = ["topic", "specific_use", "connective", "new_word"];
+const BASIC_WORD_REASONS = new Set(["connective", "specific_use"]);
+
+// A keyword the AI added itself must occur in the text in some form (its stem): one
+// that doesn't was made up ("åtgärd" for a text without it).
+export function occursInText(lemma, freq) {
+  const word = String(lemma || "").toLowerCase();
+  if (freq.has(word)) return true;
+  const stem = word.slice(0, Math.max(3, word.length - 2));
+  return [...freq.keys()].some((token) => token.startsWith(stem));
+}
 const READING_POS = ["verb", "noun", "adjective", "adverb", "pronoun", "preposition", "conjunction", "numeral", "interjection", "other"];
 
-async function selectReadingContent(cleanedText, tier, glossary = [], vocabularyPool = [], nativeLanguage = "zh") {
+export async function selectReadingContent(cleanedText, tier, glossary = [], vocabularyPool = [], nativeLanguage = "zh") {
   const langName = languageName(nativeLanguage);
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
-  const [vocabMin, vocabMax] = tierConfig.keyVocabulary;
+  const vocabMax = tierConfig.keyVocabulary[1];
   // A few more than are shown, so each reader's mastered words can be swapped out.
-  const vocabCandidates = vocabMax + Math.ceil(vocabMax / 2);
-  const [collocMin, collocMax] = tierConfig.keyCollocations;
-  const [idiomMin, idiomMax] = tierConfig.keyIdioms;
+  // No extra candidates beyond what the length tier shows: asking for more invited
+  // padding with basic words (2026-11-01).
+  const vocabCandidates = vocabMax;
+  const collocMax = tierConfig.keyCollocations[1];
+  const idiomMax = tierConfig.keyIdioms[1];
   const [sentMin, sentMax] = tierConfig.keySentences;
   const expressionSchema = {
     type: "object",
@@ -566,10 +613,12 @@ async function selectReadingContent(cleanedText, tier, glossary = [], vocabulary
             swedish: { type: "string" },
             pos: { type: "string", enum: READING_POS },
             meaning: { type: "string" },
+            reason: { type: "string", enum: VOCABULARY_REASONS },
           },
-          required: ["swedish", "pos", "meaning"],
+          required: ["swedish", "pos", "meaning", "reason"],
         },
       },
+      expressions_found: { type: "array", items: { type: "string" } },
       collocations: { type: "array", items: expressionSchema },
       idioms: { type: "array", items: expressionSchema },
       key_sentences: {
@@ -600,10 +649,10 @@ async function selectReadingContent(cleanedText, tier, glossary = [], vocabulary
         },
       },
     },
-    required: ["vocabulary", "collocations", "idioms", "key_sentences", "language_patterns"],
+    required: ["vocabulary", "expressions_found", "collocations", "idioms", "key_sentences", "language_patterns"],
   };
   const glossaryNote = glossary.length
-    ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${glossary.map((g) => g.word).join(", ")}. Do not select any of these as a keyword, collocation or idiom — the book already did that job.`
+    ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${[...glossaryForms(glossary)].join(", ")}. Do not select any of these words or phrases (in any inflected form) on their own as a keyword, collocation or idiom — the book already did that job. A longer expression that merely contains one of them (e.g. a verb + noun combination around it) may still be taken if it passes its own test.`
     : "";
   const candidateList = vocabularyPool.length
     ? vocabularyPool.map((c) => `${c.word.swedish} (${c.word.pos || "?"}${c.word.cefr_level ? `, ${c.word.cefr_level}` : ""})`).join(", ")
@@ -611,17 +660,21 @@ async function selectReadingContent(cleanedText, tier, glossary = [], vocabulary
   const { result, usage } = await callOpenAI({
     schemaName: "reading_selection",
     schema,
-    maxOutputTokens: 5000,
+    maxOutputTokens: 6000,
     systemPrompt: `You select what is worth learning in a Swedish text for a ${langName}-speaking learner — never invent content, everything must actually appear in the text. Every field named *_zh below (meaning_zh, source_sentence_zh, translation_zh) and every "meaning" must be written entirely in ${langName} regardless of its name — never in Chinese unless ${langName} is Chinese, and never let a stray Swedish or ${langName} word drift into a field written in the other language.
 
-Every list below is ordered from most to least worth learning IN THIS TEXT: how much understanding the text's topic and core content depends on the item comes first. Difficulty is only a secondary hint (the dictionary level is given for listed candidates); never leave out an item the text's meaning depends on just because it looks easy or common.
+Every list below is ordered from most to least worth learning IN THIS TEXT: how much understanding the text's topic and core content depends on the item comes first. Difficulty is only a secondary hint (the dictionary level is given for listed candidates). There is no target number for any list — the text decides: a plain text may have only a few items, a dense one more. Never add an item to reach a number.
 
-1. vocabulary: up to ${vocabCandidates} single words worth learning, best first — typically ${vocabMin}-${vocabMax} of them are shown, so return fewer if fewer genuinely earn a place; do not pad. The user message lists dictionary candidates found in the text as "lemma (part of speech, CEFR)"; pick from them (keep the lemma and part of speech exactly as given) and you may ALSO add other words from the text that are genuinely worth learning even if not listed — give their dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. Use these dimensions together:
+1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists dictionary candidates found in the text as "lemma (part of speech, CEFR)"; pick from them (keep the lemma and part of speech exactly as given) and you may ALSO add other words from the text that are genuinely worth learning even if not listed — give their dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. Use these dimensions together:
 ${WORTH_LEARNING_DIMENSIONS}
 
-2. collocations (${collocMin}-${collocMax}, max ${MAX_KEY_COLLOCATIONS}): fixed multi-word combinations (verb+preposition, adjective+preposition, verb+noun, etc.) whose meaning is still mostly derivable from the component words — the point is learning HOW they combine and are used, not that they're mysterious. Words that merely happen to sit next to each other in the sentence are not a collocation — the real test is: would a learner want to memorize this exact combination as one unit? If not, don't extract it.
+expressions_found: first go through the text sentence by sentence and list every multi-word expression in it that could pass the test of list 2 or 3 below, in its learnable form. An expression is a reusable unit of a few words (usually 2-5), never a whole clause or sentence. Easy to overlook, so check for them: a light verb with a noun (göra/ta/ha/få/spela/sätta/komma + noun, where the verb adds little and the pair means one thing), fixed "x och y" pairs, and set linking phrases. Then fill lists 2 and 3 from it, best first: take every one that passes, up to each maximum — return few or none when the text has few, but do not leave out real ones.
 
-3. idioms (${idiomMin}-${idiomMax}, max ${MAX_KEY_IDIOMS}): genuinely idiomatic or holistic expressions — possibly non-literal meaning, used for attitude, spoken register, emphasis, or cultural context. Do NOT include something here just because it "looks like a phrase" — it must have real idiomatic character. It's fine to return 0 if the text has no genuine idioms.
+2. collocations (Fasta fraser, at most ${collocMax}): fixed combinations whose meaning can be worked out from the words, but whose word choice is fixed and has to be learned as a unit — verb + particle/preposition ("ta hand om", "vara beroende av"), verb + noun ("fatta ett beslut"), adjective + preposition ("stolt över"), fixed prepositional or linking phrases ("i samband med", "till skillnad från"). Test: writing it themselves, would a learner likely pick the wrong preposition, particle or verb? Words that merely sit next to each other are not a collocation.
+
+3. idioms (Idiomatiska uttryck, at most ${idiomMax}): expressions whose meaning is NOT just the sum of the words, or set expressions a learner could not build from the parts — figurative or non-literal ("gå i taket", "ta det lugnt"), set phrases with a discourse, attitude or emphasis function ("för all del", "på sätt och vis"), fixed pairs and formulas ("hit och dit"). A literal free combination never belongs here.
+
+Each expression goes in EXACTLY ONE of lists 2 and 3, never both — use the two tests to decide, and if it passes both, put it where its test fits most clearly. Phrases so basic every reader of this text knows them ("till exempel", "varje dag", "på morgonen") belong in neither.
 
 Both must be normalized to a reusable "learnable form", never copied as the sentence's own accidental inflected fragment: verbs go to infinitive, and use "någon"/"något" as a placeholder for an open object/subject slot the learner would fill in themselves. E.g. if the text has "gick inte ihop med" or "hade skänkt bort", extract "gå ihop med något" / "skänka bort något" — not the sentence's own conjugated fragment. Also merge near-duplicate surface variants of the same underlying expression into one canonical entry (e.g. "gå ihop med", "gick inte ihop", "går ihop med" are the same knowledge point — return it once). If a word is really only valuable as part of a fixed expression, extract that expression (the isolated word will be dropped programmatically in favor of your expression).
 
@@ -640,10 +693,12 @@ Both must be normalized to a reusable "learnable form", never copied as the sent
 Every source_sentence/sentence must be quoted exactly from the text. Return empty arrays for any category with nothing genuinely worth flagging — do not pad to hit a target count.${glossaryNote}`,
     userPrompt: `Text:\n${cleanedText}\n\nDictionary candidates: ${candidateList}`,
   });
+  const expressions = distinctExpressions(result.collocations || [], result.idioms || [], glossary);
   return {
     vocabulary: (result.vocabulary || []).slice(0, vocabCandidates),
-    collocations: (result.collocations || []).slice(0, MAX_KEY_COLLOCATIONS),
-    idioms: (result.idioms || []).slice(0, MAX_KEY_IDIOMS),
+    expressionsFound: result.expressions_found || [],
+    collocations: expressions.collocations.slice(0, MAX_KEY_COLLOCATIONS),
+    idioms: expressions.idioms.slice(0, MAX_KEY_IDIOMS),
     keySentences: (result.key_sentences || []).slice(0, MAX_KEY_SENTENCES),
     languagePatterns: (result.language_patterns || []).slice(0, MAX_LANGUAGE_PATTERNS),
     usage,
@@ -655,7 +710,7 @@ Every source_sentence/sentence must be quoted exactly from the text. Return empt
 // the dictionary doesn't have keep word_id null here (the shown ones get a full
 // entry in ensureKeywordEntries). The meaning is always the one for THIS text; the
 // CEFR level is the dictionary's own (none for words it doesn't have).
-async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, freq) {
+export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, freq) {
   const key = (swedish, pos) => `${String(swedish || "").toLowerCase()}|${pos || ""}`;
   const known = new Map();
   pool.forEach((c) => known.set(key(c.word.swedish, c.word.pos), { word: c.word, occurrences: c.occurrences }));
@@ -677,6 +732,8 @@ async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, freq) {
     const match = known.get(key(v.swedish, v.pos));
     const dedupeKey = match ? match.word.id : key(v.swedish, v.pos);
     if (seen.has(dedupeKey) || !String(v.swedish || "").trim()) continue;
+    if (!occursInText(v.swedish, freq)) continue;
+    if (match?.word.cefr_level === "A1" && v.reason && !BASIC_WORD_REASONS.has(v.reason)) continue;
     seen.add(dedupeKey);
     candidates.push({
       word_id: match?.word.id || null,
@@ -1252,7 +1309,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   // 缺口2 (2026-07-30): words the textbook's own margin glossary already
   // explains never compete for the 5-15 key-vocabulary slots — the book
   // already did that job for free.
-  const glossaryWords = new Set((glossary || []).map((g) => String(g.word || "").toLowerCase()).filter(Boolean));
+  const glossaryWords = glossaryForms(glossary);
   const tokens = [...freq.keys()].filter((t) => !glossaryWords.has(t));
   const found = await matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage);
   // A pool of dictionary candidates (2x the shown count) for the AI to score; the
