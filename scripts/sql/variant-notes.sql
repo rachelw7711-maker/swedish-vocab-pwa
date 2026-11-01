@@ -22,3 +22,15 @@ insert into public.content_audit_archive (batch_id, learning_object_id, table_na
 select :'batch', learning_object_id, 'learning_object_translations', 'meaning_note:' || lang, '', note, 'variant_or_form_note' from upd;
 update public.learning_object_translations t set meaning_note = u.note, updated_at = now() from upd u where t.id = u.id;
 commit;
+
+-- anmälning carried anmälan's singular forms; SALDO anmälning..nn.1: anmälning, anmälningen.
+begin;
+insert into public.content_audit_archive (batch_id, learning_object_id, table_name, field, old_value, new_value, reason)
+select :'batch', f.learning_object_id, 'word_forms', f.form_type, f.form_value, v.val, 'saldo_anmälning..nn.1'
+from public.word_forms f join public.learning_objects lo on lo.id = f.learning_object_id and lo.swedish = 'anmälning' and lo.status <> 'retired'
+join (values ('singular_indefinite', 'anmälning'), ('singular_definite', 'anmälningen')) v(t, val) on v.t = f.form_type
+where f.form_value = 'anmälan';
+update public.word_forms f set form_value = v.val, updated_at = now()
+from public.learning_objects lo, (values ('singular_indefinite', 'anmälning'), ('singular_definite', 'anmälningen')) v(t, val)
+where lo.id = f.learning_object_id and lo.swedish = 'anmälning' and lo.status <> 'retired' and f.form_type = v.t and f.form_value = 'anmälan';
+commit;
