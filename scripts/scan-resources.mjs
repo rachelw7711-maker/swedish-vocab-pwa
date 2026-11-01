@@ -86,6 +86,19 @@ const [objects, forms, translations, examples] = await Promise.all([
   load("learning_object_examples", "id, learning_object_id, example_swedish"),
 ]);
 
+// Decisions of a manual review (source 'manual-review', detail.value = the value it judged):
+// kept as they are while the stored value is unchanged, so a confirmed variant or a form
+// the word does not have is not flagged again. A changed value is checked afresh.
+const manual = new Map();
+if (!backupDir) {
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await retry(() => db.from("resource_field_status").select("learning_object_id, field, status, detail").eq("source", "manual-review").order("learning_object_id").order("field").range(from, from + 999));
+    if (error) throw error;
+    data.forEach((r) => manual.set(`${r.learning_object_id}|${r.field}`, r));
+    if (data.length < 1000) break;
+  }
+}
+
 const formsById = new Map();
 forms.forEach((f) => { if (f.form_value) (formsById.get(f.learning_object_id) ?? formsById.set(f.learning_object_id, {}).get(f.learning_object_id))[f.form_type] = f.form_value; });
 const meaning = new Map();
@@ -112,6 +125,9 @@ for (const o of objects) {
   t.entries++;
   let complete = true;
   const record = (field, status, source, detail) => {
+    const decided = manual.get(`${o.id}|${field}`);
+    const current = field.startsWith("form:") ? entry.forms[field.slice(5)] || "" : null;
+    if (decided && (current === null || (decided.detail?.value ?? "") === current)) ({ status, detail } = decided), source = "manual-review";
     bump(type, field, status);
     statusLines.push(JSON.stringify({ learning_object_id: o.id, field, status, source, detail }));
     if (status !== "verified" && status !== "present" && status !== "not_applicable") complete = false;
