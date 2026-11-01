@@ -199,11 +199,12 @@ export async function extractTextFromImage({ imageDataUrl }) {
 const LAYOUT_SYSTEM = `You sort the OCR lines of a photographed Swedish page. You get the photo and its lines, numbered, with their position (x, y, w, h as fractions of the page, origin top left).
 
 Return:
-- body: the line numbers of the main article or story text (its title and headings included), in reading order (follow the columns of the page).
+- title: the line numbers of the article's own title (usually one line, large or bold above the text); empty if it has none.
+- body: the line numbers of the main article or story text (its headings inside the text included, the title not), in reading order (follow the columns of the page).
 - glossary: only if the page prints its own word list next to or below the text (each entry a word or phrase with the book's short explanation, often in a margin column, a box or a footnote list). One item per entry: lines = the line numbers it uses, word = the word or phrase exactly as printed, definition = the explanation exactly as printed. Copy both character for character from those lines; leave out only separators between them (a dash, colon, equals sign or the gap between columns). Never write, correct, translate or complete anything. The word list's own heading (Ordlista, Ord, Glosor, Ordförklaringar …) is not part of an entry: put it in other.
-- other: line numbers of everything else (page numbers, running headers, chapter labels, captions, exercises and questions, notes, advertising, text from a facing page).
+- other: line numbers of everything else (page numbers, running headers, chapter and text labels such as "Kapitel 3" or "Text 5A", captions, exercises and questions, notes, advertising, text from a facing page).
 
-Every line number goes in exactly one of the three. Most pages have no word list: then glossary is empty.`;
+Every line number goes in exactly one of the four. Most pages have no word list: then glossary is empty.`;
 
 export function sanitizeOcrLines(lines) {
   return (Array.isArray(lines) ? lines : []).slice(0, 400).map((l) => ({
@@ -214,25 +215,36 @@ export function sanitizeOcrLines(lines) {
 
 const squash = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
-// Turns the model's answer into { body: [line numbers], glossary: [{word, definition}] }.
+// Spelling key that ignores diacritics: the phone's OCR sometimes reads å / ä as ả, á, ã,
+// which the model, looking at the photo, writes correctly.
+const fold = (s) => squash(s).normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+// Turns the model's answer into { title, body: [line numbers], glossary: [{word, definition}] }.
 // Lines the answer leaves out are kept in the body (nothing read is silently lost); a
-// glossary item whose word or definition is not verbatim in its lines keeps the lines'
-// own text as the word, with no definition.
+// glossary item whose word or definition is not in its lines (diacritics aside) keeps the
+// lines' own text as the word, with no definition.
 export function assemblePageLayout(lines, parsed) {
   const n = lines.length;
   const valid = (i) => Number.isInteger(i) && i >= 0 && i < n;
   const used = new Set();
   const glossary = [];
+  const titleIds = [...new Set((parsed?.title || []).filter(valid))].sort((a, b) => a - b);
+  titleIds.forEach((i) => used.add(i));
+  const title = squash(titleIds.map((i) => lines[i].text).join(" "));
   for (const g of Array.isArray(parsed?.glossary) ? parsed.glossary : []) {
     const ids = [...new Set((g.lines || []).filter(valid))].filter((i) => !used.has(i)).sort((a, b) => a - b);
     if (!ids.length) continue;
     ids.forEach((i) => used.add(i));
-    let joined = squash(ids.map((i) => lines[i].text).join(" "));
-    const word = squash(g.word);
+    // A footnote marker (¹, read as ' or *) in front of the entry is not part of it.
+    const marker = /^[’'`*¹²³⁴⁵⁶⁷⁸⁹⁰]+\s*/;
+    let joined = squash(ids.map((i) => lines[i].text).join(" ")).replace(marker, "");
+    const word = squash(g.word).replace(marker, "");
     const definition = squash(g.definition);
     // An entry starts with its word: text cited before it (a list heading) is dropped.
-    if (word && joined.indexOf(word) > 0) joined = joined.slice(joined.indexOf(word));
-    if (word && definition && joined.startsWith(word) && joined.endsWith(definition) && word.length + definition.length <= joined.length) {
+    const at = fold(joined).indexOf(fold(word));
+    if (word && at > 0 && fold(joined).length === joined.length) joined = joined.slice(at);
+    const f = fold(joined);
+    if (word && definition && f.startsWith(fold(word)) && f.endsWith(fold(definition)) && word.length + definition.length <= joined.length) {
       glossary.push({ word, definition });
     } else if (joined) {
       glossary.push({ word: joined, definition: "" });
@@ -242,7 +254,7 @@ export function assemblePageLayout(lines, parsed) {
   const body = [];
   for (const i of parsed?.body || []) if (valid(i) && !used.has(i) && !other.has(i)) { used.add(i); body.push(i); }
   for (let i = 0; i < n; i++) if (!used.has(i) && !other.has(i) && lines[i].text) { used.add(i); body.push(i); }
-  return { body, glossary };
+  return { title, body, glossary };
 }
 
 export async function classifyPageLines({ imageDataUrl, lines }) {
@@ -255,6 +267,7 @@ export async function classifyPageLines({ imageDataUrl, lines }) {
     type: "object",
     additionalProperties: false,
     properties: {
+      title: { type: "array", items: { type: "integer" } },
       body: { type: "array", items: { type: "integer" } },
       glossary: {
         type: "array",
@@ -267,7 +280,7 @@ export async function classifyPageLines({ imageDataUrl, lines }) {
       },
       other: { type: "array", items: { type: "integer" } },
     },
-    required: ["body", "glossary", "other"],
+    required: ["title", "body", "glossary", "other"],
   };
   const numbered = lines.map((l, i) => `${i}\t[${[l.x, l.y, l.w, l.h].map((v) => v.toFixed(3)).join(", ")}]\t${l.text}`).join("\n");
   const content = [{ type: "input_text", text: `OCR lines (number, [x, y, w, h], text):\n${numbered}` }];

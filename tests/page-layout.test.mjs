@@ -43,3 +43,27 @@ test("a list heading cited with the first entry is dropped", () => {
   const r = assemblePageLayout(l, { body: [], other: [], glossary: [{ lines: [0, 1], word: "en stuga", definition: "ett litet hus på landet" }] });
   assert.deepEqual(r.glossary, [{ word: "en stuga", definition: "ett litet hus på landet" }]);
 });
+
+test("the title is returned on its own and kept out of the body", () => {
+  const r = assemblePageLayout(lines, { title: [1], body: [1, 2, 4], other: [0, 7], glossary: [] });
+  assert.equal(r.title, "Rösten i natten");
+  assert.deepEqual(r.body, [2, 4, 3, 5, 6]);
+});
+
+test("an entry whose OCR misread å / ä still splits into word and definition", () => {
+  const l = sanitizeOcrLines([{ text: "trảng" }, { text: "med lite plats" }, { text: "en visa en enkel sáng" }]);
+  const r = assemblePageLayout(l, { title: [], body: [], other: [], glossary: [{ lines: [0, 1], word: "trång", definition: "med lite plats" }, { lines: [2], word: "en visa", definition: "en enkel sång" }] });
+  assert.deepEqual(r.glossary, [{ word: "trång", definition: "med lite plats" }, { word: "en visa", definition: "en enkel sång" }]);
+});
+
+test("a rewritten word is still not accepted", () => {
+  const l = sanitizeOcrLines([{ text: "trång – med lite plats" }]);
+  const r = assemblePageLayout(l, { title: [], body: [], other: [], glossary: [{ lines: [0], word: "trång", definition: "liten" }] });
+  assert.deepEqual(r.glossary, [{ word: "trång – med lite plats", definition: "" }]);
+});
+
+test("a footnote marker read in front of a word is not part of it", () => {
+  const l = sanitizeOcrLines([{ text: "' midsommarstång – en hög stång som man dansar runt" }, { text: "* sju sorters blommor – sju olika slags blommor" }]);
+  const r = assemblePageLayout(l, { title: [], body: [], other: [], glossary: [{ lines: [0], word: "' midsommarstång", definition: "en hög stång som man dansar runt" }, { lines: [1], word: "sju sorters blommor", definition: "sju olika slags blommor" }] });
+  assert.deepEqual(r.glossary, [{ word: "midsommarstång", definition: "en hög stång som man dansar runt" }, { word: "sju sorters blommor", definition: "sju olika slags blommor" }]);
+});

@@ -59,13 +59,13 @@ export default async function handler(req, res) {
     if (Array.isArray(lines)) {
       const ocrLines = sanitizeOcrLines(lines);
       if (!ocrLines.some((l) => l.text)) {
-        sendJson(res, 200, { body: [], glossary: [] });
+        sendJson(res, 200, { title: "", body: [], glossary: [] });
         return;
       }
       const image = clean(imageDataUrl).startsWith("data:image/") && imageDataUrl.length <= MAX_IMAGE_BYTES * 1.4 ? imageDataUrl : null;
       const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       await enforceQuota(admin, userId, calculateCredits("ocr"));
-      const { body, glossary, usage } = await classifyPageLines({ imageDataUrl: image, lines: ocrLines });
+      const { title, body, glossary, usage } = await classifyPageLines({ imageDataUrl: image, lines: ocrLines });
       const inputTokens = usage.input_tokens || 0;
       const outputTokens = usage.output_tokens || 0;
       await admin.from("ai_usage_logs").insert({
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
         actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
         cache_hit: false,
       });
-      sendJson(res, 200, { body, glossary });
+      sendJson(res, 200, { title, body, glossary });
       return;
     }
     if (!clean(imageDataUrl) || !imageDataUrl.startsWith("data:image/")) {
