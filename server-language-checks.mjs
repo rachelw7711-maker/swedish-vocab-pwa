@@ -157,7 +157,7 @@ For each item:
 Be conservative: change only what is clearly wrong.`;
 
 // Characters only traditional Chinese uses (common ones): a zh field is Simplified Chinese.
-const TRADITIONAL = /[乾淨國這說們會來時對學過還長無與開關見發後電話書車門問題觀點記讓應樣種經變當實現燒鍋魚鳥麵飯雞錢買賣寫聽讀從裡為麼誰嗎幾體邊遠給錯樂歡氣將專業級總親愛顏場歲頭腦臉髮兒媽爺睡覺餐廳館區園離準備辦幫將應該較雖際網號碼個們]/u;
+const TRADITIONAL = /[乾淨國這說們會來時對學過還長無與開關見發後電話書車門問題觀點記讓應樣種經變當實現燒鍋魚鳥麵飯雞錢買賣寫聽讀從裡為麼誰嗎幾體邊遠給錯樂歡氣將專業級總親愛顏場歲頭腦臉髮兒媽爺覺廳館區園離準備辦幫將應該較雖際網號碼個們]/u;
 
 /** Program checks on an example's translations, passed to the AI check as flags. */
 export function translationFlags(example) {
@@ -165,7 +165,7 @@ export function translationFlags(example) {
   const words = (String(example.sv || "").match(/\p{L}+/gu) || []).length;
   const zh = String(example.zh || "").replace(/[\s，。！？、；：,.!?]/gu, "");
   const en = (String(example.en || "").match(/\p{L}+/gu) || []).length;
-  if (example.zh !== undefined && words >= 4 && zh.length < words) flags.push("zh_too_short");
+  if (example.zh !== undefined && words >= 4 && zh.length < words * 0.8) flags.push("zh_too_short");
   if (TRADITIONAL.test(zh)) flags.push("zh_traditional");
   if (example.en !== undefined && words >= 4 && en < Math.ceil(words / 2)) flags.push("en_too_short");
   if (example.zh && pronounMismatch(example.sv, example.zh)) flags.push("zh_pronoun");
@@ -174,17 +174,19 @@ export function translationFlags(example) {
 }
 
 /**
- * A Chinese translation whose pronouns don't match the Swedish: "hon" without 她, "han"
- * without 他, or 她 where the Swedish has only "han" (and the reverse). Only clear cases:
- * a sentence with both or with hen / generic subjects isn't judged.
+ * A Chinese translation that gets a pronoun's gender wrong: the Swedish has only "hon"
+ * (henne, hennes) and the Chinese only 他, or only "han" and the Chinese only 她. A
+ * pronoun left out is normal Chinese, and 他 for another person in the sentence ("hon
+ * ringde sin fästman … 告诉他") is fine — neither is judged.
  */
 export function pronounMismatch(sv, zh) {
   const words = new Set((String(sv || "").toLowerCase().match(/\p{L}+/gu) || []));
   const she = words.has("hon") || words.has("henne") || words.has("hennes");
   const he = words.has("han") || words.has("honom") || words.has("hans");
   const text = String(zh || "");
-  if (she && !he) return !text.includes("她") || /他(?!们)/u.test(text);
-  if (he && !she) return !/他/u.test(text) || text.includes("她");
+  const hasShe = text.includes("她"), hasHe = /他(?!们)/u.test(text);
+  if (she && !he) return hasHe && !hasShe;
+  if (he && !she) return hasShe && !hasHe;
   return false;
 }
 
@@ -509,4 +511,63 @@ export async function checkedTranslations(supabaseAdmin, items, { feature = "exa
     }
   }
   return { accepted, rejected, usage };
+}
+
+// ---------------------------------------------------------------------------
+// The other explanation language of an expression entry (2026-11-02)
+// ---------------------------------------------------------------------------
+
+const otherMeaningItem = {
+  type: "object", additionalProperties: false,
+  properties: { key: { type: "string" }, expression: { type: "string" }, meaning: { type: "string" } },
+  required: ["key", "expression", "meaning"],
+};
+
+/**
+ * Fills the missing explanation-language row of expression entries found while reading
+ * (they were saved in the reader's language only, so readers of the other language saw
+ * no meaning): the meaning in one batched call (echo-checked), the example sentence with
+ * checkedTranslations (written, reviewed, program-checked). A row is written only when
+ * both pass. Returns { filled: [ids], failed: Map(id → problems), usage }.
+ *   items: [{ id, expression, meaning, meaningLanguage, sentence }]
+ */
+export async function fillExpressionLanguage(supabaseAdmin, items, { write = true } = {}) {
+  const filled = [];
+  const failed = new Map();
+  const usage = { input_tokens: 0, output_tokens: 0, calls: 0, cost: 0 };
+  const byTarget = { zh: items.filter((i) => i.meaningLanguage === "en"), en: items.filter((i) => i.meaningLanguage === "zh") };
+  for (const [lang, group] of Object.entries(byTarget)) {
+    if (!group.length) continue;
+    const keyed = group.map((g, n) => ({ ...g, key: `m${n + 1}` }));
+    const { result, usage: u } = await callOpenAIJson({
+      schemaName: "expression_meaning",
+      schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", items: otherMeaningItem } }, required: ["items"] },
+      system: `You write the ${lang === "zh" ? "Simplified Chinese" : "English"} meaning of Swedish expressions for a learner's dictionary: short, in the style of the given meaning in the other language, for the sense the example sentence uses. Echo each key and the expression exactly.`,
+      user: JSON.stringify(keyed.map((k) => ({ key: k.key, expression: k.expression, meaning_given: k.meaning, sentence: k.sentence }))),
+      maxOutputTokens: 400 + 80 * keyed.length,
+    });
+    const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
+    usage.input_tokens += u.input_tokens || 0; usage.output_tokens += u.output_tokens || 0; usage.calls += 1; usage.cost += cost;
+    if (supabaseAdmin && write) await logUsage(supabaseAdmin, { feature: "expression_language", model: MODEL, inputTokens: u.input_tokens, outputTokens: u.output_tokens, cost });
+    const examples = await checkedTranslations(write ? supabaseAdmin : null, keyed.filter((k) => k.sentence).map((k) => ({ id: k.id, headword: k.expression, pos: "phrase", sv: k.sentence })), { feature: "expression_language" });
+    usage.input_tokens += examples.usage.input_tokens; usage.output_tokens += examples.usage.output_tokens; usage.calls += examples.usage.calls; usage.cost += examples.usage.cost;
+    for (const k of keyed) {
+      const answers = (result.items || []).filter((x) => x.key === k.key);
+      const meaning = answers.length === 1 && norm(answers[0].expression).join(" ") === norm(k.expression).join(" ") ? answers[0].meaning.trim() : "";
+      const example = k.sentence ? examples.accepted.get(k.id)?.[lang] : "";
+      const problems = [];
+      if (!meaning) problems.push("meaning_missing_or_misplaced");
+      if (lang === "zh" && TRADITIONAL.test(meaning)) problems.push("meaning_traditional");
+      if (k.sentence && !example) problems.push(...(examples.rejected.get(k.id) || ["example_missing"]));
+      if (problems.length) { failed.set(k.id, problems); continue; }
+      if (write && supabaseAdmin) {
+        const { error } = await supabaseAdmin.from("learning_object_translations").upsert(
+          { learning_object_id: k.id, native_language: lang, meaning, example_translation: example || null, updated_at: new Date().toISOString() },
+          { onConflict: "learning_object_id,native_language" });
+        if (error) { failed.set(k.id, [`write_failed:${error.message}`]); continue; }
+      }
+      filled.push(k.id);
+    }
+  }
+  return { filled, failed, usage };
 }

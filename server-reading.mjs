@@ -6,7 +6,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { generateWordEntry } from "./server-native.mjs";
 import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
-import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence } from "./server-language-checks.mjs";
+import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence, fillExpressionLanguage } from "./server-language-checks.mjs";
 import { lookupWiktionary } from "./server-wiktionary.mjs";
 import { formReadings } from "./server-lexicon.mjs";
 
@@ -1123,15 +1123,29 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
       updated_at: now,
     }));
     const { data: inserted, error: insertError } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish");
+    const newRows = [];
     if (!insertError && inserted) {
       for (const row of inserted) {
         const created = toCreate.find((c) => c.item.expression_text.toLowerCase() === row.swedish.toLowerCase());
         if (!created) continue;
         byKey.set(created.matchKey, row.id);
         await setMatchKey(supabaseAdmin, row.id, created.matchKey);
-        await supabaseAdmin.from("learning_object_translations").insert({ learning_object_id: row.id, native_language: nativeLanguage, meaning: created.item.meaning_zh || "", updated_at: now });
+        // The example's translation too (it was left out, so the app showed the sentence untranslated).
+        await supabaseAdmin.from("learning_object_translations").insert({ learning_object_id: row.id, native_language: nativeLanguage, meaning: created.item.meaning_zh || "",
+          example_translation: created.item.source_sentence_zh || null, updated_at: now });
+        newRows.push({ id: row.id, expression: row.swedish, meaning: created.item.meaning_zh || "", meaningLanguage: nativeLanguage, sentence: created.item.source_sentence || "" });
         // Collected from a text: meaning and example only — the rest is recorded as missing.
         await recordEntryStatus(supabaseAdmin, row.id, { type: module, pos: "other", [`meaning_${nativeLanguage}`]: Boolean(created.item.meaning_zh), example: Boolean(created.item.source_sentence) });
+      }
+    }
+    // The other explanation language right away, so every reader sees a meaning and a
+    // translated example (a failure leaves that row missing, recorded in the logs).
+    if (newRows.length) {
+      try {
+        const { failed } = await fillExpressionLanguage(supabaseAdmin, newRows);
+        if (failed.size) console.warn("[Reading] other-language row not filled", [...failed]);
+      } catch (error) {
+        console.warn("[Reading] other-language row skipped", error.message);
       }
     }
     // Lost a race (same spelling inserted meanwhile): re-check before linking.

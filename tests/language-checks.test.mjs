@@ -178,3 +178,13 @@ test("a sense said not to belong must be quoted from the entry itself; batches d
     assert.deepEqual(requests, [["torka", "vecka"], ["torka"]]);
   });
 });
+
+test("translation flags: no alarm for a left-out pronoun, another person's 他, or characters both scripts share", async () => {
+  const { translationFlags, pronounMismatch } = await import("../server-language-checks.mjs");
+  assert.equal(pronounMismatch("Hon ringde sin fästman för att berätta att hon fick jobbet.", "她打电话给未婚夫，告诉他自己得到了那份工作。"), false);
+  assert.equal(pronounMismatch("Barnet stannade hemma eftersom han var magsjuk.", "孩子因为肠胃不舒服留在家里了。"), false);
+  assert.equal(pronounMismatch("Han flydde snabbt.", "她迅速逃走了。"), true);
+  assert.deepEqual(translationFlags({ sv: "Barnet somnade i bilen på väg hem.", zh: "孩子在回家的路上在车里睡着了。" }), []);
+  assert.deepEqual(translationFlags({ sv: "Det var bussigt av dig att stanna kvar och hjälpa till efter mötet.", zh: "你会后留下来帮忙，真够意思。" }), []);
+  assert.deepEqual(translationFlags({ sv: "Du kunde kanske stänga fönstret? Det drar här inne. Jag fryser lite.", zh: "也许可以；委婉表达" }), ["zh_too_short"]);
+});
