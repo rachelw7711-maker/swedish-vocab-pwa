@@ -201,7 +201,7 @@ const LAYOUT_SYSTEM = `You sort the OCR lines of a photographed Swedish page. Yo
 Return:
 - title: the line numbers of the article's own title (usually one line, large or bold above the text); empty if it has none.
 - body: the line numbers of the main article or story text (its headings inside the text included, the title not), in reading order (follow the columns of the page).
-- glossary: only if the page prints its own word list next to or below the text (each entry a word or phrase with the book's short explanation, often in a margin column, a box or a footnote list). One item per entry: lines = the line numbers it uses, word = the word or phrase exactly as printed, definition = the explanation exactly as printed. Copy both character for character from those lines; leave out only separators between them (a dash, colon, equals sign or the gap between columns). Never write, correct, translate or complete anything. The word list's own heading (Ordlista, Ord, Glosor, Ordförklaringar …) is not part of an entry: put it in other.
+- glossary: only if the page prints its own word list next to or below the text (each entry a word or phrase with the book's short explanation, often in a margin column, a box or a footnote list). One item per entry: lines = the line numbers it uses, word = the word or phrase exactly as printed, definition = the explanation exactly as printed. Every entry starts on a new line with its own word (usually bold, often "en"/"ett" + noun or a verb with its forms, e.g. "en öken, öknar", "drabba, drabbas"): a line that starts with a new word is a new entry even when there is no gap before it — never put two words and their explanations in one entry. Copy both character for character from those lines; leave out only separators between them (a dash, colon, equals sign or the gap between columns). Never write, correct, translate or complete anything. The word list's own heading (Ordlista, Ord, Glosor, Ordförklaringar …) is not part of an entry: put it in other.
 - other: line numbers of everything else (page numbers, running headers, chapter and text labels such as "Kapitel 3" or "Text 5A", captions, exercises and questions, notes, advertising, text from a facing page).
 
 Every line number goes in exactly one of the four. Most pages have no word list: then glossary is empty.`;
@@ -223,6 +223,32 @@ const fold = (s) => squash(s).normalize("NFD").replace(/\p{M}/gu, "").toLowerCas
 // Lines the answer leaves out are kept in the body (nothing read is silently lost); a
 // glossary item whose word or definition is not in its lines (diacritics aside) keeps the
 // lines' own text as the word, with no definition.
+// A word list entry the model ran into the next one ("en brist, -er för lite en vattenbrist
+// när det inte finns …"): a later line of the entry that starts like a headword starts a
+// new entry. A headword start is an article/verb with its own inflection ("en öken, öknar",
+// "drabba, drabbas", "en yta, -or"), or "en"/"ett" + a word the article itself uses that is
+// not already in the entry's first line ("en vattenbrist" — but not "en skatt" under "en
+// trängselskatt"). Returns the headword, or "".
+export function glossaryHeadwordAt(line, firstLine, bodyText) {
+  const text = squash(line);
+  const inflected = text.match(/^((?:(?:en|ett)\s+)?(\p{L}+)),\s*(-\p{L}+|\p{L}+)(?:,\s*\p{L}+)*/u);
+  if (inflected) {
+    const [whole, , stem, form] = inflected;
+    // "öken, öknar": the inflected form shares the start of the word (two letters: a vowel can drop).
+    if (form.startsWith("-") || (form.length >= 3 && fold(form).startsWith(fold(stem).slice(0, 2)))) return whole;
+  }
+  const noun = text.match(/^(?:en|ett)\s+(\p{L}{4,})/u);
+  if (noun) {
+    const word = fold(noun[1]);
+    const stem = word.slice(0, Math.max(4, word.length - 2));
+    if (!fold(firstLine).includes(word) && (fold(bodyText).match(/\p{L}+/gu) || []).some((t) => t.startsWith(stem))) return `${text.split(/\s+/).slice(0, 2).join(" ")}`;
+  }
+  return "";
+}
+
+// "överkon- sumerar": a word broken over two lines is read as one again.
+const unbreak = (text) => text.replace(/(\p{Ll})- (\p{Ll})/gu, "$1$2");
+
 export function assemblePageLayout(lines, parsed) {
   const n = lines.length;
   const valid = (i) => Number.isInteger(i) && i >= 0 && i < n;
@@ -231,15 +257,42 @@ export function assemblePageLayout(lines, parsed) {
   const titleIds = [...new Set((parsed?.title || []).filter(valid))].sort((a, b) => a - b);
   titleIds.forEach((i) => used.add(i));
   const title = squash(titleIds.map((i) => lines[i].text).join(" "));
+  const bodyIds = new Set((parsed?.body || []).filter(valid));
+  const bodyText = lines.filter((_, i) => bodyIds.has(i)).map((l) => l.text).join(" ");
+  const entries = [];
   for (const g of Array.isArray(parsed?.glossary) ? parsed.glossary : []) {
     const ids = [...new Set((g.lines || []).filter(valid))].filter((i) => !used.has(i)).sort((a, b) => a - b);
     if (!ids.length) continue;
     ids.forEach((i) => used.add(i));
+    let start = 0;
+    for (let k = 1; k <= ids.length; k++) {
+      let headword = k < ids.length ? glossaryHeadwordAt(lines[ids[k]].text, lines[ids[start]].text, bodyText) : "";
+      // The model's own explanation already ended on the line before ("uppfatta, uppfattar
+      // förstå" + "obekväm inte bekväm"): a next line whose first word is in the article is a new entry.
+      if (k < ids.length && !headword && start === 0 && g.definition) {
+        const sofar = fold(ids.slice(0, k).map((i) => lines[i].text).join(" "));
+        const first = fold(lines[ids[k]].text).match(/^\p{L}{4,}/u)?.[0];
+        const stem = first?.slice(0, Math.max(4, first.length - 2));
+        if (first && sofar.endsWith(fold(g.definition)) && (fold(bodyText).match(/\p{L}+/gu) || []).some((t) => t.startsWith(stem))) headword = squash(lines[ids[k]].text).split(" ")[0];
+      }
+      if (k < ids.length && !headword) continue;
+      // The first piece keeps the model's own word and definition; a split-off one starts
+      // with the headword found in its first line.
+      entries.push(start === 0 ? { ids: ids.slice(0, k), word: g.word, definition: k === ids.length ? g.definition : "" } : { ids: ids.slice(start, k), word: entries.at(-1).nextWord, definition: "" });
+      if (headword) entries.at(-1).nextWord = headword;
+      start = k;
+    }
+  }
+  for (const g of entries) {
+    const ids = g.ids;
     // A footnote marker (¹, read as ' or *) in front of the entry is not part of it.
     const marker = /^[’'`*¹²³⁴⁵⁶⁷⁸⁹⁰]+\s*/;
-    let joined = squash(ids.map((i) => lines[i].text).join(" ")).replace(marker, "");
-    const word = squash(g.word).replace(marker, "");
-    const definition = squash(g.definition);
+    let joined = unbreak(squash(ids.map((i) => lines[i].text).join(" ")).replace(marker, ""));
+    const word = unbreak(squash(g.word).replace(marker, ""));
+    let definition = unbreak(squash(g.definition));
+    const at0 = fold(joined).indexOf(fold(word));
+    // A piece without the model's definition: the explanation is what follows the word.
+    if (!definition && word && at0 >= 0 && fold(joined).length === joined.length) definition = squash(joined.slice(at0 + word.length));
     // An entry starts with its word: text cited before it (a list heading) is dropped.
     const at = fold(joined).indexOf(fold(word));
     if (word && at > 0 && fold(joined).length === joined.length) joined = joined.slice(at);
@@ -456,6 +509,15 @@ const LOW_VALUE_TIME_WORDS = new Set([
 // The pool is shared by everyone who reads this text, so it is never filtered by
 // one reader's mastered words — each reader's own mastered words are swapped for
 // other candidates on their device (2026-10-30).
+// How many dictionary words found in a text are offered to the AI (most texts have fewer).
+const POOL_SIZE = 40;
+
+// The candidates in the order their words first occur in the text (freq keeps that order).
+export function inTextOrder(pool, freq) {
+  const position = new Map([...freq.keys()].map((token, i) => [token, i]));
+  return [...pool].sort((a, b) => (position.get(a.token) ?? 0) - (position.get(b.token) ?? 0));
+}
+
 export function rankFoundWords(found, freq, firstSeenCapitalized, limit) {
   const excludedPos = new Set(["preposition", "conjunction", "pronoun", "numeral", "interjection"]);
   const candidates = [...found.entries()]
@@ -513,7 +575,8 @@ const WORTH_LEARNING_DIMENSIONS = `1. Does it genuinely help understand THIS art
 Calibration — rank by how much a word actually determines whether the reader understands the article, NOT by how common, short, or grammatically "simple" it looks:
 - "och", "väldigt" → bottom of the list or left out. Generic, replaceable, contributes almost nothing specific.
 - "regering" → middle of the list if the article is genuinely about government/policy; otherwise low.
-- "däremot", "trots", "dessutom" → near the top, even though they're short, frequent, and CEFR A2-B1. A connective word that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands the article correctly — never downgrade a word just because it "looks too simple" or "too common" to be worth learning.
+- "däremot", "trots" → worth a place even though they're short, frequent, and CEFR A2-B1: a connective that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands it correctly. A connective that only adds or sums up ("dessutom", "alltså", "också") steers far less; take it only when the text has little else. Connectives never push out the terms the text's subject is discussed in.
+- The specific terms a text discusses its subject in (for a text about health, e.g. "blodtryck", "kost", "förebygga"; for one about work, "arbetsmarknad", "anställning", "lön") → the top of the list: they are what the text is about and what a reader must understand to follow it. A general word that only names things in everyday terms ("problem", "fördel", "stor", "öka", "rik") is below them, and left out when the text has such specific terms.
 - A phrasal/idiomatic verb sense (e.g. "lägga ner", "komma fram till") → near the top — these carry far more meaning than any single component word.
 - A basic everyday word used in its ordinary sense (e.g. "barn", "mamma", "hus", "dag", "ofta", "aldrig", "göra", "tycka", "gå", "bra", "stor") → leave it out, even if it occurs often or the story is about it: a reader who can read this text already knows it, so it teaches nothing here.
 Simplicity alone neither qualifies nor disqualifies a word: a short connective that steers a sentence's meaning belongs near the top, a basic content word in its everyday sense does not belong at all. How often a word occurs in the text is never a reason to include it.
@@ -591,6 +654,16 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
     type: "object",
     additionalProperties: false,
     properties: {
+      article: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          topic: { type: "string" },
+          core_points: { type: "array", items: { type: "string" } },
+          key_terms: { type: "array", items: { type: "string" } },
+        },
+        required: ["topic", "core_points", "key_terms"],
+      },
       vocabulary: {
         type: "array",
         items: {
@@ -633,10 +706,13 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
         },
       },
     },
-    required: ["vocabulary", "key_sentences", "language_patterns"],
+    required: ["article", "vocabulary", "key_sentences", "language_patterns"],
   };
+  // The book's own word list is a hint about what matters in the text, not a list to keep
+  // out (2026-11-02): leaving its words out took "koldioxid", "nederbörd", "översvämning"
+  // away from a climate text and left "problem" and "rik" in their place.
   const glossaryNote = glossary.length
-    ? `\n\nThe text's own printed margin glossary already explains these words/phrases: ${[...glossaryForms(glossary)].join(", ")}. Do not select any of these words or phrases (in any inflected form) on their own as a keyword, collocation or idiom — the book already did that job. A longer expression that merely contains one of them (e.g. a verb + noun combination around it) may still be taken if it passes its own test.`
+    ? `\n\nThe textbook prints its own word list for this text: ${[...glossaryForms(glossary)].join(", ")}. These words are judged like every other word in the text — being in the book's list neither excludes a word nor qualifies it on its own (the book often explains exactly the text's key terms, and they belong among the keywords then).`
     : "";
   const candidateList = vocabularyPool.length
     ? vocabularyPool.map((c) => `${c.word.swedish} (${c.word.pos || "?"}${c.word.cefr_level ? `, ${c.word.cefr_level}` : ""})`).join(", ")
@@ -649,7 +725,9 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
 
 Every list below is ordered from most to least worth learning IN THIS TEXT: how much understanding the text's topic and core content depends on the item comes first. Difficulty is only a secondary hint (the dictionary level is given for listed candidates). There is no target number for any list — the text decides: a plain text may have only a few items, a dense one more. Never add an item to reach a number.
 
-1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists dictionary candidates found in the text as "lemma (part of speech, CEFR)"; pick from them (keep the lemma and part of speech exactly as given) and you may ALSO add other words from the text that are genuinely worth learning even if not listed — give their dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. A word that is only there as part of a fixed phrase ("exempel" in "till exempel", "eget" in "på mitt eget sätt") is not a keyword — fixed phrases are chosen in a separate step. Use these dimensions together:
+0. article: first read the whole text and work out what it is about — topic (one line), core_points (its main points, a few short lines) and key_terms (the words and terms in the text that carry those points, as they appear in it). Everything below is chosen with this in mind.
+
+1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. Start from article.key_terms: the words that carry the text's topic and main points come first, whether common or rare, listed as candidates or not, in the book's word list or not. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists the dictionary words found in the text as "lemma (part of speech, CEFR)", in the order they occur — it is not a ranking, and many of the text's most important words (compounds, rarer terms) are not in it. Take a listed word with its lemma and part of speech exactly as given, and add any other word from the text that deserves a place just as readily — give its dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. How difficult a word is only helps choose between words of similar importance to this text; it never removes a word the text's topic depends on, and a word is never left out just because it looks simple — what counts is what it does in this text. A word that is only there as part of a fixed phrase ("exempel" in "till exempel", "eget" in "på mitt eget sätt") is not a keyword — fixed phrases are chosen in a separate step. Use these dimensions together:
 ${WORTH_LEARNING_DIMENSIONS}
 
 Fixed phrases and idioms are chosen in a separate step (selectExpressions), not here.
@@ -670,6 +748,7 @@ Every source_sentence/sentence must be quoted exactly from the text. Return empt
     userPrompt: `Text:\n${cleanedText}\n\nDictionary candidates: ${candidateList}`,
   });
   return {
+    article: result.article,
     vocabulary: (result.vocabulary || []).slice(0, vocabCandidates),
     keySentences: (result.key_sentences || []).slice(0, MAX_KEY_SENTENCES),
     languagePatterns: (result.language_patterns || []).slice(0, MAX_LANGUAGE_PATTERNS),
@@ -690,24 +769,36 @@ export function splitSentences(text) {
   return String(text || "").replace(/\s+/g, " ").split(/(?<=[.!?])\s+(?=[-–A-ZÅÄÖ])/).map((s) => s.trim()).filter(Boolean);
 }
 
+// Strong verbs change their stem when inflected ("ta" → "tog", "göra" → "gjorde"), so their
+// infinitive can't be found in the sentence by its start.
+const STRONG_VERBS = new Set(["vara", "ha", "göra", "ta", "gå", "få", "se", "ge", "komma", "bli", "hålla", "sätta", "lägga", "ligga", "stå", "sitta", "dra", "slå", "säga", "veta", "finnas", "bära", "falla", "låta", "välja", "sälja", "vinna", "äta", "dricka", "skriva", "stiga", "bryta", "gripa", "sticka", "springa", "binda", "finna", "hinna", "försvinna", "be", "dö", "le", "kunna", "vilja", "skola", "böra", "måste"]);
+
 // An expression is kept only if it is written in Swedish letters (one came back with a
-// Cyrillic "а"), its sentence is quoted from the text, and a word of it (not a "någon"/
-// "sig" placeholder) is in that sentence — so nothing is taken that the text doesn't have.
+// Cyrillic "а"), its sentence is quoted from the text, and each of its words (but a "någon"/
+// "sig" placeholder or a strong verb's infinitive) is in that sentence — so nothing is taken
+// that the text doesn't have ("äga sig åt" for a text with "ägnar sig åt").
 export function expressionInText(e, text) {
   const expression = String(e?.expression_text || "").trim();
   if (!/^[\p{Script=Latin}\s'’\-\/]+$/u.test(expression) || expression.split(/\s+/).length < 2) return false;
   const sentence = normalizeSpace(e.source_sentence);
   if (!sentence || !normalizeSpace(text).includes(sentence)) return false;
   const tokens = sentence.match(/\p{L}+/gu) || [];
-  return expression.toLowerCase().split(/[\s\/]+/)
-    .filter((w) => w.length > 1 && !EXPRESSION_PLACEHOLDERS.has(w))
-    .some((w) => tokens.some((t) => t.startsWith(w.slice(0, Math.max(3, w.length - 2)))));
+  const words = expression.toLowerCase().split(/[\s\/]+/).filter((w) => w.length > 1 && !EXPRESSION_PLACEHOLDERS.has(w));
+  const found = (w) => tokens.some((t) => t.startsWith(w.length <= 4 ? w : w.slice(0, -2)));
+  return words.some(found) && words.every((w) => found(w) || STRONG_VERBS.has(w));
 }
 
 // The scan's verdict decides the list (one rule for every expression: not what the words
 // say → Idiomatiska uttryck; what they say, but fixed words → Fasta fraser), whichever
 // list the model put it in. One the scan didn't judge, judged "neither", or not in the
 // text is left out — so an expression can't land in both lists or in the wrong one.
+// The sentence of the text the quote comes from, exactly as the text has it.
+export function textSentence(quote, text) {
+  const wanted = normalizeSpace(quote);
+  if (!wanted) return "";
+  return splitSentences(text).find((s) => normalizeSpace(s).includes(wanted)) || "";
+}
+
 export function expressionCategory(c) {
   if (c?.verdict === "idiom") return "idiom";
   if (c?.verdict === "fast_fras") return "collocation";
@@ -730,8 +821,12 @@ export function sortExpressions(result, text) {
     if (placed.has(key) || !expressionInText(e, text)) continue;
     placed.add(key);
     const category = expressionCategory(judged.get(expressionKey(e.expression_text)));
-    if (category === "idiom") idioms.push(e);
-    else if (category === "collocation") collocations.push(e);
+    // Shown as the text's own sentence, never the model's copy of it (a copy that only
+    // differs in case or spacing passes the check above).
+    const own = textSentence(e.source_sentence, text);
+    const kept = own ? { ...e, source_sentence: own } : e;
+    if (category === "idiom") idioms.push(kept);
+    else if (category === "collocation") collocations.push(kept);
   }
   return { collocations, idioms };
 }
@@ -789,17 +884,18 @@ export async function selectExpressions(cleanedText, tier, glossary = [], native
     maxOutputTokens: 8000,
     systemPrompt: `You find the multi-word expressions in a Swedish text that a ${langName}-speaking learner should learn as units. Never invent anything: every expression must occur in the text. meaning_zh, source_sentence_zh and word_for_word are written entirely in ${langName} regardless of their names.
 
-Step 1 — scan: go through the numbered sentences in order, one entry per sentence (a sentence with no candidates gets an empty list). For each sentence list every multi-word combination in it that might be a fixed unit, in its learnable form: verbs in the infinitive, "någon"/"något" for an open slot ("hade skänkt bort huset" → "skänka bort något"). Check especially: a light verb with a noun (göra/ta/ha/få/spela/sätta/komma/hålla + noun), verb + particle or preposition, adjective + preposition, set linking phrases, fixed "x och y" pairs. An expression is a few words (usually 2-5), never a whole clause.
+Step 1 — scan: go through the numbered sentences in order, one entry per sentence (a sentence with no candidates gets an empty list). For each sentence list every multi-word combination in it that might be a fixed unit, in its learnable form: verbs in the infinitive, "någon"/"något" for an open slot ("hade skänkt bort huset" → "skänka bort något"), and without words that only belong to this sentence — numbers, quantifiers and descriptive words around the fixed part ("tog flera viktiga beslut" → "ta beslut"). Check especially: a light verb with a noun (göra/ta/ha/få/spela/sätta/komma/hålla + noun), verb + particle or preposition, adjective + preposition, set linking phrases, fixed "x och y" pairs. An expression is a few words (usually 2-5), never a whole clause.
 
 For every candidate, the same steps in this order:
-1. word_for_word: translate it word by word into ${langName}, each word in its most ordinary sense.
+1. word_for_word: each word on its own, as "word=gloss" pairs in order, the gloss being that word's most ordinary dictionary sense in ${langName} — never a smooth translation of the whole ("i första hand" → "i=在 första=第一 hand=手", not a translation such as "primarily").
 2. meaning_here: what it actually means in this sentence, in ${langName}.
-3. verdict — compare the two:
+3. verdict — compare the two (read only the glosses, as if you didn't know the expression):
    - "idiom" (Idiomatiska uttryck) when word_for_word does NOT say what meaning_here says: figurative expressions ("gå i taket" = get furious), set phrases with a discourse, attitude or emphasis function ("för all del", "rättare sagt", "med andra ord"), fixed pairs ("hit och dit"), and a light verb + noun whose pair means something neither word says ("ta illa upp" = be offended, "slå igenom" = become known).
    - "fast_fras" (Fasta fraser) when word_for_word already gives the meaning, but the word choice is fixed — a learner writing it would likely pick the wrong verb, preposition or particle ("ta hand om", "vara beroende av", "fatta ett beslut", "stolt över", "i samband med", "när det gäller").
+     Also "fast_fras", whatever the glosses say: a group of words that works as one preposition or conjunction in front of a noun or clause ("på grund av", "i stället för", "i samband med", "trots att"), and a light verb + noun that means the same as a verb made from that noun ("ta beslut" = besluta, "ta ansvar" = ansvara, "göra ett försök" = försöka).
    - "neither" for a literal free combination (a verb with its ordinary object or adverb: "försöka igen", "köra bil", "lära sig något"), a phrase so basic every reader knows it ("till exempel", "varje år"), a combination only about this text's own content (a place, event, name or subject: "åka till Berlin", "vinna VM"), or something the textbook's own word list already explains on its own${glossaryList ? `: ${glossaryList}` : ""} (a longer expression around such a word is judged on its own).
 
-Step 2 — choose: collocations = "fast_fras" candidates, idioms = "idiom" candidates, each expression once and in exactly one list, best first (most useful to learn for this text first), at most ${collocMax} collocations and ${idiomMax} idioms. Return fewer, even none, if fewer pass — never add one to reach a number. expression_text exactly as in the scan; meaning_zh = its meaning as used here; source_sentence = the sentence quoted exactly from the text, without its [number]; source_sentence_zh = its translation.`,
+Step 2 — choose: collocations = "fast_fras" candidates, idioms = "idiom" candidates, each expression once and in exactly one list, best first (most useful to learn for this text first), at most ${collocMax} collocations and ${idiomMax} idioms. Return fewer, even none, if fewer pass — never add one to reach a number. expression_text as in the scan, after checking it once more: the verb in the infinitive ("breder ut sig" → "breda ut sig"), and no word that could be left out or replaced while the expression stays the same ("ta flera beslut" → "ta beslut"); meaning_zh = its meaning as used here; source_sentence = the sentence quoted exactly from the text, without its [number]; source_sentence_zh = its translation.`,
     userPrompt: sentences.map((sentence, index) => `[${index + 1}] ${sentence}`).join("\n"),
   });
   const sorted = sortExpressions(result, cleanedText);
@@ -1412,15 +1508,13 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   const idiomLimit = Math.min(tierConfig.keyIdioms[1], MAX_KEY_IDIOMS);
 
   const { freq, firstSeenCapitalized } = extractCandidateTokens(cleaned);
-  // 缺口2 (2026-07-30): words the textbook's own margin glossary already
-  // explains never compete for the 5-15 key-vocabulary slots — the book
-  // already did that job for free.
-  const glossaryWords = glossaryForms(glossary);
-  const tokens = [...freq.keys()].filter((t) => !glossaryWords.has(t));
-  const found = await matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage);
-  // A pool of dictionary candidates (2x the shown count) for the AI to score; the
-  // AI may add words the dictionary doesn't have.
-  const pool = rankFoundWords(found, freq, firstSeenCapitalized, vocabularyLimit * 2);
+  // Every word of the text competes, the ones the textbook's own word list explains too
+  // (2026-11-02): keeping those out removed most of a text's key terms.
+  const found = await matchAgainstCorpus(supabaseAdmin, [...freq.keys()], nativeLanguage);
+  // The dictionary words found in the text, in text order (not by how often they occur:
+  // that put "problem" and "rik" in front), for the AI to choose from; it may add words
+  // the dictionary doesn't have.
+  const pool = inTextOrder(rankFoundWords(found, freq, firstSeenCapitalized, POOL_SIZE), freq);
 
   const [selection, expressions] = await Promise.all([
     selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage),
@@ -1429,8 +1523,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_selection", model: MODEL, usage: selection.usage, cacheHit: false });
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_expressions", model: MODEL, usage: expressions.usage, cacheHit: false });
 
-  const scoredVocabulary = (await resolveVocabularyCandidates(supabaseAdmin, selection.vocabulary, pool, freq))
-    .filter((v) => !glossaryWords.has(v.swedish.toLowerCase()));
+  const scoredVocabulary = await resolveVocabularyCandidates(supabaseAdmin, selection.vocabulary, pool, freq);
   const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, expressions.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
   const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, expressions.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
   const asExpression = (category) => (e) => ({ ...e, category });

@@ -67,3 +67,31 @@ test("chosen expressions are placed by the scan's verdict, never both", () => {
   assert.deepEqual(idioms.map((e) => e.expression_text), ["spela roll"]);
   assert.deepEqual(collocations.map((e) => e.expression_text), ["när det gäller"]);
 });
+
+test("an expression's sentence is the text's own sentence, not the model's copy", () => {
+  const text = "Nu är det politikerna som måste agera. De måste ta flera beslut som kan uppfattas som obekväma.";
+  const result = {
+    scan: [{ sentence: 2, candidates: [{ expression: "ta beslut", word_for_word: "", meaning_here: "", verdict: "fast_fras" }] }],
+    collocations: [{ expression_text: "ta beslut", meaning_zh: "做决定", source_sentence: "de måste ta  flera beslut som kan uppfattas som obekväma.", source_sentence_zh: "" }],
+    idioms: [],
+  };
+  const { collocations } = sortExpressions(result, text);
+  assert.equal(collocations[0].source_sentence, "De måste ta flera beslut som kan uppfattas som obekväma.");
+});
+
+test("dictionary candidates are offered in text order, not by how often they occur", async () => {
+  const { inTextOrder } = await import("../server-reading.mjs");
+  const freq = new Map([["vi", 1], ["överkonsumerar", 1], ["koldioxiden", 1], ["problem", 4]]);
+  const pool = [{ token: "problem" }, { token: "koldioxiden" }, { token: "överkonsumerar" }];
+  assert.deepEqual(inTextOrder(pool, freq).map((c) => c.token), ["överkonsumerar", "koldioxiden", "problem"]);
+});
+
+test("every word of an expression must be in its sentence (strong verbs aside)", () => {
+  const text = "Hon ägnar sig åt musik. De tog beslut i går. Han gjorde succé.";
+  const at = (expression_text, source_sentence) => expressionInText({ expression_text, source_sentence }, text);
+  assert.equal(at("ägna sig åt", "Hon ägnar sig åt musik."), true);
+  assert.equal(at("äga sig åt", "Hon ägnar sig åt musik."), false);
+  assert.equal(at("ta beslut", "De tog beslut i går."), true);
+  assert.equal(at("göra succé", "Han gjorde succé."), true);
+  assert.equal(at("göra fiasko", "Han gjorde succé."), false);
+});
