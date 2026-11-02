@@ -9,15 +9,19 @@ const { generateWordEntry } = await import("../server-native.mjs");
 const { resolveExpressionEntries } = await import("../server-reading.mjs");
 const { fakeSupabase } = await import("./fake-supabase.mjs");
 
-let aiCalls = 0, card = null;
+let aiCalls = 0, checkCalls = 0, card = null, check = null;
+const okCheck = (over = {}) => ({ id: "card", pos_supported: true, other_pos_senses: [], unsupported_senses: [], meaning_zh_fixed: "", meaning_en_fixed: "",
+  swedish_explanation_fixed: "", examples: [], context_matches_entry: "n/a", verdict: "ok", note: "", ...over });
 before(async () => {
   await useSaldoFiles();
-  globalThis.fetch = async () => {
-    aiCalls++;
-    return { ok: true, json: async () => ({ output_text: JSON.stringify(card), usage: { input_tokens: 500, output_tokens: 400 } }) };
+  // Word-card generation, the AI check before saving (sense_check) and Wiktionary (no page) — no network.
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes("wiktionary.org")) return { ok: true, json: async () => ({ error: { code: "missingtitle" } }) };
+    const answer = JSON.parse(init.body).text.format.name === "sense_check" ? (checkCalls++, { items: [check || okCheck()] }) : (aiCalls++, card);
+    return { ok: true, json: async () => ({ output_text: JSON.stringify(answer), usage: { input_tokens: 500, output_tokens: 400 } }) };
   };
 });
-beforeEach(() => { aiCalls = 0; });
+beforeEach(() => { aiCalls = 0; checkCalls = 0; check = null; });
 
 const baseCard = (over) => ({
   is_real_word: true, lemma: "", pos: "noun", pos_detail: "", cefr_level: "B1", meaning_zh: "发酵", meaning_en: "fermentation", swedish_explanation: "när något jäser",
@@ -117,4 +121,46 @@ test("reading expressions: variants reuse one row, other module gets a membershi
   const created = d.tables.learning_objects.find((o) => o.id === out[1].expression_id);
   assert.equal(created.match_key, "lägga märke till");
   assert.ok(d.tables.resource_field_status.some((s) => s.learning_object_id === created.id && s.field === "swedish_explanation" && s.status === "missing"));
+});
+
+test("before saving: a card of another part of speech than asked for is not saved", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning", pos: "verb" });
+  await assert.rejects(generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", chargeQuota: false }), { status: 422 });
+  assert.equal(d.tables.learning_objects.filter((o) => o.swedish === "jäsning").length, 0);
+});
+
+test("before saving: a part of speech the references don't give the word is not saved", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning", pos: "adjective" });   // SALDO: jäsning is only a noun
+  await assert.rejects(generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", chargeQuota: false }), { status: 422 });
+  assert.equal(d.tables.learning_objects.filter((o) => o.swedish === "jäsning").length, 0);
+});
+
+test("before saving: another part of speech's sense is taken out, a wrong translation fixed, an example without the word dropped", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning", meaning_zh: "发酵；使发酵", examples: [
+    { swedish: "Jäsningen tar tid.", zh: "擦乾淨", en: "Fermentation takes time." },
+    { swedish: "Degen får jäsa över natten.", zh: "面团发酵一夜。", en: "The dough rises overnight." },
+  ] });
+  check = okCheck({ other_pos_senses: ["使发酵"], meaning_zh_fixed: "发酵", verdict: "fixed",
+    examples: [{ index: 0, fits_entry: true, translation_zh_ok: false, translation_en_ok: true, translation_zh_fixed: "发酵需要时间。", translation_en_fixed: "" }] });
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", sense: "发酵", chargeQuota: false });
+  assert.equal(checkCalls, 1);
+  assert.equal(d.tables.learning_object_translations.find((t) => t.learning_object_id === entryId && t.native_language === "zh").meaning, "发酵");
+  const examples = d.tables.learning_object_examples.filter((e) => e.learning_object_id === entryId);
+  assert.deepEqual(examples.map((e) => e.example_swedish), ["Jäsningen tar tid."]);   // "jäsa" is another word
+  const zh = d.tables.learning_object_example_translations.find((t) => t.example_id === examples[0].id && t.native_language === "zh");
+  assert.equal(zh.translation, "发酵需要时间。");
+  const status = (field) => d.tables.resource_field_status.find((s) => s.learning_object_id === entryId && s.field === field);
+  assert.equal(status("pos").status, "verified");
+  assert.equal(status("sense").status, "verified");
+});
+
+test("before saving: a check that can't decide leaves the card marked for review, not verified", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning" });
+  check = okCheck({ verdict: "unsure", note: "references too short" });
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", chargeQuota: false });
+  assert.equal(d.tables.resource_field_status.find((s) => s.learning_object_id === entryId && s.field === "sense").status, "mismatch");
 });

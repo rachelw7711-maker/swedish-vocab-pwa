@@ -95,3 +95,11 @@ test("every word of an expression must be in its sentence (strong verbs aside)",
   assert.equal(at("göra succé", "Han gjorde succé."), true);
   assert.equal(at("göra fiasko", "Han gjorde succé."), false);
 });
+
+test("word list OCR letters: put right only where SALDO knows the corrected word", async () => {
+  const { useSaldoFiles } = await import("../server-lexicon.mjs");
+  const { repairGlossaryLetters } = await import("../server-reading.mjs");
+  await useSaldoFiles();
+  const fixed = await repairGlossaryLetters(null, [{ word: "blöt", definition: "văt" }, { word: "en zăx", definition: "något" }]);
+  assert.deepEqual(fixed, [{ word: "blöt", definition: "våt" }, { word: "en zăx", definition: "något" }]);
+});

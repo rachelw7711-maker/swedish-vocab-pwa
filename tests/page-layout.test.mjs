@@ -25,7 +25,8 @@ test("body in the model's order, other left out, glossary verbatim", () => {
 
 test("a rewritten glossary item keeps the printed text instead", () => {
   const r = assemblePageLayout(lines, { body: [1, 2, 4], other: [0, 7], glossary: [{ lines: [3], word: "ofantlig", definition: "enorm, väldigt stor" }, { lines: [5, 6], word: "att trasas sönder", definition: "att gå sönder" }] });
-  assert.deepEqual(r.glossary[0], { word: "ofantlig, -t – mycket stor", definition: "" });
+  // Both parts are the printed text, never the model's rewrite.
+  assert.deepEqual(r.glossary[0], { word: "ofantlig, -t", definition: "mycket stor" });
 });
 
 test("lines the answer leaves out stay in the body; bad numbers are ignored", () => {
@@ -118,4 +119,12 @@ test("word list: a plain headword after a finished explanation starts a new entr
     { lines: [1, 2], word: "uppfatta, uppfattar", definition: "förstå" },
   ] });
   assert.deepEqual(r.glossary, [{ word: "uppfatta, uppfattar", definition: "förstå" }, { word: "obekväm", definition: "inte bekväm" }]);
+});
+
+test("word list: an entry the model gave as one word is split into headword and explanation", () => {
+  const lines = [L("Vi överkonsumerar olja."), L("överkonsumera, överkon-"), L("sumerar äta och köpa för"), L("mycket")];
+  const r = assemblePageLayout(lines, { title: [], body: [0], other: [], glossary: [
+    { lines: [1, 2, 3], word: "överkonsumera, överkonsumerar äta och köpa för mycket", definition: "" },
+  ] });
+  assert.deepEqual(r.glossary, [{ word: "överkonsumera, överkonsumerar", definition: "äta och köpa för mycket" }]);
 });

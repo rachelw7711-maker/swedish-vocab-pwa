@@ -10,6 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
+import { checkNewWordCard, recordCheck } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey } from "./server-resources.mjs";
 import { saldoEntries, perfectParticipleDeclension } from "./server-lexicon.mjs";
 
@@ -166,7 +167,7 @@ function relatedMeaning(r, lang) {
   return lang === "zh" ? `${meaning}（${note}）` : `${meaning} (${note})`;
 }
 
-async function callOpenAIJson({ schemaName, schema, system, user, maxOutputTokens = 2500 }) {
+export async function callOpenAIJson({ schemaName, schema, system, user, maxOutputTokens = 2500 }) {
   if (!OPENAI_API_KEY) throw httpError(500, "OPENAI_API_KEY saknas på servern.");
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -309,6 +310,16 @@ If the input names a part of speech and the sense a text uses, write the entry f
     const passive = fromSaldo ? fromSaldo.passive : result.passive || "";
     const matchKey = isPhrase ? await expressionMatchKey(supabaseAdmin, lemma) : null;
 
+    // Checked before saving (2026-11-02): part of speech against the request and the
+    // references, examples against the word's forms, meanings and translations by one AI
+    // check. A card the references contradict is not saved.
+    const checked = await checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos, sense, result, forms, isPhrase, userId, textResourceId });
+    if (!checked.ok) {
+      console.warn("[native] word card rejected", lemma, pos, checked.reason);
+      throw httpError(422, "Ordkortet kunde inte bekräftas. Försök igen senare.");
+    }
+    Object.assign(result, checked.result);
+
     // Re-check before saving: the lemma may exist even if the input didn't match —
     // as the same part of speech (a same-spelling word of another class gets its own
     // entry), or as a phrase / expression in either module.
@@ -366,6 +377,8 @@ If the input names a part of speech and the sense a text uses, write the entry f
           meaning_zh: Boolean(String(result.meaning_zh || "").trim()), meaning_en: Boolean(String(result.meaning_en || "").trim()),
           example: examples.length > 0, swedish_explanation: Boolean(result.swedish_explanation), cefr_level: Boolean(result.cefr_level),
         }, { saldoRows });
+        if (!isPhrase) await recordCheck(supabaseAdmin, entryId, "pos", checked.pos.status, checked.pos.source);
+        await recordCheck(supabaseAdmin, entryId, "sense", checked.sense.status, checked.sense.source, checked.sense.detail);
       }
     }
 

@@ -6,6 +6,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { generateWordEntry } from "./server-native.mjs";
 import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
+import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence } from "./server-language-checks.mjs";
+import { lookupWiktionary } from "./server-wiktionary.mjs";
+import { formReadings } from "./server-lexicon.mjs";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
@@ -300,7 +303,11 @@ export function assemblePageLayout(lines, parsed) {
     if (word && definition && f.startsWith(fold(word)) && f.endsWith(fold(definition)) && word.length + definition.length <= joined.length) {
       glossary.push({ word, definition });
     } else if (joined) {
-      glossary.push({ word: joined, definition: "" });
+      // The model gave the whole entry as its word ("överkonsumera, överkonsumerar äta och
+      // köpa för mycket"): the headword is the printed word with its forms, the rest explains it.
+      const head = glossaryHeadwordAt(joined, "", bodyText);
+      if (head && joined.length > head.length + 1 && fold(joined).startsWith(fold(head))) glossary.push({ word: head, definition: squash(joined.slice(head.length)).replace(/^[–—:=-]\s*/, "") });
+      else glossary.push({ word: joined, definition: "" });
     }
   }
   const other = new Set((parsed?.other || []).filter(valid));
@@ -359,6 +366,26 @@ export async function classifyPageLines({ imageDataUrl, lines }) {
 }
 
 // Textbook word list as sent by a client: [{word, definition}] strings only, verbatim.
+// Letters Swedish doesn't use that OCR reads for å / ö ("văt" for "våt", "mănga" for "många").
+const OCR_LETTERS = { "ă": "å", "ắ": "å", "ằ": "å", "ẵ": "å", "ā": "å", "Ă": "Å", "õ": "ö", "ơ": "ö", "ỗ": "ö", "ố": "ö", "ồ": "ö", "Õ": "Ö" };
+const OCR_LETTER_RE = new RegExp(`[${Object.keys(OCR_LETTERS).join("")}]`, "u");
+
+/**
+ * The word list with OCR letter slips put right — only where the corrected word is a
+ * form SALDO knows and the misread one isn't, so nothing is changed on a guess.
+ */
+export async function repairGlossaryLetters(supabaseAdmin, glossary) {
+  const suspicious = new Set();
+  for (const g of glossary) for (const t of `${g.word} ${g.definition}`.match(/\p{L}+/gu) || []) if (OCR_LETTER_RE.test(t)) suspicious.add(t);
+  if (!suspicious.size) return glossary;
+  const fix = (t) => [...t].map((c) => OCR_LETTERS[c] || c).join("");
+  const readings = await formReadings(supabaseAdmin, [...suspicious].flatMap((t) => [t, fix(t)]));
+  const known = (t) => (readings.get(t.toLowerCase()) || []).length > 0;
+  const repairs = new Map([...suspicious].filter((t) => !known(t) && known(fix(t))).map((t) => [t, fix(t)]));
+  const apply = (text) => String(text || "").replace(/\p{L}+/gu, (t) => repairs.get(t) || t);
+  return glossary.map((g) => ({ word: apply(g.word), definition: apply(g.definition) }));
+}
+
 export function sanitizeGlossary(glossary) {
   return (Array.isArray(glossary) ? glossary : [])
     .filter((g) => g && typeof g === "object")
@@ -674,8 +701,9 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
             pos: { type: "string", enum: READING_POS },
             meaning: { type: "string" },
             reason: { type: "string", enum: VOCABULARY_REASONS },
+            sentence: { type: "string" },
           },
-          required: ["swedish", "pos", "meaning", "reason"],
+          required: ["swedish", "pos", "meaning", "reason", "sentence"],
         },
       },
       key_sentences: {
@@ -715,7 +743,7 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
     ? `\n\nThe textbook prints its own word list for this text: ${[...glossaryForms(glossary)].join(", ")}. These words are judged like every other word in the text — being in the book's list neither excludes a word nor qualifies it on its own (the book often explains exactly the text's key terms, and they belong among the keywords then).`
     : "";
   const candidateList = vocabularyPool.length
-    ? vocabularyPool.map((c) => `${c.word.swedish} (${c.word.pos || "?"}${c.word.cefr_level ? `, ${c.word.cefr_level}` : ""})`).join(", ")
+    ? vocabularyPool.map((c) => `${c.word.swedish} (${(c.posOptions?.length ? c.posOptions : [c.word.pos || "?"]).join("/")}${c.word.cefr_level ? `, ${c.word.cefr_level}` : ""})`).join(", ")
     : "(none)";
   const { result, usage } = await callOpenAI({
     schemaName: "reading_selection",
@@ -727,7 +755,7 @@ Every list below is ordered from most to least worth learning IN THIS TEXT: how 
 
 0. article: first read the whole text and work out what it is about — topic (one line), core_points (its main points, a few short lines) and key_terms (the words and terms in the text that carry those points, as they appear in it). Everything below is chosen with this in mind.
 
-1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. Start from article.key_terms: the words that carry the text's topic and main points come first, whether common or rare, listed as candidates or not, in the book's word list or not. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists the dictionary words found in the text as "lemma (part of speech, CEFR)", in the order they occur — it is not a ranking, and many of the text's most important words (compounds, rarer terms) are not in it. Take a listed word with its lemma and part of speech exactly as given, and add any other word from the text that deserves a place just as readily — give its dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. meaning = a short ${langName} meaning (a few words) as used in THIS text, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. How difficult a word is only helps choose between words of similar importance to this text; it never removes a word the text's topic depends on, and a word is never left out just because it looks simple — what counts is what it does in this text. A word that is only there as part of a fixed phrase ("exempel" in "till exempel", "eget" in "på mitt eget sätt") is not a keyword — fixed phrases are chosen in a separate step. Use these dimensions together:
+1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. Start from article.key_terms: the words that carry the text's topic and main points come first, whether common or rare, listed as candidates or not, in the book's word list or not. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists the dictionary words found in the text as "lemma (parts of speech, CEFR)", in the order they occur — it is not a ranking, and many of the text's most important words (compounds, rarer terms) are not in it. Take a listed word with its lemma exactly as given, and add any other word from the text that deserves a place just as readily — give its dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. pos = the part of speech the word has in ITS sentence in this text — a spelling can have several ("torka (noun/verb)": "svår torka" is the noun, "torka håret" the verb); decide from the sentence, never from the list order. sentence = that sentence, quoted exactly from the text. meaning = a short ${langName} meaning (a few words) as used in that sentence, for that part of speech, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. How difficult a word is only helps choose between words of similar importance to this text; it never removes a word the text's topic depends on, and a word is never left out just because it looks simple — what counts is what it does in this text. A word that is only there as part of a fixed phrase ("exempel" in "till exempel", "eget" in "på mitt eget sätt") is not a keyword — fixed phrases are chosen in a separate step. Use these dimensions together:
 ${WORTH_LEARNING_DIMENSIONS}
 
 Fixed phrases and idioms are chosen in a separate step (selectExpressions), not here.
@@ -907,6 +935,66 @@ Step 2 — choose: collocations = "fast_fras" candidates, idioms = "idiom" candi
   };
 }
 
+// A keyword's part of speech is checked before it is matched to an entry (2026-11-02):
+// the textbook's word list decides when it names one ("en torka" → noun), otherwise it
+// must be one SALDO (or, for a word SALDO lacks, Wiktionary) gives the word. One the
+// references contradict is left out rather than shown with a wrong part of speech; one no
+// reference knows stays, marked unconfirmed.
+export async function checkKeywordPartsOfSpeech(supabaseAdmin, vocabulary, glossary = []) {
+  const fromBook = glossaryPartsOfSpeech(glossary);
+  const checked = await Promise.all((vocabulary || []).map(async (v) => {
+    const lemma = String(v.swedish || "").trim().toLowerCase();
+    const references = await referencePartsOfSpeech(supabaseAdmin, lemma);
+    const result = checkKeywordPos({ pos: v.pos, glossaryPos: fromBook.get(lemma) || null, referencePos: references.all });
+    return { ...v, pos: result.pos, pos_check: result.status, pos_reason: result.reason };
+  }));
+  return checked.filter((v) => v.pos_check !== "rejected");
+}
+
+// A keyword matched to an existing entry is shown with that entry's word card, so the
+// entry has to fit the sense the text uses (2026-11-02): "torka" in "svår torka" must not
+// lead to a verb entry that only says "干旱" because a noun sense was mixed into it. One
+// AI call checks all the linked keywords of a text against their entries and the
+// references; an entry that doesn't fit is flagged for review and the keyword is shown
+// without it (its meaning for this text is still shown).
+export async function checkLinkedKeywordSenses(supabaseAdmin, keywords, { userId, textResourceId }) {
+  const linked = keywords.filter((k) => k.word_id);
+  if (!linked.length) return keywords;
+  try {
+    const ids = linked.map((k) => k.word_id);
+    const [{ data: entries }, { data: translations }, { data: examples }] = await Promise.all([
+      supabaseAdmin.from("learning_objects").select("id, swedish, part_of_speech, swedish_explanation").in("id", ids),
+      supabaseAdmin.from("learning_object_translations").select("learning_object_id, native_language, meaning").in("learning_object_id", ids),
+      supabaseAdmin.from("learning_object_examples").select("learning_object_id, example_swedish, sort_order").in("learning_object_id", ids).order("sort_order"),
+    ]);
+    const items = await Promise.all(linked.map(async (k) => {
+      const entry = (entries || []).find((e) => e.id === k.word_id) || {};
+      const meaning = (lang) => (translations || []).find((t) => t.learning_object_id === k.word_id && t.native_language === lang)?.meaning || "";
+      const page = await lookupWiktionary(supabaseAdmin, entry.swedish || k.swedish);
+      return {
+        id: k.word_id, lemma: entry.swedish || k.swedish, pos: entry.part_of_speech || k.pos,
+        entry: { meaning_zh: meaning("zh"), meaning_en: meaning("en"), swedish_explanation: entry.swedish_explanation || "",
+          examples: (examples || []).filter((x) => x.learning_object_id === k.word_id).slice(0, 2).map((x) => ({ sv: x.example_swedish })) },
+        context: { sentence: k.sentence || "", meaning_here: k.chinese || "" },
+        references: { wiktionary: wiktionaryEvidence(page) },
+      };
+    }));
+    const { checks } = await aiSenseCheck(supabaseAdmin, items, { userId, textResourceId, feature: "reading_sense_check" });
+    return await Promise.all(keywords.map(async (k) => {
+      const c = k.word_id && checks.get(k.word_id);
+      if (!c) return k;
+      const misfit = c.context_matches_entry === "no" || c.other_pos_senses.length > 0 || !c.pos_supported;
+      if (!misfit) return k;
+      await recordCheck(supabaseAdmin, k.word_id, "sense", "mismatch", "reading_check",
+        { other_pos_senses: c.other_pos_senses, context: k.sentence, context_matches_entry: c.context_matches_entry, note: c.note });
+      return { ...k, word_id: null, entry_conflict: true };
+    }));
+  } catch (error) {
+    console.warn("[Reading] sense check skipped", error.message);
+    return keywords;
+  }
+}
+
 // The AI's ordered keywords, matched to dictionary entries by exact lemma AND part
 // of speech (a same-spelling word of another class is a different entry). Words
 // the dictionary doesn't have keep word_id null here (the shown ones get a full
@@ -943,6 +1031,8 @@ export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, f
       pos: match?.word.pos || v.pos,
       chinese: v.meaning || match?.word.chinese || "",
       cefr_level: match?.word.cefr_level || null,
+      ...(v.sentence ? { sentence: v.sentence } : {}),
+      ...(v.pos_check ? { pos_check: v.pos_check } : {}),
       occurrences: match?.occurrences || freq.get(String(v.swedish).toLowerCase()) || 1,
     });
   }
@@ -974,6 +1064,7 @@ async function ensureKeywordEntries(supabaseAdmin, keywords, { userId, textResou
   }
   return Promise.all(keywords.map(async (k) => {
     if (k.word_id && translated.has(k.word_id)) return k;
+    if (k.entry_conflict) return k;
     try {
       const { entryId } = await generateWordEntry({
         supabaseAdmin, userId, word: k.swedish, nativeLanguage, pos: k.pos, sense: k.chinese,
@@ -1197,6 +1288,7 @@ async function generateFastLayer(cleanedText, tier, nativeLanguage = "zh") {
 }
 
 export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, sourceType = "paste", glossary = [], nativeLanguage = "zh" }) {
+  if (glossary.length) glossary = await repairGlossaryLetters(supabaseAdmin, glossary);
   const cleaned = cleanText(text);
   const wordCount = countWords(cleaned);
   const hash = textHash(cleaned);
@@ -1515,6 +1607,13 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   // that put "problem" and "rik" in front), for the AI to choose from; it may add words
   // the dictionary doesn't have.
   const pool = inTextOrder(rankFoundWords(found, freq, firstSeenCapitalized, POOL_SIZE), freq);
+  // Every part of speech SALDO gives the word as it stands in the text ("torka" → noun/verb),
+  // not only the one the dictionary entry happens to have.
+  const readings = await textReadings(supabaseAdmin, pool.map((c) => c.token));
+  pool.forEach((c) => {
+    const options = (readings.get(c.token) || []).filter((r) => r.lemma.toLowerCase() === c.word.swedish.toLowerCase()).map((r) => r.pos);
+    c.posOptions = [...new Set([c.word.pos, ...options].filter(Boolean))];
+  });
 
   const [selection, expressions] = await Promise.all([
     selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage),
@@ -1523,7 +1622,8 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_selection", model: MODEL, usage: selection.usage, cacheHit: false });
   logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_expressions", model: MODEL, usage: expressions.usage, cacheHit: false });
 
-  const scoredVocabulary = await resolveVocabularyCandidates(supabaseAdmin, selection.vocabulary, pool, freq);
+  const checkedVocabulary = await checkKeywordPartsOfSpeech(supabaseAdmin, selection.vocabulary, glossary);
+  const scoredVocabulary = await resolveVocabularyCandidates(supabaseAdmin, checkedVocabulary, pool, freq);
   const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, expressions.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
   const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, expressions.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
   const asExpression = (category) => (e) => ({ ...e, category });
@@ -1543,7 +1643,8 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     (e.expression_text || "").match(/[a-zA-ZåäöÅÄÖ]+/g)?.forEach((w) => phraseWordSet.add(w.toLowerCase()));
   });
   const openVocabulary = scoredVocabulary.filter((v) => !phraseWordSet.has(v.swedish.toLowerCase()));
-  const withEntries = await ensureKeywordEntries(supabaseAdmin, openVocabulary.slice(0, vocabularyLimit), { userId, textResourceId: textResource.id, nativeLanguage });
+  const checkedLinks = await checkLinkedKeywordSenses(supabaseAdmin, openVocabulary.slice(0, vocabularyLimit), { userId, textResourceId: textResource.id });
+  const withEntries = await ensureKeywordEntries(supabaseAdmin, checkedLinks, { userId, textResourceId: textResource.id, nativeLanguage });
   // A shown keyword always has a full entry: one that couldn't get one (e.g. a
   // misspelt lemma the word-card generation rejects) gives its place to the next
   // candidate that already has an entry, or the list is just shorter.

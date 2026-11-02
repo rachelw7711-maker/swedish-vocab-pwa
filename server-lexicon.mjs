@@ -124,6 +124,36 @@ export async function lemmatize(supabaseAdmin, token) {
     .filter((c) => !seen.has(`${c.lemma}|${c.pos}`) && seen.add(`${c.lemma}|${c.pos}`));
 }
 
+/**
+ * Every reading SALDO gives each word of a text, in one query: "torka" → torka/noun and
+ * torka/verb, "torkar" → tork/noun and torka/verb. Map of form → [{ lemma, pos }].
+ */
+export async function formReadings(supabaseAdmin, forms) {
+  const keys = [...new Set(forms.map(key).filter(Boolean))];
+  const readings = new Map(keys.map((k) => [k, []]));
+  const add = (form, row) => {
+    const pos = POS_FROM_SALDO[row?.pos];
+    const list = readings.get(form);
+    if (pos && list && !list.some((r) => r.lemma === row.baseform && r.pos === pos)) list.push({ lemma: row.baseform, pos });
+  };
+  if (fileIndex) {
+    for (const k of keys) for (const lemgram of fileIndex.byForm.get(k) || []) add(k, fileIndex.byLemgram.get(lemgram));
+    return readings;
+  }
+  for (let i = 0; i < keys.length; i += 200) {
+    const { data, error } = await supabaseAdmin.from("saldo_wordforms").select("form, saldo_lemmas(baseform, pos)").in("form", keys.slice(i, i + 200));
+    if (error) return readings;   // reference layer unavailable: no readings known
+    for (const r of data || []) add(r.form, r.saldo_lemmas);
+  }
+  return readings;
+}
+
+/** The parts of speech SALDO has for a headword. */
+export async function saldoPartsOfSpeech(supabaseAdmin, lemma) {
+  const rows = await rowsForLemmas(supabaseAdmin, [lemma]);
+  return [...new Set(rows.filter((r) => key(r.baseform) === key(lemma)).map((r) => POS_FROM_SALDO[r.pos]).filter(Boolean))];
+}
+
 /** Whether SALDO lists this multi-word expression (in any of the given spellings). */
 export async function saldoHasExpression(supabaseAdmin, texts) {
   const rows = await rowsForLemmas(supabaseAdmin, texts);

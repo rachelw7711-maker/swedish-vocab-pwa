@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     const supabaseAdmin = adminClient();
     switch (body.action) {
       case "generate-entry":
-        return sendJson(res, 200, await generateWordEntry({ supabaseAdmin, userId, word: body.word, nativeLanguage: normalizeLanguage(body.nativeLanguage) }));
+        return sendJson(res, 200, await generateWordEntry({ supabaseAdmin, userId, word: body.word, pos: typeof body.pos === "string" ? body.pos : null, nativeLanguage: normalizeLanguage(body.nativeLanguage) }));
       case "delete-account":
         return sendJson(res, 200, await deleteAccount({ supabaseAdmin, userId }));
       case "assess":
