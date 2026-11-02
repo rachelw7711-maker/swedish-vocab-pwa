@@ -944,8 +944,10 @@ export async function checkKeywordPartsOfSpeech(supabaseAdmin, vocabulary, gloss
   const fromBook = glossaryPartsOfSpeech(glossary);
   const checked = await Promise.all((vocabulary || []).map(async (v) => {
     const lemma = String(v.swedish || "").trim().toLowerCase();
-    const references = await referencePartsOfSpeech(supabaseAdmin, lemma);
-    const result = checkKeywordPos({ pos: v.pos, glossaryPos: fromBook.get(lemma) || null, referencePos: references.all });
+    let references = await referencePartsOfSpeech(supabaseAdmin, lemma);
+    // SALDO without this part of speech: Wiktionary is asked before anything is rejected.
+    if (!references.all.includes(v.pos) && references.wiktionaryStatus === "skipped") references = await referencePartsOfSpeech(supabaseAdmin, lemma, { askWiktionary: true });
+    const result = checkKeywordPos({ pos: v.pos, glossaryPos: fromBook.get(lemma) || null, referencePos: references.all, wiktionaryStatus: references.wiktionaryStatus });
     return { ...v, pos: result.pos, pos_check: result.status, pos_reason: result.reason };
   }));
   return checked.filter((v) => v.pos_check !== "rejected");

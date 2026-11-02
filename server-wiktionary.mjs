@@ -14,6 +14,7 @@ const API = "https://sv.wiktionary.org/w/api.php";
 const USER_AGENT = "SprakLab/0.1 (https://swedish-vocab-pwa.vercel.app; dictionary verification) node-fetch";
 const TIMEOUT_MS = 4000;
 const GAP_MS = 120;
+const RETRY_PAUSE_MS = Number(process.env.WIKTIONARY_RETRY_PAUSE_MS ?? 1500);
 const FOUND_TTL_MS = 30 * 24 * 3600 * 1000;
 const MISSING_TTL_MS = 7 * 24 * 3600 * 1000;
 
@@ -97,7 +98,17 @@ export function formsFromTable(wikitext) {
   return [...forms];
 }
 
+// One retry after a pause for what may pass (timeout, network, 429, 5xx); not for 4xx.
 async function request(params, fetchImpl) {
+  const first = await requestOnce(params, fetchImpl);
+  const transient = first.error === "timeout" || first.error === "network" || /^http_(429|5\d\d)$/.test(String(first.error || ""));
+  if (!transient) return first;
+  await new Promise((r) => setTimeout(r, RETRY_PAUSE_MS));
+  const second = await requestOnce(params, fetchImpl);
+  return second.error ? { ...second, retried: true } : second;
+}
+
+async function requestOnce(params, fetchImpl) {
   const url = `${API}?${new URLSearchParams({ format: "json", formatversion: "2", maxlag: "5", ...params })}`;
   // Serial, with a short gap: Wikimedia asks API clients not to send requests in parallel.
   const turn = queue.then(() => new Promise((r) => setTimeout(r, GAP_MS)));

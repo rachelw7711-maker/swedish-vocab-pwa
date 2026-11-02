@@ -10,14 +10,20 @@ const { resolveExpressionEntries } = await import("../server-reading.mjs");
 const { fakeSupabase } = await import("./fake-supabase.mjs");
 
 let aiCalls = 0, checkCalls = 0, card = null, check = null;
-const okCheck = (over = {}) => ({ id: "card", pos_supported: true, other_pos_senses: [], unsupported_senses: [], meaning_zh_fixed: "", meaning_en_fixed: "",
-  swedish_explanation_fixed: "", examples: [], context_matches_entry: "n/a", verdict: "ok", note: "", ...over });
+// The check's answer echoes each item (key, lemma, pos) and each example (key, first words).
+const okCheck = (over = {}) => (item) => ({ key: item.key, lemma: item.lemma, pos: item.pos, pos_supported: true, other_pos_senses: [], unsupported_senses: [],
+  meaning_zh_fixed: "", meaning_en_fixed: "", swedish_explanation_fixed: "", context_matches_entry: "n/a", verdict: "ok", note: "",
+  examples: item.entry.examples.map((e) => ({ key: e.key, sv_start: e.sv.split(" ").slice(0, 3).join(" "), fits_entry: true, translation_zh_ok: true, translation_en_ok: true,
+    translation_zh_fixed: "", translation_en_fixed: "", ...(over.example?.[e.key] || {}) })), ...over, example: undefined });
 before(async () => {
   await useSaldoFiles();
   // Word-card generation, the AI check before saving (sense_check) and Wiktionary (no page) — no network.
   globalThis.fetch = async (url, init) => {
     if (String(url).includes("wiktionary.org")) return { ok: true, json: async () => ({ error: { code: "missingtitle" } }) };
-    const answer = JSON.parse(init.body).text.format.name === "sense_check" ? (checkCalls++, { items: [check || okCheck()] }) : (aiCalls++, card);
+    const body = JSON.parse(init.body);
+    const answer = body.text.format.name === "sense_check"
+      ? (checkCalls++, { items: JSON.parse(body.input.at(-1).content).map((item) => (check || okCheck())(item)) })
+      : (aiCalls++, card);
     return { ok: true, json: async () => ({ output_text: JSON.stringify(answer), usage: { input_tokens: 500, output_tokens: 400 } }) };
   };
 });
@@ -144,7 +150,7 @@ test("before saving: another part of speech's sense is taken out, a wrong transl
     { swedish: "Degen får jäsa över natten.", zh: "面团发酵一夜。", en: "The dough rises overnight." },
   ] });
   check = okCheck({ other_pos_senses: ["使发酵"], meaning_zh_fixed: "发酵", verdict: "fixed",
-    examples: [{ index: 0, fits_entry: true, translation_zh_ok: false, translation_en_ok: true, translation_zh_fixed: "发酵需要时间。", translation_en_fixed: "" }] });
+    example: { "i1.e0": { translation_zh_ok: false, translation_zh_fixed: "发酵需要时间。" } } });
   const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", sense: "发酵", chargeQuota: false });
   assert.equal(checkCalls, 1);
   assert.equal(d.tables.learning_object_translations.find((t) => t.learning_object_id === entryId && t.native_language === "zh").meaning, "发酵");

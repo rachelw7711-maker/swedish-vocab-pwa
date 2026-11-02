@@ -69,15 +69,23 @@ export async function referencePartsOfSpeech(supabaseAdmin, lemma, { askWiktiona
  * missing from a dictionary doesn't make it wrong.
  *   { pos, status: "confirmed" | "corrected" | "unconfirmed" | "rejected", reason }
  */
-export function checkKeywordPos({ pos, glossaryPos = null, referencePos = [] }) {
+// Regular conversions dictionaries often don't list: an adjective's -t form used as an
+// adverb ("explicit", "konsekvent"), an adjective or participle used as a noun
+// ("anställd", "vuxen"). Not evidence for the part of speech, not against it either.
+const DERIVED = { adverb: ["adjective"], noun: ["adjective"] };
+
+export function checkKeywordPos({ pos, glossaryPos = null, referencePos = [], wiktionaryStatus = "found" }) {
   const known = new Set(referencePos);
   if (glossaryPos) {
     if (known.size && !known.has(glossaryPos)) return { pos, status: known.has(pos) ? "confirmed" : "rejected", reason: "glossary_not_in_references" };
     if (glossaryPos === pos) return { pos, status: "confirmed", reason: "glossary" };
     return { pos: glossaryPos, status: "corrected", reason: `glossary_says_${glossaryPos}` };
   }
-  if (!known.size) return { pos, status: "unconfirmed", reason: "no_reference" };
+  if (!known.size) return { pos, status: "unconfirmed", reason: wiktionaryStatus === "found" || wiktionaryStatus === "missing" ? "no_reference" : `wiktionary_${wiktionaryStatus}` };
   if (known.has(pos)) return { pos, status: "confirmed", reason: "references" };
+  if ((DERIVED[pos] || []).some((p) => known.has(p))) return { pos, status: "unconfirmed", reason: `derived_from_${[...known].join("/")}` };
+  // Wiktionary not reached: SALDO alone doesn't reject.
+  if (wiktionaryStatus !== "found" && wiktionaryStatus !== "missing") return { pos, status: "unconfirmed", reason: `wiktionary_${wiktionaryStatus}` };
   return { pos, status: "rejected", reason: `references_say_${[...known].join("/")}` };
 }
 
@@ -103,20 +111,23 @@ const exampleCheck = {
   type: "object",
   additionalProperties: false,
   properties: {
-    index: { type: "integer" },
+    key: { type: "string" },
+    sv_start: { type: "string" },
     fits_entry: { type: "boolean" },
     translation_zh_ok: { type: "boolean" },
     translation_en_ok: { type: "boolean" },
     translation_zh_fixed: { type: "string" },
     translation_en_fixed: { type: "string" },
   },
-  required: ["index", "fits_entry", "translation_zh_ok", "translation_en_ok", "translation_zh_fixed", "translation_en_fixed"],
+  required: ["key", "sv_start", "fits_entry", "translation_zh_ok", "translation_en_ok", "translation_zh_fixed", "translation_en_fixed"],
 };
 const itemCheck = {
   type: "object",
   additionalProperties: false,
   properties: {
-    id: { type: "string" },
+    key: { type: "string" },
+    lemma: { type: "string" },
+    pos: { type: "string" },
     pos_supported: { type: "boolean" },
     other_pos_senses: { type: "array", items: { type: "string" } },
     unsupported_senses: { type: "array", items: { type: "string" } },
@@ -128,23 +139,25 @@ const itemCheck = {
     verdict: { type: "string", enum: ["ok", "fixed", "unsure"] },
     note: { type: "string" },
   },
-  required: ["id", "pos_supported", "other_pos_senses", "unsupported_senses", "meaning_zh_fixed", "meaning_en_fixed", "swedish_explanation_fixed", "examples", "context_matches_entry", "verdict", "note"],
+  required: ["key", "lemma", "pos", "pos_supported", "other_pos_senses", "unsupported_senses", "meaning_zh_fixed", "meaning_en_fixed", "swedish_explanation_fixed", "examples", "context_matches_entry", "verdict", "note"],
 };
 
 const SENSE_CHECK_SYSTEM = `You check Swedish learner's-dictionary entries for one problem class: content that does not belong to the entry's part of speech and sense. Each item has a lemma, its part of speech, the entry's meanings (Chinese, English, Swedish explanation) and examples with translations, and reference evidence: the parts of speech SALDO gives the lemma and, when available, Swedish Wiktionary's senses per part of speech with their English equivalents. Some items also have a context: a sentence from a text and what the word means there.
 
+Every item has a key ("i1", "i2", …) and every example a key ("i1.e0", "i1.e1", …). Answer every item and, inside it, every one of its examples — never leave an example out, never answer one item with another item's content. Echo the item's key, lemma and pos exactly, and for each example its key and sv_start = its first three words exactly as written.
+
 For each item:
 - pos_supported: whether the references support this part of speech for the lemma (when they give none, judge from your knowledge and say so in note).
-- other_pos_senses: senses in the entry's meanings that belong to ANOTHER part of speech of the same spelling (e.g. the noun sense "干旱 / drought" written into the verb entry "torka") — empty if none.
-- unsupported_senses: senses neither the references nor ordinary Swedish usage support for this lemma and part of speech — empty if none. Don't list a sense just because the references are short.
+- other_pos_senses: (look hardest when the item has "also_exists_as": the same spelling is also those parts of speech, and their senses are often written into the wrong entry) senses in THIS entry's meanings that belong to ANOTHER part of speech of the same spelling (e.g. the noun sense "干旱" written into the verb entry "torka") — each one quoted exactly as it is written in this entry's meaning_zh, meaning_en or swedish_explanation; empty if none. Judge each item only by its own fields.
+- unsupported_senses: senses in this entry that neither the references nor ordinary Swedish usage support for this lemma and part of speech, quoted exactly from its fields — empty if none. Don't list a sense just because the references are short.
 - meaning_zh_fixed / meaning_en_fixed / swedish_explanation_fixed: only when something must change — the corrected text for THIS part of speech, keeping every supported sense and the entry's style (concise, Simplified Chinese for zh). When the only problem is a sense that doesn't belong, delete just that sense and leave the rest exactly as it was, word for word (don't reword or "improve" it). Never copy Wiktionary's wording. "" when the field is fine.
-- examples: for each example (by index), fits_entry = the Swedish sentence uses the word in this part of speech and one of the entry's senses; translation_*_ok = the translation renders the WHOLE sentence correctly — go through the Swedish sentence word by word and check each content word's meaning is in the translation; a fragment, a gloss of only the headword, a translation of a different sentence, or a zh translation in traditional characters is not ok; translation_*_fixed = a correct full translation when not ok, else "". zh translations in Simplified Chinese. An example may carry "flags" from a program check (e.g. "zh_too_short", "zh_traditional"): look at those especially carefully.
+- examples: for each example (by key), fits_entry = the Swedish sentence uses the word in this part of speech and one of the entry's senses; translation_*_ok = the translation renders the WHOLE sentence correctly — go through the Swedish sentence word by word and check each content word's meaning is in the translation; a fragment, a gloss of only the headword, a translation of a different sentence, or a zh translation in traditional characters is not ok; translation_*_fixed = a correct full translation when not ok, else "". zh translations in Simplified Chinese. Keep every pronoun's person and gender (hon = 她 / she, han = 他 / he, de = 他们 / they, vi = 我们) and add nothing that is not in the Swedish. An example may carry "flags" from a program check (e.g. "zh_too_short", "zh_traditional"): look at those especially carefully.
 - context_matches_entry: when a context is given, "yes" if one of the entry's (fixed) senses is the one the sentence uses, else "no"; "n/a" without a context.
 - verdict: "ok" if nothing needed changing, "fixed" if you gave corrections, "unsure" if the evidence isn't enough to decide — then change nothing and say why in note.
 Be conservative: change only what is clearly wrong.`;
 
 // Characters only traditional Chinese uses (common ones): a zh field is Simplified Chinese.
-const TRADITIONAL = /[乾淨國這說們會來時對學過還長無與開關見發後電話書車門問題觀點記讓應樣種經變當實現燒鍋魚鳥麵飯雞錢買賣寫聽讀]/u;
+const TRADITIONAL = /[乾淨國這說們會來時對學過還長無與開關見發後電話書車門問題觀點記讓應樣種經變當實現燒鍋魚鳥麵飯雞錢買賣寫聽讀從裡為麼誰嗎幾體邊遠給錯樂歡氣將專業級總親愛顏場歲頭腦臉髮兒媽爺睡覺餐廳館區園離準備辦幫將應該較雖際網號碼個們]/u;
 
 /** Program checks on an example's translations, passed to the AI check as flags. */
 export function translationFlags(example) {
@@ -155,28 +168,106 @@ export function translationFlags(example) {
   if (example.zh !== undefined && words >= 4 && zh.length < words) flags.push("zh_too_short");
   if (TRADITIONAL.test(zh)) flags.push("zh_traditional");
   if (example.en !== undefined && words >= 4 && en < Math.ceil(words / 2)) flags.push("en_too_short");
+  if (example.zh && pronounMismatch(example.sv, example.zh)) flags.push("zh_pronoun");
+  if (example.zh && words >= 3 && zh.length > words * 4 + 6) flags.push("zh_too_long");
   return flags;
 }
 
 /**
+ * A Chinese translation whose pronouns don't match the Swedish: "hon" without 她, "han"
+ * without 他, or 她 where the Swedish has only "han" (and the reverse). Only clear cases:
+ * a sentence with both or with hen / generic subjects isn't judged.
+ */
+export function pronounMismatch(sv, zh) {
+  const words = new Set((String(sv || "").toLowerCase().match(/\p{L}+/gu) || []));
+  const she = words.has("hon") || words.has("henne") || words.has("hennes");
+  const he = words.has("han") || words.has("honom") || words.has("hans");
+  const text = String(zh || "");
+  if (she && !he) return !text.includes("她") || /他(?!们)/u.test(text);
+  if (he && !she) return !/他/u.test(text) || text.includes("她");
+  return false;
+}
+
+const norm = (text) => String(text || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").split(/\s+/).filter(Boolean);
+const startsAlike = (echo, sentence) => {
+  const a = norm(echo).slice(0, 3), b = norm(sentence).slice(0, 3);
+  return a.length > 0 && a.every((w, i) => w === b[i]);
+};
+
+/**
+ * Whether one returned check really answers this item (2026-11-02, after a batch answered
+ * one entry with another's content and left examples out): the echoed lemma and part of
+ * speech, every example by key with its first words, no example twice, and answers that
+ * are consistent (a translation judged wrong comes with a correction that passes the
+ * program checks). Returns a list of problems — empty when the check can be used.
+ */
+export function checkProblems(item, c) {
+  const problems = [];
+  if (!c) return ["missing"];
+  if (norm(c.lemma).join(" ") !== norm(item.lemma).join(" ")) problems.push(`lemma_echo:${c.lemma}`);
+  if (c.pos !== item.pos) problems.push(`pos_echo:${c.pos}`);
+  const examples = item.entry?.examples || [];
+  const seen = new Set();
+  for (const x of c.examples || []) {
+    const idx = examples.findIndex((e) => e.key === x.key);
+    if (idx < 0) { problems.push(`unknown_example:${x.key}`); continue; }
+    if (seen.has(x.key)) problems.push(`duplicate_example:${x.key}`);
+    seen.add(x.key);
+    const e = examples[idx];
+    if (!startsAlike(x.sv_start, e.sv)) problems.push(`example_echo:${x.key}`);
+    if (!x.translation_zh_ok && e.zh !== undefined) {
+      if (!x.translation_zh_fixed) problems.push(`no_zh_fix:${x.key}`);
+      else if (TRADITIONAL.test(x.translation_zh_fixed) || pronounMismatch(e.sv, x.translation_zh_fixed)) problems.push(`bad_zh_fix:${x.key}`);
+    }
+    if (!x.translation_en_ok && e.en !== undefined && !x.translation_en_fixed) problems.push(`no_en_fix:${x.key}`);
+  }
+  for (const e of examples) if (!seen.has(e.key)) problems.push(`example_missing:${e.key}`);
+  // A sense said not to belong must be one this entry has: words quoted from another item
+  // of the batch mean the answer mixed items up.
+  const own = norm(`${item.entry?.meaning_zh || ""} ${item.entry?.meaning_en || ""} ${item.entry?.swedish_explanation || ""}`).join(" ");
+  const ownZh = String(item.entry?.meaning_zh || "") + String(item.entry?.swedish_explanation || "") + String(item.entry?.meaning_en || "");
+  for (const quote of [...(c.other_pos_senses || []), ...(c.unsupported_senses || [])]) {
+    const q = norm(quote).join(" ");
+    const parts = String(quote).split(/[\/／|]/).map((x) => x.trim()).filter(Boolean);
+    const inEntry = (q && own.includes(q)) || parts.some((p) => ownZh.includes(p) || (norm(p).length && own.includes(norm(p).join(" "))));
+    if (!inEntry) problems.push(`foreign_sense:${quote}`);
+  }
+  const hasFix = c.meaning_zh_fixed || c.meaning_en_fixed || c.swedish_explanation_fixed || (c.examples || []).some((x) => !x.translation_zh_ok || !x.translation_en_ok || !x.fits_entry);
+  if (c.verdict === "ok" && hasFix) c.verdict = "fixed";      // the answers decide, not the label
+  return problems;
+}
+
+/**
  * Checks entries' meanings and examples against their part of speech, the references
- * and (optionally) a sentence they're used in — several items per call. Returns
- * Map(id → check) and the usage; an item the model didn't return is absent (unchecked).
+ * and (optionally) a sentence they're used in — several items per call. Every answer is
+ * matched to its item by key AND checked against it (checkProblems); an item whose
+ * answer is missing, misplaced or incomplete is asked again on its own once, and if that
+ * fails too it is reported in `failures` — never counted as checked.
+ * Returns { checks: Map(id → check), failures: Map(id → problems), usage }.
+ * A check's examples carry `index` (position in item.entry.examples) besides the key.
  */
 export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textResourceId = null, feature = "sense_check", chunk = 8 } = {}) {
   const checks = new Map();
-  const usage = { input_tokens: 0, output_tokens: 0, calls: 0, cost: 0 };
-  for (let i = 0; i < items.length; i += chunk) {
-    const batch = items.slice(i, i + chunk).map((item) => ({
-      ...item,
-      entry: { ...item.entry, examples: (item.entry?.examples || []).map((e) => { const flags = translationFlags(e); return flags.length ? { ...e, flags } : e; }) },
-    }));
+  const failures = new Map();
+  const usage = { input_tokens: 0, output_tokens: 0, calls: 0, cost: 0, retries: 0, failed_calls: 0 };
+  const keyed = items.map((item, n) => {
+    const key = `i${n + 1}`;
+    // The spelling's other parts of speech, named, so mixing them in is looked for.
+    const others = [...new Set([...(item.references?.saldo_pos || []), ...((item.references?.wiktionary?.entries || []).map((e) => e.pos))])]
+      .filter((p) => p && p !== item.pos && p !== "other");
+    return { item, prompt: {
+      ...item, id: undefined, key,
+      ...(others.length ? { also_exists_as: others } : {}),
+      entry: { ...item.entry, examples: (item.entry?.examples || []).map((e, j) => { const flags = translationFlags(e); return { key: `${key}.e${j}`, ...e, ...(flags.length ? { flags } : {}) }; }) },
+    } };
+  });
+  const ask = async (group) => {
     const { result, usage: u } = await callOpenAIJson({
       schemaName: "sense_check",
       schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", items: itemCheck } }, required: ["items"] },
       system: SENSE_CHECK_SYSTEM,
-      user: JSON.stringify(batch),
-      maxOutputTokens: 1200 + 700 * batch.length,
+      user: JSON.stringify(group.map((g) => g.prompt)),
+      maxOutputTokens: 1200 + 800 * group.length,
     });
     const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
     usage.input_tokens += u.input_tokens || 0;
@@ -184,9 +275,51 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
     usage.calls += 1;
     usage.cost += cost;
     if (supabaseAdmin) await logUsage(supabaseAdmin, { userId, textResourceId, feature, model: MODEL, inputTokens: u.input_tokens, outputTokens: u.output_tokens, cost });
-    for (const c of result.items || []) if (batch.some((b) => b.id === c.id)) checks.set(c.id, c);
+    return result.items || [];
+  };
+  const settle = (group, answers, final) => {
+    const retry = [];
+    for (const g of group) {
+      const mine = answers.filter((c) => c.key === g.prompt.key);
+      const c = mine.length === 1 ? mine[0] : null;
+      const problems = mine.length > 1 ? ["duplicate_item"] : checkProblems(g.prompt, c);
+      if (!problems.length) {
+        c.examples = c.examples.map((x) => ({ ...x, index: g.prompt.entry.examples.findIndex((e) => e.key === x.key) }));
+        checks.set(g.item.id, { ...c, id: g.item.id });
+        failures.delete(g.item.id);
+      } else if (final) failures.set(g.item.id, problems);
+      else { failures.set(g.item.id, problems); retry.push(g); }
+    }
+    return retry;
+  };
+  // Batches never hold two items of the same lemma (an answer about one torka was
+  // carried over to the other).
+  const groups = [];
+  for (const k of keyed) {
+    const lemma = norm(k.item.lemma).join(" ");
+    let g = groups.find((x) => x.length < chunk && !x.some((y) => norm(y.item.lemma).join(" ") === lemma));
+    if (!g) groups.push((g = []));
+    g.push(k);
   }
-  return { checks, usage };
+  for (const group of groups) {
+    let retry = group;
+    try {
+      retry = settle(group, await ask(group), false);
+    } catch (error) {
+      usage.failed_calls += 1;
+      group.forEach((g) => failures.set(g.item.id, [`call_failed:${error.message}`]));
+    }
+    for (const g of retry) {
+      usage.retries += 1;
+      try {
+        settle([g], await ask([g]), true);
+      } catch (error) {
+        usage.failed_calls += 1;
+        failures.set(g.item.id, [...(failures.get(g.item.id) || []), `call_failed:${error.message}`]);
+      }
+    }
+  }
+  return { checks, failures, usage };
 }
 
 /** The Wiktionary evidence an AI check gets: senses and English equivalents per part of speech. */
@@ -233,6 +366,8 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     if (references.all.length && !references.all.includes(pos)) return { ok: false, reason: `references_say_${references.all.join("/")}` };
     if (references.saldo.includes(pos)) posCheck = { status: "verified", source: "saldo-morphology-2017" };
     else if (references.wiktionary.includes(pos)) posCheck = { status: "verified", source: "sv-wiktionary" };
+    // Unconfirmed says why: no reference has the word, or Wiktionary couldn't be asked.
+    else posCheck = { status: "present", source: "unconfirmed", detail: { saldo: references.saldo, wiktionary: page.status } };
   } else {
     page = await lookupWiktionary(supabaseAdmin, lemma);
   }
@@ -259,17 +394,20 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     const out = await aiSenseCheck(supabaseAdmin, [item], { userId, textResourceId, feature: "word_card_check" });
     check = out.checks.get("card");
     usage = out.usage;
+    // The check failed (no usable answer even when asked again): the card is saved as
+    // generated, marked unchecked with the reason — never as checked.
+    if (!check) return { ok: true, result: card, pos: posCheck, usage,
+      sense: { status: "missing", source: "ai_check_failed", detail: { problems: out.failures.get("card") || ["missing"], dropped, wiktionary: page.status } } };
   } catch (error) {
-    return { ok: true, result: card, pos: posCheck, sense: { status: "missing", source: "ai_check", detail: { error: error.message, dropped } }, usage };
+    return { ok: true, result: card, pos: posCheck, sense: { status: "missing", source: "ai_check_failed", detail: { error: error.message, dropped, wiktionary: page.status } }, usage };
   }
-  if (!check) return { ok: true, result: card, pos: posCheck, sense: { status: "missing", source: "ai_check", detail: { dropped } }, usage };
   if (!isPhrase && !check.pos_supported && posCheck.status !== "verified") return { ok: false, reason: `pos_not_supported: ${check.note}`, usage };
   if (check.meaning_zh_fixed) card.meaning_zh = check.meaning_zh_fixed;
   if (check.meaning_en_fixed) card.meaning_en = check.meaning_en_fixed;
   if (check.swedish_explanation_fixed) card.swedish_explanation = check.swedish_explanation_fixed;
   const misfits = [];
   for (const x of check.examples || []) {
-    const e = card.examples[x.index] || card.examples[x.index - 1];
+    const e = card.examples[x.index];
     if (!e) continue;
     if (!x.fits_entry) misfits.push(e.swedish);
     if (!x.translation_zh_ok && x.translation_zh_fixed) e.zh = x.translation_zh_fixed;
@@ -282,4 +420,93 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     ok: true, result: card, pos: posCheck, usage,
     sense: unsure ? { status: "mismatch", source: "ai_check", detail } : { status: "verified", source: page.status === "found" ? "ai_check+sv-wiktionary" : "ai_check", detail },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Example translations: written, then independently reviewed (2026-11-02)
+// ---------------------------------------------------------------------------
+
+const translationItem = {
+  type: "object", additionalProperties: false,
+  properties: { key: { type: "string" }, sv_start: { type: "string" }, zh: { type: "string" }, en: { type: "string" } },
+  required: ["key", "sv_start", "zh", "en"],
+};
+const reviewItem = {
+  type: "object", additionalProperties: false,
+  properties: {
+    key: { type: "string" }, sv_start: { type: "string" },
+    zh_faithful: { type: "boolean" }, en_faithful: { type: "boolean" },
+    problems: { type: "array", items: { type: "string" } },
+  },
+  required: ["key", "sv_start", "zh_faithful", "en_faithful", "problems"],
+};
+const TRANSLATE_SYSTEM = `You translate example sentences of a Swedish learner's dictionary. Each item has a key, the headword with its part of speech (it tells you which sense the sentence uses) and the Swedish text (one or more sentences). For each item give zh = the whole text in natural Simplified Chinese and en = the whole text in natural English. Translate every sentence and every content word; add nothing that isn't in the Swedish (no invented time, place, reason or detail); keep each pronoun's person and gender (hon = 她 / she, han = 他 / he, hen = 他/她 / they, de = 他们 / they, vi = 我们 / we, man = 人们 or a natural impersonal phrasing / one, you). Echo each key and sv_start = the first three words of its Swedish text exactly. If problems from an earlier attempt are listed, avoid them.`;
+const REVIEW_SYSTEM = `You review translations of Swedish dictionary example sentences, strictly. For each item compare the Swedish with the Chinese (zh) and the English (en) word by word. zh_faithful / en_faithful = true only if the translation renders the whole Swedish text with the same meaning: no sentence or content word left out, nothing added that isn't in the Swedish, pronouns with the same person and gender (hon = 她, han = 他), tense and negation kept, the headword in the right sense; zh in Simplified Chinese. Natural rephrasing is fine. problems = short descriptions of what is wrong (empty when both are faithful). Echo each key and sv_start = the first three words of its Swedish text exactly. Don't rewrite anything.`;
+
+/**
+ * Example translations made and checked: one call writes zh/en for each item, a second,
+ * independent call reviews them against the Swedish, and program checks (pronouns,
+ * traditional characters, fragment length) run on both. An item passing everything is
+ * `accepted`; one that doesn't is written again once with the problems named, reviewed
+ * again, and otherwise reported in `rejected` with the reasons — never written.
+ *   items: [{ id, headword, pos, sv }]   → { accepted: Map(id → {zh, en}), rejected: Map(id → problems), usage }
+ */
+export async function checkedTranslations(supabaseAdmin, items, { feature = "example_translation", chunk = 15 } = {}) {
+  const usage = { input_tokens: 0, output_tokens: 0, calls: 0, cost: 0, failed_calls: 0 };
+  const call = async (schemaName, system, schema, payload, perItem) => {
+    const { result, usage: u } = await callOpenAIJson({
+      schemaName, system, user: JSON.stringify(payload), maxOutputTokens: 800 + perItem * payload.length,
+      schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", items: schema } }, required: ["items"] },
+    });
+    const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
+    usage.input_tokens += u.input_tokens || 0; usage.output_tokens += u.output_tokens || 0; usage.calls += 1; usage.cost += cost;
+    if (supabaseAdmin) await logUsage(supabaseAdmin, { feature, model: MODEL, inputTokens: u.input_tokens, outputTokens: u.output_tokens, cost });
+    return result.items || [];
+  };
+  const accepted = new Map();
+  const rejected = new Map();
+  const keyed = items.map((item, n) => ({ ...item, key: `t${n + 1}` }));
+  const programProblems = (sv, zh, en) => {
+    const p = [];
+    if (!zh) p.push("zh_empty");
+    if (!en) p.push("en_empty");
+    for (const f of translationFlags({ sv, zh, en })) p.push(f);
+    return p;
+  };
+  for (let i = 0; i < keyed.length; i += chunk) {
+    let group = keyed.slice(i, i + chunk);
+    const notes = new Map();
+    for (let attempt = 1; attempt <= 2 && group.length; attempt += 1) {
+      let drafts = [];
+      let reviews = [];
+      try {
+        drafts = await call("example_translation", TRANSLATE_SYSTEM, translationItem,
+          group.map((g) => ({ key: g.key, headword: g.headword, pos: g.pos, sv: g.sv, ...(notes.get(g.key) ? { problems_before: notes.get(g.key) } : {}) })), 220);
+        const usable = group.map((g) => ({ g, d: drafts.filter((d) => d.key === g.key) })).filter(({ g, d }) => d.length === 1 && startsAlike(d[0].sv_start, g.sv));
+        reviews = usable.length ? await call("translation_review", REVIEW_SYSTEM, reviewItem,
+          usable.map(({ g, d }) => ({ key: g.key, headword: g.headword, sv: g.sv, zh: d[0].zh, en: d[0].en })), 120) : [];
+      } catch (error) {
+        usage.failed_calls += 1;
+        group.forEach((g) => notes.set(g.key, [`call_failed:${error.message}`]));
+      }
+      const again = [];
+      for (const g of group) {
+        const d = drafts.filter((x) => x.key === g.key);
+        const r = reviews.filter((x) => x.key === g.key);
+        const problems = [];
+        if (d.length !== 1) problems.push(d.length ? "duplicate_draft" : "draft_missing");
+        else if (!startsAlike(d[0].sv_start, g.sv)) problems.push("draft_echo");
+        else problems.push(...programProblems(g.sv, d[0].zh.trim(), d[0].en.trim()));
+        if (!problems.length) {
+          if (r.length !== 1 || !startsAlike(r[0].sv_start, g.sv)) problems.push("review_missing");
+          else if (!r[0].zh_faithful || !r[0].en_faithful) problems.push(...(r[0].problems.length ? r[0].problems : ["review_not_faithful"]));
+        }
+        if (!problems.length) accepted.set(g.id, { zh: d[0].zh.trim(), en: d[0].en.trim() });
+        else if (attempt === 2) rejected.set(g.id, [...(notes.get(g.key) || []), ...problems]);
+        else { notes.set(g.key, problems); again.push(g); }
+      }
+      group = again;
+    }
+  }
+  return { accepted, rejected, usage };
 }

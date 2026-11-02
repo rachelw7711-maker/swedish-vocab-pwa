@@ -1,3 +1,4 @@
+import "./env-test.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseSwedishSection, formsFromTable, lookupWiktionary, wiktionaryReadings, clearWiktionaryMemory } from "../server-wiktionary.mjs";
@@ -66,4 +67,16 @@ test("Wiktionary: a missing page, a timeout, a server error and an unreadable pa
   assert.equal((await lookupWiktionary(null, "natfel", { fetchImpl: async () => { throw new TypeError("fetch failed"); } })).status, "error");
   // A timeout is not cached: the next lookup asks again.
   assert.equal((await lookupWiktionary(null, "långsam", { fetchImpl: reply({ parse: { wikitext: TORKA } }) })).status, "found");
+});
+
+test("Wiktionary: a passing failure (timeout, 503, 429) is asked once more; a 404 is not", async () => {
+  clearWiktionaryMemory();
+  let calls = 0;
+  const flaky = async () => (++calls === 1 ? { ok: false, status: 503, json: async () => ({}) } : { ok: true, json: async () => ({ parse: { wikitext: TORKA } }) });
+  assert.equal((await lookupWiktionary(null, "omigen", { fetchImpl: flaky })).status, "found");
+  assert.equal(calls, 2);
+  calls = 0;
+  const gone = async () => { calls++; return { ok: false, status: 404, json: async () => ({}) }; };
+  assert.equal((await lookupWiktionary(null, "borta", { fetchImpl: gone })).status, "error");
+  assert.equal(calls, 1);
 });

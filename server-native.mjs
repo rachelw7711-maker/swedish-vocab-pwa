@@ -377,7 +377,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
           meaning_zh: Boolean(String(result.meaning_zh || "").trim()), meaning_en: Boolean(String(result.meaning_en || "").trim()),
           example: examples.length > 0, swedish_explanation: Boolean(result.swedish_explanation), cefr_level: Boolean(result.cefr_level),
         }, { saldoRows });
-        if (!isPhrase) await recordCheck(supabaseAdmin, entryId, "pos", checked.pos.status, checked.pos.source);
+        if (!isPhrase) await recordCheck(supabaseAdmin, entryId, "pos", checked.pos.status, checked.pos.source, checked.pos.detail || null);
         await recordCheck(supabaseAdmin, entryId, "sense", checked.sense.status, checked.sense.source, checked.sense.detail);
       }
     }
