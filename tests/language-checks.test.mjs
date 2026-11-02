@@ -188,3 +188,40 @@ test("translation flags: no alarm for a left-out pronoun, another person's 他, 
   assert.deepEqual(translationFlags({ sv: "Det var bussigt av dig att stanna kvar och hjälpa till efter mötet.", zh: "你会后留下来帮忙，真够意思。" }), []);
   assert.deepEqual(translationFlags({ sv: "Du kunde kanske stänga fönstret? Det drar här inne. Jag fryser lite.", zh: "也许可以；委婉表达" }), ["zh_too_short"]);
 });
+
+test("collocations: one learning point once, complete ones only", async () => {
+  const { sameLearningPoint, cleanCollocations } = await import("../server-language-checks.mjs");
+  assert.equal(sameLearningPoint("minska koldioxidutsläppen", "minska koldioxidutsläpp"), true);
+  assert.equal(sameLearningPoint("hata någon", "hata något"), true);
+  assert.equal(sameLearningPoint("påträffa död", "påträffas död"), true);
+  assert.equal(sameLearningPoint("kaninbur", "kaninunge"), false);
+  assert.equal(sameLearningPoint("överstiga gränsen", "överstiga gränsvärdet"), false);
+  assert.equal(sameLearningPoint("släppa ut koldioxid", "koldioxid i atmosfären"), false);
+  assert.equal(sameLearningPoint("vänja sig vid något", "vänja någon vid något"), false);
+  assert.equal(sameLearningPoint("så ... att", "så att"), false);
+  const { similarMeaning } = await import("../server-language-checks.mjs");
+  assert.equal(similarMeaning("减少二氧化碳排放", "减少二氧化碳排放"), true);
+  assert.equal(similarMeaning("今年秋天", "去年秋天"), false);
+  assert.equal(similarMeaning("只要", "再见"), false);
+  assert.equal(similarMeaning("", "再见"), true);
+  const { duplicateCollocation } = await import("../server-language-checks.mjs");
+  assert.equal(duplicateCollocation({ phrase: "hata någon", zh: "讨厌某人" }, { phrase: "hata något", zh: "讨厌某事" }, ["zh"]), true);
+  assert.equal(duplicateCollocation({ phrase: "i höst", zh: "今年秋天；在秋天" }, { phrase: "i höstas", zh: "去年秋天" }, ["zh"]), false);
+  assert.equal(duplicateCollocation({ phrase: "så länge", zh: "只要" }, { phrase: "så länge!", zh: "再见" }, ["zh"]), false);
+  assert.equal(duplicateCollocation({ phrase: "typ 1-diabetes", zh: "1型糖尿病" }, { phrase: "typ 2-diabetes", zh: "2型糖尿病" }, ["zh"]), false);
+  const full = (phrase) => ({ phrase, zh: "x", en: "x", example: "Ett exempel." });
+  const { kept, dropped } = cleanCollocations([full("minska koldioxidutsläppen"), full("minska koldioxidutsläpp"), { ...full("släppa ut koldioxid"), zh: "" }, full("koldioxid i atmosfären")]);
+  assert.deepEqual(kept.map((k) => k.phrase), ["minska koldioxidutsläppen", "koldioxid i atmosfären"]);
+  assert.deepEqual(dropped.map((d) => d.reason), ["duplicate_of:minska koldioxidutsläppen", "incomplete"]);
+});
+
+test("noun grammar: gender label from the genus form, SALDO's zero plural decides uncountable", async () => {
+  const { nounGrammar } = await import("../server-language-checks.mjs");
+  const forms = [{ type: "genus", value: "en" }];
+  assert.deepEqual(nounGrammar({ saldoCountability: null, aiCountability: "uncountable", forms, aiPosDetail: "en-ord, obestämd form singular en nederbörd; används oftast som massord" }),
+    { countability: "uncountable", countabilitySource: "ai", posDetail: "en-ord" });
+  assert.equal(nounGrammar({ saldoCountability: "uncountable", aiCountability: "countable", forms }).countability, "uncountable");
+  assert.equal(nounGrammar({ aiCountability: "both", forms: [{ type: "genus", value: "ett" }] }).posDetail, "ett-ord");
+  assert.equal(nounGrammar({ aiCountability: "", forms: [], aiPosDetail: "massord" }).countability, null);
+  assert.equal(nounGrammar({ aiCountability: "", forms: [], aiPosDetail: "massord" }).posDetail, "");
+});

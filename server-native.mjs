@@ -10,7 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
-import { checkNewWordCard, recordCheck } from "./server-language-checks.mjs";
+import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey } from "./server-resources.mjs";
 import { saldoEntries, perfectParticipleDeclension } from "./server-lexicon.mjs";
 
@@ -143,6 +143,7 @@ function wordCardSchema() {
     swedish_explanation: { type: "string" },
     forms: { type: "array", items: pair({ type: { type: "string", enum: ALL_FORM_TYPES }, value: { type: "string" } }) },
     transitivity: { type: "string", enum: ["transitive", "intransitive", "both", ""] },
+    countability: { type: "string", enum: ["countable", "uncountable", "both", ""] },
     passive: { type: "string" },
     // minItems: without it the model returned no examples at all (seen 2026-10-31).
     examples: { type: "array", minItems: 2, maxItems: 2, items: pair({ swedish: { type: "string" }, zh: { type: "string" }, en: { type: "string" } }) },
@@ -273,8 +274,10 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 - meaning_zh: concise core meaning in Simplified Chinese. meaning_en: the same meaning, concise, in English. swedish_explanation: one simple Swedish definition.
 - forms: full inflection for the part of speech using only the allowed form types (verbs include present_participle and perfect_participle when they exist; verb_group / declension_group as "1"–"5" when applicable). Empty for expressions.
 - passive: the s-passive for verbs when natural (e.g. "påverkas"), else "".
+- pos_detail: for nouns exactly "en-ord" or "ett-ord" (or "plural" for a plural-only noun); "" otherwise.
+- countability (nouns only, else ""): "countable" (räknebart), "uncountable" (oräknebart: a mass or abstract noun normally without plural, e.g. koldioxid, nederbörd) or "both" (one sense countable and another a mass sense, e.g. kaffe: the drink / "två kaffe"). Don't call a noun uncountable just because its plural is rare, and don't give an uncountable noun plural forms.
 - examples: 2 natural Swedish sentences, each with a Chinese (zh) and an English (en) translation of the whole sentence.
-- collocations: 3–5 high-frequency fixed combinations with Chinese (zh) and English (en) meanings and a Swedish example.
+- collocations: up to 5 combinations a learner must learn as units — a fixed verb, preposition or particle choice, or a typical strong partner word — with Chinese (zh) and English (en) meanings and a Swedish example that contains it. Not free combinations any noun or adjective would allow ("en stor bil"), never two that differ only in inflection or in någon/något, and fewer (even none) rather than weak ones.
 - related: 3–6 word-family members or related words with Chinese (zh) and English (en) meanings and each word's part of speech (pos; "other" for multi-word expressions).
 - memory_tip_zh / memory_tip_en: the same short mnemonic in Chinese and in English, or "" for both.
 Every zh field is Chinese only and every en field English only. If uncertain about a sense, prefer the most common one.
@@ -308,6 +311,15 @@ If the input names a part of speech and the sense a text uses, write the entry f
     const declined = participle && await perfectParticipleDeclension(supabaseAdmin, lemma, participle);
     if (declined) forms.push({ type: "perfect_participle_ett", value: declined.ett }, { type: "perfect_participle_plural", value: declined.plural });
     const passive = fromSaldo ? fromSaldo.passive : result.passive || "";
+    // Nouns: gender label from the genus form, countability from SALDO (zero plural) or the model.
+    const grammar = pos === "noun" ? nounGrammar({ saldoCountability: fromSaldo?.countability, aiCountability: result.countability, forms, aiPosDetail: result.pos_detail }) : null;
+    if (grammar?.countability === "uncountable") {
+      for (let i = forms.length - 1; i >= 0; i--) if (/^plural_/.test(forms[i].type) && grammar.countabilitySource === "ai" && !fromSaldo) forms.splice(i, 1);
+    }
+    // One learning point once, each complete (meaning in both languages and an example).
+    const { kept: collocationList, dropped: droppedCollocations } = cleanCollocations(result.collocations, [...LANGUAGES]);
+    if (droppedCollocations.length) console.warn("[native] collocations dropped", lemma, droppedCollocations);
+    result.collocations = collocationList;
     const matchKey = isPhrase ? await expressionMatchKey(supabaseAdmin, lemma) : null;
 
     // Checked before saving (2026-11-02): part of speech against the request and the
@@ -332,7 +344,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         id: entryId,
         swedish: lemma,
         part_of_speech: isPhrase ? "other" : pos,
-        pos_detail: result.pos_detail || "",
+        pos_detail: grammar ? grammar.posDetail : (pos === "noun" ? "" : result.pos_detail || ""),
         object_type: isPhrase ? "phrase" : "word",
         category: isPhrase ? "common_phrase" : null,
         cefr_level: result.cefr_level || null,
@@ -341,7 +353,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         example_sv: (result.examples || []).map((e) => String(e.swedish || "").trim()).filter(Boolean).join("\n"),
         transitivity: result.transitivity || null,
         passiv_s: passive,
-        countability: fromSaldo?.countability || null,
+        countability: grammar?.countability || null,
         source,
         status: "ai_generated",
       });
@@ -373,7 +385,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         const examples = (result.examples || []).filter((e) => String(e.swedish || "").trim());
         await recordEntryStatus(supabaseAdmin, entryId, {
           type: isPhrase ? "phrase" : "word", pos, forms: Object.fromEntries(forms.map((f) => [f.type, f.value])),
-          passiv_s: passive, countability: fromSaldo?.countability || null,
+          passiv_s: passive, countability: grammar?.countability || null,
           meaning_zh: Boolean(String(result.meaning_zh || "").trim()), meaning_en: Boolean(String(result.meaning_en || "").trim()),
           example: examples.length > 0, swedish_explanation: Boolean(result.swedish_explanation), cefr_level: Boolean(result.cefr_level),
         }, { saldoRows });

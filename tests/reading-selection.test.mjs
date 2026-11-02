@@ -103,3 +103,12 @@ test("word list OCR letters: put right only where SALDO knows the corrected word
   const fixed = await repairGlossaryLetters(null, [{ word: "blöt", definition: "văt" }, { word: "en zăx", definition: "något" }]);
   assert.deepEqual(fixed, [{ word: "blöt", definition: "våt" }, { word: "en zăx", definition: "något" }]);
 });
+
+test("keyword ceiling follows the text's length, below the tier's", async () => {
+  const { keywordLimit } = await import("../server-reading.mjs");
+  assert.equal(keywordLimit(60, "standard"), 3);
+  assert.equal(keywordLimit(200, "standard"), 5);
+  assert.equal(keywordLimit(470, "standard"), 8);
+  assert.equal(keywordLimit(800, "long"), 12);
+  assert.equal(keywordLimit(1500, "overlong"), 15);
+});

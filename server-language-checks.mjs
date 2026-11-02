@@ -156,6 +156,43 @@ For each item:
 - verdict: "ok" if nothing needed changing, "fixed" if you gave corrections, "unsure" if the evidence isn't enough to decide — then change nothing and say why in note.
 Be conservative: change only what is clearly wrong.`;
 
+// The whole-entry audit (2026-11-02): the sense check plus missing senses, grammar
+// (countability, forms, grammar note) and collocations — all answers, like the examples,
+// matched by key and checked against the item before they count.
+const collocationCheck = {
+  type: "object", additionalProperties: false,
+  properties: {
+    key: { type: "string" },
+    phrase_start: { type: "string" },
+    verdict: { type: "string", enum: ["keep", "free_combination", "duplicate", "wrong_meaning", "bad_example"] },
+    zh_fixed: { type: "string" },
+    en_fixed: { type: "string" },
+  },
+  required: ["key", "phrase_start", "verdict", "zh_fixed", "en_fixed"],
+};
+const grammarCheck = {
+  type: "object", additionalProperties: false,
+  properties: {
+    countability: { type: "string", enum: ["countable", "uncountable", "both", "unsure", "not_noun"] },
+    forms_wrong: { type: "array", items: { type: "object", additionalProperties: false, properties: { type: { type: "string" }, value: { type: "string" }, correct: { type: "string" } }, required: ["type", "value", "correct"] } },
+    grammar_note_wrong: { type: "string" },
+  },
+  required: ["countability", "forms_wrong", "grammar_note_wrong"],
+};
+const auditItemCheck = {
+  ...itemCheck,
+  properties: { ...itemCheck.properties, missing_common_senses: { type: "array", items: { type: "string" } }, grammar: grammarCheck, collocations: { type: "array", items: collocationCheck } },
+  required: [...itemCheck.required, "missing_common_senses", "grammar", "collocations"],
+};
+
+const AUDIT_EXTRA = `
+
+This is a full audit: besides the above, each item may have entry.grammar (countability, declension or verb group, gender, forms as "type=value", a grammar note), entry.collocations (each with a key "i1.c0", …) and more references (saldo_paradigm: SALDO's inflection class, where nn_0… means no plural forms; korp: corpus counts of the noun's singular and plural forms, plural_share = plural / all).
+- missing_common_senses: common senses of this lemma IN THIS PART OF SPEECH that a learner meets often and that the entry lacks (judge with the references; in Simplified Chinese, a few words each) — empty if none. Never a sense of another part of speech, never a rare or technical one.
+- grammar.countability: for a noun, as its senses are used: "countable" (räknebart), "uncountable" (oräknebart: mass or abstract, normally no plural), "both" (one sense countable, another a mass sense, e.g. kaffe: the drink / "två kaffe"), "unsure" when the evidence doesn't settle it; "not_noun" for other parts of speech. A rare plural doesn't make a noun uncountable; corpus plurals of a mass noun meaning "kinds of" don't make it countable.
+- grammar.forms_wrong: each listed form that is wrong for this lemma (type, the value as listed, the correct value — "" when the form shouldn't exist, e.g. a plural given to a noun without one); empty if all are right. grammar.grammar_note_wrong: what is false in the grammar note (a wrong group, a plural for a noun without one, a wrong ending), "" if nothing.
+- collocations: answer every one (echo key and phrase_start = its first word exactly): "keep" (worth learning as a unit: fixed verb/preposition/particle choice or a typical strong partner), "free_combination" (an ordinary free combination with nothing fixed to learn), "duplicate" (the same learning point as an earlier collocation of this entry, only another form or slot), "wrong_meaning" (its zh or en meaning is wrong: give zh_fixed / en_fixed, else ""), "bad_example" (its example doesn't contain it or is wrong).`;
+
 // Characters only traditional Chinese uses (common ones): a zh field is Simplified Chinese.
 const TRADITIONAL = /[乾淨國這說們會來時對學過還長無與開關見發後電話書車門問題觀點記讓應樣種經變當實現燒鍋魚鳥麵飯雞錢買賣寫聽讀從裡為麼誰嗎幾體邊遠給錯樂歡氣將專業級總親愛顏場歲頭腦臉髮兒媽爺覺廳館區園離準備辦幫將應該較雖際網號碼個們]/u;
 
@@ -206,6 +243,23 @@ const startsAlike = (echo, sentence) => {
 export function checkProblems(item, c) {
   const problems = [];
   if (!c) return ["missing"];
+  if (item.entry?.collocations || item.entry?.grammar) {
+    const colls = item.entry.collocations || [];
+    const seen = new Set();
+    for (const x of c.collocations || []) {
+      const own = colls.find((k) => k.key === x.key);
+      if (!own) { problems.push(`unknown_collocation:${x.key}`); continue; }
+      if (seen.has(x.key)) problems.push(`duplicate_collocation:${x.key}`);
+      seen.add(x.key);
+      if (norm(x.phrase_start)[0] !== norm(own.phrase)[0]) problems.push(`collocation_echo:${x.key}`);
+      if (x.verdict === "wrong_meaning" && !x.zh_fixed && !x.en_fixed) problems.push(`no_collocation_fix:${x.key}`);
+      if (x.zh_fixed && TRADITIONAL.test(x.zh_fixed)) problems.push(`bad_collocation_fix:${x.key}`);
+    }
+    for (const k of colls) if (!seen.has(k.key)) problems.push(`collocation_missing:${k.key}`);
+    const listed = new Set((item.entry.grammar?.forms || []).map((f) => String(f).split("=")[0]));
+    for (const f of c.grammar?.forms_wrong || []) if (!listed.has(f.type)) problems.push(`unknown_form:${f.type}`);
+    if (item.pos === "noun" && c.grammar?.countability === "not_noun") problems.push("countability_not_noun");
+  }
   if (norm(c.lemma).join(" ") !== norm(item.lemma).join(" ")) problems.push(`lemma_echo:${c.lemma}`);
   if (c.pos !== item.pos) problems.push(`pos_echo:${c.pos}`);
   const examples = item.entry?.examples || [];
@@ -248,10 +302,10 @@ export function checkProblems(item, c) {
  * Returns { checks: Map(id → check), failures: Map(id → problems), usage }.
  * A check's examples carry `index` (position in item.entry.examples) besides the key.
  */
-export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textResourceId = null, feature = "sense_check", chunk = 8 } = {}) {
+export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textResourceId = null, feature = "sense_check", chunk = 8, audit = false } = {}) {
   const checks = new Map();
   const failures = new Map();
-  const usage = { input_tokens: 0, output_tokens: 0, calls: 0, cost: 0, retries: 0, failed_calls: 0 };
+  const usage = { input_tokens: 0, output_tokens: 0, calls: 0, cost: 0, retries: 0, failed_calls: 0, retry_reasons: {} };
   const keyed = items.map((item, n) => {
     const key = `i${n + 1}`;
     // The spelling's other parts of speech, named, so mixing them in is looked for.
@@ -260,16 +314,20 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
     return { item, prompt: {
       ...item, id: undefined, key,
       ...(others.length ? { also_exists_as: others } : {}),
-      entry: { ...item.entry, examples: (item.entry?.examples || []).map((e, j) => { const flags = translationFlags(e); return { key: `${key}.e${j}`, ...e, ...(flags.length ? { flags } : {}) }; }) },
+      entry: {
+        ...item.entry,
+        examples: (item.entry?.examples || []).map((e, j) => { const flags = translationFlags(e); return { key: `${key}.e${j}`, ...e, ...(flags.length ? { flags } : {}) }; }),
+        ...(audit ? { collocations: (item.entry?.collocations || []).map((c, j) => ({ key: `${key}.c${j}`, ...c })), grammar: item.entry?.grammar || {} } : {}),
+      },
     } };
   });
   const ask = async (group) => {
     const { result, usage: u } = await callOpenAIJson({
       schemaName: "sense_check",
-      schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", items: itemCheck } }, required: ["items"] },
-      system: SENSE_CHECK_SYSTEM,
+      schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", items: audit ? auditItemCheck : itemCheck } }, required: ["items"] },
+      system: audit ? SENSE_CHECK_SYSTEM + AUDIT_EXTRA : SENSE_CHECK_SYSTEM,
       user: JSON.stringify(group.map((g) => g.prompt)),
-      maxOutputTokens: 1200 + 800 * group.length,
+      maxOutputTokens: (audit ? 2000 : 1200) + (audit ? 1400 : 800) * group.length,
     });
     const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
     usage.input_tokens += u.input_tokens || 0;
@@ -290,7 +348,11 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
         checks.set(g.item.id, { ...c, id: g.item.id });
         failures.delete(g.item.id);
       } else if (final) failures.set(g.item.id, problems);
-      else { failures.set(g.item.id, problems); retry.push(g); }
+      else {
+        failures.set(g.item.id, problems); retry.push(g);
+        // What made answers unusable, by kind ("example_missing", "collocation_echo" …).
+        for (const p of problems) { const kind = String(p).split(":")[0]; usage.retry_reasons[kind] = (usage.retry_reasons[kind] || 0) + 1; }
+      }
     }
     return retry;
   };
@@ -570,4 +632,103 @@ export async function fillExpressionLanguage(supabaseAdmin, items, { write = tru
     }
   }
   return { filled, failed, usage };
+}
+
+// ---------------------------------------------------------------------------
+// A new card's collocations and noun grammar (2026-11-02)
+// ---------------------------------------------------------------------------
+
+// An open slot. A reflexive (sig, sin …) is not one: "vänja sig vid" and "vänja någon vid" differ.
+const PLACEHOLDER = /^(någon|något|någons)$/;
+// Words, with an ellipsis kept as a word of its own ("så … att" is not "så att").
+const phraseWords = (s) => String(s || "").toLowerCase().replace(/\.{2,}|…/g, " … ").replace(/[^\p{L}\p{N}\s…]/gu, " ").split(/\s+/).filter(Boolean);
+
+/**
+ * Two phrases that are the same learning point: equal word for word, or differing only in
+ * inflection ("minska koldioxidutsläppen" / "minska koldioxidutsläpp": the shorter word is
+ * the longer one less at most three letters at the end) or in an open slot (någon / något;
+ * a reflexive "sig" is not a slot).
+ * Different words that share a beginning ("kaninbur" / "kaninunge") are not.
+ */
+export function sameLearningPoint(a, b) {
+  const x = phraseWords(a), y = phraseWords(b);
+  if (!x.length || x.length !== y.length) return false;
+  return x.every((w, i) => {
+    const v = y[i];
+    if (w === v || (PLACEHOLDER.test(w) && PLACEHOLDER.test(v))) return true;
+    const [s, l] = w.length <= v.length ? [w, v] : [v, w];
+    const base = s.length > 4 && /[aeo]$/.test(s) ? s.slice(0, -1) : s;
+    return base.length >= 4 && l.startsWith(base) && l.length - base.length <= 3;
+  });
+}
+
+/**
+ * Whether two meanings say about the same thing: Chinese by shared character pairs, other
+ * text by shared words (Jaccard ≥ 0.6). "减少二氧化碳排放" twice is; "今年秋天" (i höst) /
+ * "去年秋天" (i höstas) and "只要" / "再见" (så länge / så länge!) are not. Unknown (an empty
+ * meaning) counts as similar.
+ */
+export function similarMeaning(a, b) {
+  const units = (s) => {
+    const t = String(s || "").toLowerCase();
+    if (!/\p{Script=Han}/u.test(t)) return new Set(t.match(/\p{L}+/gu) || []);
+    const out = new Set();
+    for (const run of t.match(/\p{Script=Han}+/gu) || []) {
+      if (run.length === 1) out.add(run);
+      for (let i = 0; i + 1 < run.length; i++) out.add(run.slice(i, i + 2));
+    }
+    return out;
+  };
+  const x = units(a), y = units(b);
+  if (!x.size || !y.size) return true;
+  const shared = [...x].filter((u) => y.has(u)).length;
+  return shared / (x.size + y.size - shared) >= 0.6;
+}
+
+/** Two phrases that differ only in an open slot (hata någon / hata något). */
+export function slotVariant(a, b) {
+  const x = phraseWords(a), y = phraseWords(b);
+  return x.length > 0 && x.length === y.length && x.some((w, i) => w !== y[i])
+    && x.every((w, i) => w === y[i] || (PLACEHOLDER.test(w) && PLACEHOLDER.test(y[i])));
+}
+
+/** The same learning point said twice: same words up to form or slot, and (unless only the slot differs) the same meaning. */
+export function duplicateCollocation(a, b, langs = ["zh", "en"]) {
+  if (!sameLearningPoint(a.phrase, b.phrase)) return false;
+  return slotVariant(a.phrase, b.phrase) || langs.every((l) => similarMeaning(a[l], b[l]));
+}
+
+/**
+ * The collocations a card keeps: complete (a meaning in every explanation language and a
+ * Swedish example), and each learning point once — a second one that is only another form
+ * or slot of a kept one is dropped. Returns { kept, dropped: [{ phrase, reason }] }.
+ */
+export function cleanCollocations(list, langs = ["zh", "en"]) {
+  const kept = [];
+  const dropped = [];
+  for (const c of list || []) {
+    const phrase = String(c?.phrase || "").trim();
+    if (!phrase) continue;
+    if (langs.some((l) => !String(c[l] || "").trim()) || !String(c.example || "").trim()) { dropped.push({ phrase, reason: "incomplete" }); continue; }
+    const twin = kept.find((k) => duplicateCollocation(k, { ...c, phrase }, langs));
+    if (twin) { dropped.push({ phrase, reason: `duplicate_of:${twin.phrase}` }); continue; }
+    kept.push({ ...c, phrase });
+  }
+  return { kept, dropped };
+}
+
+const COUNTABILITY = ["countable", "uncountable", "both"];
+
+/**
+ * A new noun's gender label and countability. SALDO's zero-plural paradigm is a firm
+ * "uncountable"; otherwise the model's judgment (it can say "both" — a mass sense and a
+ * countable one — which SALDO can't), recorded as unconfirmed by the caller. The gender
+ * label is "en-ord" / "ett-ord" from the genus form, never the model's free text.
+ */
+export function nounGrammar({ saldoCountability = null, aiCountability = "", forms = [], aiPosDetail = "" }) {
+  const genus = (forms.find((f) => f.type === "genus")?.value || "").toLowerCase();
+  const fromAi = String(aiPosDetail || "").toLowerCase().trim();
+  const posDetail = genus === "en" || genus === "ett" ? `${genus}-ord` : (["en-ord", "ett-ord"].includes(fromAi) ? fromAi : "");
+  if (saldoCountability === "uncountable") return { countability: "uncountable", countabilitySource: "saldo", posDetail };
+  return { countability: COUNTABILITY.includes(aiCountability) ? aiCountability : null, countabilitySource: COUNTABILITY.includes(aiCountability) ? "ai" : null, posDetail };
 }

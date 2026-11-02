@@ -37,6 +37,16 @@ export const LENGTH_TIERS = {
 export const MAX_AUTO_ANALYSIS_WORDS = LENGTH_TIERS.long.maxWords;
 export const MAX_SAVE_WORDS = LENGTH_TIERS.overlong.maxWords;
 const MAX_KEY_VOCABULARY = 15;
+
+/**
+ * How many keywords a text may have at most (2026-11-02): the tier's ceiling, lower for a
+ * short text (about one per 40 words, at least 3), so a 60-word text isn't padded to 8.
+ * A ceiling, not a target — the selection returns fewer when the text has fewer.
+ */
+export function keywordLimit(wordCount, tier) {
+  const ceiling = Math.min(LENGTH_TIERS[tier === "oversized" ? "overlong" : tier].keyVocabulary[1], MAX_KEY_VOCABULARY);
+  return Math.max(3, Math.min(ceiling, Math.ceil((Number(wordCount) || 0) / 40)));
+}
 const MAX_KEY_COLLOCATIONS = 6;
 const MAX_KEY_IDIOMS = 4;
 const MAX_KEY_SENTENCES = 5;
@@ -671,7 +681,7 @@ const READING_POS = ["verb", "noun", "adjective", "adverb", "pronoun", "preposit
 export async function selectReadingContent(cleanedText, tier, glossary = [], vocabularyPool = [], nativeLanguage = "zh") {
   const langName = languageName(nativeLanguage);
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
-  const vocabMax = tierConfig.keyVocabulary[1];
+  const vocabMax = keywordLimit(countWords(cleanedText), tier);
   // A few more than are shown, so each reader's mastered words can be swapped out.
   // No extra candidates beyond what the length tier shows: asking for more invited
   // padding with basic words (2026-11-01).
@@ -1611,7 +1621,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   const usageLogEntries = [];
 
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
-  const vocabularyLimit = Math.min(tierConfig.keyVocabulary[1], MAX_KEY_VOCABULARY);
+  const vocabularyLimit = keywordLimit(wordCount, tier);
   const collocationLimit = Math.min(tierConfig.keyCollocations[1], MAX_KEY_COLLOCATIONS);
   const idiomLimit = Math.min(tierConfig.keyIdioms[1], MAX_KEY_IDIOMS);
 
