@@ -111,4 +111,10 @@ test("keyword ceiling follows the text's length, below the tier's", async () => 
   assert.equal(keywordLimit(470, "standard"), 8);
   assert.equal(keywordLimit(800, "long"), 12);
   assert.equal(keywordLimit(1500, "overlong"), 15);
+  // A dense text gets one or two more, still under the tier's ceiling.
+  const hard = (n) => Array.from({ length: n }, () => ({ word: { cefr_level: "C1" } }));
+  assert.equal(keywordLimit(200, "standard", hard(4)), 5);
+  assert.equal(keywordLimit(200, "standard", hard(7)), 6);
+  assert.equal(keywordLimit(200, "standard", hard(14)), 7);
+  assert.equal(keywordLimit(470, "standard", hard(40)), 8);
 });

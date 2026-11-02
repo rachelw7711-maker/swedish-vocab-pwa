@@ -39,13 +39,19 @@ export const MAX_SAVE_WORDS = LENGTH_TIERS.overlong.maxWords;
 const MAX_KEY_VOCABULARY = 15;
 
 /**
- * How many keywords a text may have at most (2026-11-02): the tier's ceiling, lower for a
- * short text (about one per 40 words, at least 3), so a 60-word text isn't padded to 8.
- * A ceiling, not a target — the selection returns fewer when the text has fewer.
+ * How many keywords a text may have at most (2026-11-02): about one per 40 words (at least
+ * 3), one or two more for a dense text (many B2–C2 dictionary words per 100 words), never
+ * above the tier's ceiling — a 60-word text isn't padded to 8, a hard 300-word one isn't cut
+ * at 8. A ceiling, not a target: the selection returns fewer when the text has fewer. The
+ * reader's own level orders and swaps them later (ReadingSelection on iOS).
  */
-export function keywordLimit(wordCount, tier) {
+export function keywordLimit(wordCount, tier, pool = []) {
+  const words = Number(wordCount) || 0;
   const ceiling = Math.min(LENGTH_TIERS[tier === "oversized" ? "overlong" : tier].keyVocabulary[1], MAX_KEY_VOCABULARY);
-  return Math.max(3, Math.min(ceiling, Math.ceil((Number(wordCount) || 0) / 40)));
+  const hard = pool.filter((c) => /^(B2|C1|C2)$/.test(c.word?.cefr_level || "")).length;
+  const density = words ? (hard / words) * 100 : 0;
+  const extra = density >= 6 ? 2 : density >= 3 ? 1 : 0;
+  return Math.max(3, Math.min(ceiling, Math.ceil(words / 40) + extra));
 }
 const MAX_KEY_COLLOCATIONS = 6;
 const MAX_KEY_IDIOMS = 4;
@@ -681,7 +687,7 @@ const READING_POS = ["verb", "noun", "adjective", "adverb", "pronoun", "preposit
 export async function selectReadingContent(cleanedText, tier, glossary = [], vocabularyPool = [], nativeLanguage = "zh") {
   const langName = languageName(nativeLanguage);
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
-  const vocabMax = keywordLimit(countWords(cleanedText), tier);
+  const vocabMax = keywordLimit(countWords(cleanedText), tier, vocabularyPool);
   // A few more than are shown, so each reader's mastered words can be swapped out.
   // No extra candidates beyond what the length tier shows: asking for more invited
   // padding with basic words (2026-11-01).
@@ -1621,7 +1627,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   const usageLogEntries = [];
 
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
-  const vocabularyLimit = keywordLimit(wordCount, tier);
+  let vocabularyLimit = keywordLimit(wordCount, tier);
   const collocationLimit = Math.min(tierConfig.keyCollocations[1], MAX_KEY_COLLOCATIONS);
   const idiomLimit = Math.min(tierConfig.keyIdioms[1], MAX_KEY_IDIOMS);
 
@@ -1640,6 +1646,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     const options = (readings.get(c.token) || []).filter((r) => r.lemma.toLowerCase() === c.word.swedish.toLowerCase()).map((r) => r.pos);
     c.posOptions = [...new Set([c.word.pos, ...options].filter(Boolean))];
   });
+  vocabularyLimit = keywordLimit(wordCount, tier, pool);
 
   const [selection, expressions] = await Promise.all([
     selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage),
