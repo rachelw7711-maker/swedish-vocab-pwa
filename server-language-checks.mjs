@@ -1,5 +1,6 @@
 // Language checks on what the AI writes (2026-11-02), in layers:
-//   1. the dictionary and SALDO — forms and the parts of speech a word can have;
+//   1. the dictionary and SALDO — forms and the parts of speech a word can have; Lexin
+//      (Isof, 2026-11-03) — parts of speech, senses with English equivalents, plurals;
 //   2. Swedish Wiktionary — when SALDO doesn't have the word, or for the senses of each
 //      part of speech;
 //   3. an AI check of meaning against context and references — only for what the two
@@ -10,6 +11,7 @@
 
 import { formReadings, saldoPartsOfSpeech } from "./server-lexicon.mjs";
 import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
+import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { callOpenAIJson, logUsage } from "./server-native.mjs";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
@@ -46,20 +48,24 @@ export function glossaryPartsOfSpeech(glossary = []) {
 }
 
 /**
- * The parts of speech the references give a headword: SALDO first, Wiktionary only when
- * SALDO has none (a compound like "klimatflykting") or when asked. { saldo, wiktionary,
- * wiktionaryStatus, all } — wiktionaryStatus "skipped" when it wasn't asked.
+ * The parts of speech the references give a headword: SALDO and Lexin first, Wiktionary
+ * only when neither has one (a compound like "klimatflykting") or when asked. { saldo, lexin,
+ * wiktionary, wiktionaryStatus, all, refs } — wiktionaryStatus "skipped" when it wasn't asked;
+ * refs: the Lexin entries (server-references.mjs), for callers that need their senses.
  */
 export async function referencePartsOfSpeech(supabaseAdmin, lemma, { askWiktionary = false } = {}) {
   const saldo = await saldoPartsOfSpeech(supabaseAdmin, lemma);
+  const refs = await referenceEntries(supabaseAdmin, lemma);
+  const byDictionary = referencePos(refs);
+  const lexin = [...new Set([...byDictionary.lexin_sv, ...byDictionary.lexin_en])].filter((p) => p !== "other" && p !== "name");
   let wiktionary = [];
   let wiktionaryStatus = "skipped";
-  if (askWiktionary || !saldo.length) {
+  if (askWiktionary || (!saldo.length && !lexin.length)) {
     const page = await lookupWiktionary(supabaseAdmin, lemma);
     wiktionaryStatus = page.status;
     wiktionary = [...new Set(wiktionaryReadings(page).filter((r) => !r.form).map((r) => r.pos))];
   }
-  return { saldo, wiktionary, wiktionaryStatus, all: [...new Set([...saldo, ...wiktionary])] };
+  return { saldo, lexin, wiktionary, wiktionaryStatus, all: [...new Set([...saldo, ...lexin, ...wiktionary])], refs };
 }
 
 /**
@@ -142,7 +148,7 @@ const itemCheck = {
   required: ["key", "lemma", "pos", "pos_supported", "other_pos_senses", "unsupported_senses", "meaning_zh_fixed", "meaning_en_fixed", "swedish_explanation_fixed", "examples", "context_matches_entry", "verdict", "note"],
 };
 
-const SENSE_CHECK_SYSTEM = `You check Swedish learner's-dictionary entries for one problem class: content that does not belong to the entry's part of speech and sense. Each item has a lemma, its part of speech, the entry's meanings (Chinese, English, Swedish explanation) and examples with translations, and reference evidence: the parts of speech SALDO gives the lemma and, when available, Swedish Wiktionary's senses per part of speech with their English equivalents. Some items also have a context: a sentence from a text and what the word means there.
+const SENSE_CHECK_SYSTEM = `You check Swedish learner's-dictionary entries for one problem class: content that does not belong to the entry's part of speech and sense. Each item has a lemma, its part of speech, the entry's meanings (Chinese, English, Swedish explanation) and examples with translations, and reference evidence: the parts of speech SALDO gives the lemma and, when available, Lexin's senses of this part of speech (Swedish definitions with English equivalents, from the learner's dictionaries of Isof) and Swedish Wiktionary's senses per part of speech with their English equivalents. Some items also have a context: a sentence from a text and what the word means there.
 
 Every item has a key ("i1", "i2", …) and every example a key ("i1.e0", "i1.e1", …). Answer every item and, inside it, every one of its examples — never leave an example out, never answer one item with another item's content. Echo the item's key, lemma and pos exactly, and for each example its key and sv_start = its first three words exactly as written.
 
@@ -424,11 +430,14 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   if (!isPhrase && wantedPos && pos !== wantedPos) return { ok: false, reason: `asked_${wantedPos}_got_${pos}` };
   let posCheck = { status: "present", source: "unconfirmed" };
   let page = { status: "skipped" };
+  let refs = null;
   if (!isPhrase) {
     const references = await referencePartsOfSpeech(supabaseAdmin, lemma, { askWiktionary: true });
     page = await lookupWiktionary(supabaseAdmin, lemma);
+    refs = references.refs;
     if (references.all.length && !references.all.includes(pos)) return { ok: false, reason: `references_say_${references.all.join("/")}` };
     if (references.saldo.includes(pos)) posCheck = { status: "verified", source: "saldo-morphology-2017" };
+    else if (references.lexin.includes(pos)) posCheck = { status: "verified", source: LEXIN_SV_SOURCE_ID };
     else if (references.wiktionary.includes(pos)) posCheck = { status: "verified", source: "sv-wiktionary" };
     // Unconfirmed says why: no reference has the word, or Wiktionary couldn't be asked.
     else posCheck = { status: "present", source: "unconfirmed", detail: { saldo: references.saldo, wiktionary: page.status } };
@@ -450,7 +459,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     entry: { meaning_zh: card.meaning_zh || "", meaning_en: card.meaning_en || "", swedish_explanation: card.swedish_explanation || "",
       examples: card.examples.map((e) => ({ sv: e.swedish, zh: e.zh, en: e.en })) },
     ...(sense ? { context: { sentence: "", meaning_here: sense } } : {}),
-    references: { wiktionary: wiktionaryEvidence(page) },
+    references: { wiktionary: wiktionaryEvidence(page), ...(!isPhrase && refs && lexinSenses(refs, pos).length ? { lexin: lexinSenses(refs, pos) } : {}) },
   };
   let check;
   let usage = null;
@@ -479,10 +488,17 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   }
   card.examples = card.examples.filter((e) => !misfits.includes(e.swedish));
   const unsure = check.verdict === "unsure";
-  const detail = { verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits], note: check.note, wiktionary: page.status };
+  // The English meaning against Lexin's English equivalents, independently of the AI check:
+  // no word in common leaves the sense unconfirmed rather than checked.
+  const english = !isPhrase && refs ? englishEquivalents(refs, pos) : [];
+  const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
+  const detail = { verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits], note: check.note, wiktionary: page.status, en_reference: enReference };
+  const sources = ["ai_check", page.status === "found" && "sv-wiktionary", item.references.lexin && LEXIN_SV_SOURCE_ID].filter(Boolean).join("+");
   return {
     ok: true, result: card, pos: posCheck, usage,
-    sense: unsure ? { status: "mismatch", source: "ai_check", detail } : { status: "verified", source: page.status === "found" ? "ai_check+sv-wiktionary" : "ai_check", detail },
+    sense: unsure ? { status: "mismatch", source: "ai_check", detail }
+      : enReference === "unmatched" ? { status: "present", source: `${sources};en_unmatched_lexin`, detail }
+      : { status: "verified", source: sources, detail },
   };
 }
 
@@ -725,10 +741,14 @@ const COUNTABILITY = ["countable", "uncountable", "both"];
  * countable one — which SALDO can't), recorded as unconfirmed by the caller. The gender
  * label is "en-ord" / "ett-ord" from the genus form, never the model's free text.
  */
-export function nounGrammar({ saldoCountability = null, aiCountability = "", forms = [], aiPosDetail = "" }) {
+export function nounGrammar({ saldoCountability = null, lexinCountability = null, aiCountability = "", forms = [], aiPosDetail = "" }) {
   const genus = (forms.find((f) => f.type === "genus")?.value || "").toLowerCase();
   const fromAi = String(aiPosDetail || "").toLowerCase().trim();
   const posDetail = genus === "en" || genus === "ett" ? `${genus}-ord` : (["en-ord", "ett-ord"].includes(fromAi) ? fromAi : "");
   if (saldoCountability === "uncountable") return { countability: "uncountable", countabilitySource: "saldo", posDetail };
+  // Lexin giving no plural ("kärlek: –") is a lexicographer's statement too — unless the model
+  // saw a countable sense next to the mass one ("both"), which Lexin's single entry can hide.
+  if (lexinCountability === "uncountable" && aiCountability !== "both") return { countability: "uncountable", countabilitySource: "lexin", posDetail };
+  if (lexinCountability === "uncountable") return { countability: "both", countabilitySource: "ai+lexin", posDetail };
   return { countability: COUNTABILITY.includes(aiCountability) ? aiCountability : null, countabilitySource: COUNTABILITY.includes(aiCountability) ? "ai" : null, posDetail };
 }

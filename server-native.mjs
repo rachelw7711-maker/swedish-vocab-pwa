@@ -12,7 +12,8 @@ import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
 import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey } from "./server-resources.mjs";
-import { saldoEntries, perfectParticipleDeclension } from "./server-lexicon.mjs";
+import { saldoEntries, perfectParticipleDeclension, compoundRows } from "./server-lexicon.mjs";
+import { referenceEntries, referencePos, lexinPromptLine, lexinCountability, compareWithLexin, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
@@ -249,6 +250,10 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
   const reference = resolved?.saldo || null;
   const headword = reference ? reference.baseform : text;
   const headwordPos = reference ? resolved.pos : wantedPos;
+  // Lexin's senses of the headword go into the prompt (one part of speech: the asked one, or Lexin's only one).
+  const headwordRefs = isMultiWord ? null : await referenceEntries(supabaseAdmin, headword);
+  const lexinOnly = headwordRefs ? [...new Set(referencePos(headwordRefs).lexin_sv)] : [];
+  const promptPos = headwordPos || (lexinOnly.length === 1 ? lexinOnly[0] : null);
 
   // Concurrency guard: one in-flight generation per (lemma, part of speech, language).
   const key = headwordPos ? `${normalizeKey(headword)}|${headwordPos}|${lang}` : `${normalizeKey(headword)}|${lang}`;
@@ -287,6 +292,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         wantedPos && `Part of speech: ${wantedPos}`,
         wantedPos && sense && `Sense used in the text: ${sense}`,
         saldoPromptLine(reference, headwordPos),
+        headwordRefs && promptPos ? lexinPromptLine(headwordRefs, promptPos) : "",
       ].filter(Boolean).join("\n"),
     });
     const cost = ((usage.input_tokens || 0) / 1e6) * 0.75 + ((usage.output_tokens || 0) / 1e6) * 4.5;
@@ -306,13 +312,26 @@ If the input names a part of speech and the sense a text uses, write the entry f
     const saldoRows = isPhrase ? [] : await saldoEntries(supabaseAdmin, lemma, pos);
     const fromSaldo = saldoCardFields(saldoRows[0], pos);
     const forms = fromSaldo?.forms.length ? fromSaldo.forms : (result.forms || []).filter((f) => f.value && ALL_FORM_TYPES.includes(f.type));
+    // Without SALDO: Lexin's forms of this very word replace the model's where they differ, and a
+    // compound SALDO doesn't list is checked against its last part (chokladask → ask).
+    const refs = isPhrase ? null : normalizeKey(lemma) === normalizeKey(headword) && headwordRefs ? headwordRefs : await referenceEntries(supabaseAdmin, lemma);
+    let lexinFields = {};
+    if (!fromSaldo && refs) {
+      lexinFields = compareWithLexin({ pos, forms: Object.fromEntries(forms.map((f) => [f.type, f.value])) }, refs).fields;
+      for (const f of forms) {
+        const r = lexinFields[`form:${f.type}`];
+        if (r?.status === "mismatch") { f.value = r.reference; lexinFields[`form:${f.type}`] = { status: "verified", stored: r.reference, reference: r.reference }; }
+      }
+    }
+    // An ambiguous split (a homograph head) could call a right form wrong: not used then.
+    const compound = !isPhrase && !saldoRows.length ? (await compoundRows(supabaseAdmin, lemma, pos)).filter((r) => !r.compound.ambiguous) : [];
     // The card shows the perfect participle as en / ett / plural; the other two only from SALDO.
     const participle = pos === "verb" && forms.find((f) => f.type === "perfect_participle")?.value;
     const declined = participle && await perfectParticipleDeclension(supabaseAdmin, lemma, participle);
     if (declined) forms.push({ type: "perfect_participle_ett", value: declined.ett }, { type: "perfect_participle_plural", value: declined.plural });
     const passive = fromSaldo ? fromSaldo.passive : result.passive || "";
     // Nouns: gender label from the genus form, countability from SALDO (zero plural) or the model.
-    const grammar = pos === "noun" ? nounGrammar({ saldoCountability: fromSaldo?.countability, aiCountability: result.countability, forms, aiPosDetail: result.pos_detail }) : null;
+    const grammar = pos === "noun" ? nounGrammar({ saldoCountability: fromSaldo?.countability, lexinCountability: refs ? lexinCountability(refs) : null, aiCountability: result.countability, forms, aiPosDetail: result.pos_detail }) : null;
     if (grammar?.countability === "uncountable") {
       for (let i = forms.length - 1; i >= 0; i--) if (/^plural_/.test(forms[i].type) && grammar.countabilitySource === "ai" && !fromSaldo) forms.splice(i, 1);
     }
@@ -388,7 +407,9 @@ If the input names a part of speech and the sense a text uses, write the entry f
           passiv_s: passive, countability: grammar?.countability || null,
           meaning_zh: Boolean(String(result.meaning_zh || "").trim()), meaning_en: Boolean(String(result.meaning_en || "").trim()),
           example: examples.length > 0, swedish_explanation: Boolean(result.swedish_explanation), cefr_level: Boolean(result.cefr_level),
-        }, { saldoRows });
+        }, saldoRows.length ? { saldoRows }
+          : compound.length ? { saldoRows: compound, formSource: "saldo-compound" }
+          : { referenceFields: lexinFields, formSource: LEXIN_SV_SOURCE_ID });
         if (!isPhrase) await recordCheck(supabaseAdmin, entryId, "pos", checked.pos.status, checked.pos.source, checked.pos.detail || null);
         await recordCheck(supabaseAdmin, entryId, "sense", checked.sense.status, checked.sense.source, checked.sense.detail);
       }

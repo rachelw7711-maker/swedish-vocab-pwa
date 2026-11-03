@@ -133,3 +133,18 @@ test("an uncountable noun has no missing plural", async () => {
 test("normalizeText", () => {
   assert.equal(normalizeText("  Hålla  ögonen  öppna! "), "hålla ögonen öppna");
 });
+
+test("SALDO comparison: an irregular word may be called irregular, group 2 covers 2a/2b", async () => {
+  const cmp = async (w, pos, forms) => compareWithSaldo({ pos, forms }, await saldoEntries(null, w, pos)).fields;
+  assert.equal((await cmp("göra", "verb", { verb_group: "irregular" }))["form:verb_group"].status, "verified");
+  assert.equal((await cmp("lägga", "verb", { verb_group: "4" }))["form:verb_group"].status, "verified");
+  assert.equal((await cmp("köpa", "verb", { verb_group: "4" }))["form:verb_group"].status, "mismatch");
+  assert.equal((await cmp("ha", "verb", { verb_group: "4" }))["form:verb_group"].status, "verified", "haft");
+  assert.equal((await cmp("skilja", "verb", { verb_group: "4" }))["form:verb_group"].status, "mismatch", "skilde, skilt: 2a");
+  assert.equal((await cmp("köpa", "verb", { verb_group: "2" }))["form:verb_group"].status, "verified");
+  assert.equal((await cmp("svärfar", "noun", { declension_group: "irregular" }))["form:declension_group"].status, "verified");
+  assert.equal((await cmp("bil", "noun", { declension_group: "irregular" }))["form:declension_group"].status, "mismatch");
+  assert.equal((await cmp("fågel", "noun", { declension_group: "irregular" }))["form:declension_group"].status, "mismatch");
+  // Filling an empty group takes SALDO's number, never "irregular".
+  assert.equal((await cmp("göra", "verb", {}))["form:verb_group"].reference, "2a");
+});

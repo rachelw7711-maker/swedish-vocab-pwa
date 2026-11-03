@@ -95,6 +95,93 @@ export async function saldoEntries(supabaseAdmin, lemma, pos = null) {
   return rows.filter((r) => key(r.baseform) === key(lemma) && (!wanted || wanted.includes(r.pos)));
 }
 
+/**
+ * SALDO rows for a compound SALDO doesn't list, built from its last part: "chokladask" is
+ * choklad + ask and inflects as ask (chokladasken, chokladaskar). The head is the longest
+ * final part of at least three letters that SALDO has as this part of speech; the first part
+ * must be a SALDO headword itself, or one with a linking -s / -e / -a / -u / -o or a dropped
+ * final vowel (flick-vän, gatu-kök); a first part of three letters or more is tried first
+ * (lös-vikt before lö-svikt). Returned rows carry the compound's own forms and
+ * compound: { first, head, ambiguous } — ambiguous when the head is a homograph SALDO inflects
+ * in more than one way (bot: botar / böter) or another split inflects differently: then the
+ * rows can confirm forms but not contradict them. [] when no split is found. Evidence for
+ * forms, not for meaning.
+ */
+export async function compoundRows(supabaseAdmin, word, pos) {
+  const w = key(word);
+  const wanted = SALDO_FOR_POS[pos];
+  if (!wanted || w.length < 6 || /[\s-]/.test(w)) return [];
+  const splits = [];
+  for (let i = 2; i <= w.length - 3; i++) splits.push([w.slice(0, i), w.slice(i)]);
+  const heads = await rowsForLemmas(supabaseAdmin, splits.map(([, h]) => h));
+  const firsts = new Set((await rowsForLemmas(supabaseAdmin, splits.flatMap(([f]) => [f, f.replace(/[seauo]$/, ""), f + "a", f + "e"])))
+    .filter((r) => !MULTIWORD_POS.has(r.pos)).map((r) => key(r.baseform)));
+  const plural = (r) => (r.forms?.["pl indef nom"] || r.forms?.["pret ind aktiv"] || []).join("/");
+  const found = [];
+  for (const [first, head] of [...splits.filter(([f]) => f.length >= 3), ...splits.filter(([f]) => f.length < 3)]) {
+    const rows = heads.filter((r) => key(r.baseform) === head && wanted.includes(r.pos));
+    const linked = [first, first.replace(/[seauo]$/, ""), first + "a", first + "e"].some((f) => f.length >= 2 && firsts.has(f));
+    if (rows.length && linked) found.push({ first, rows });
+  }
+  if (!found.length) return [];
+  const [{ first, rows }] = found;
+  const ambiguous = new Set(rows.map(plural)).size > 1 || found.slice(1).some((f) => f.rows.some((r) => plural(r) && !rows.some((x) => x.paradigm === r.paradigm)));
+  return rows.map((r) => ({
+    ...r, lemgram: `${first}+${r.lemgram}`, baseform: w, compound: { first, head: r.lemgram, ambiguous },
+    forms: Object.fromEntries(Object.entries(r.forms || {}).map(([msd, list]) => [msd, list.map((f) => first + f)])),
+  }));
+}
+
+/**
+ * SALDO rows for a particle or reflexive verb ("växa upp", "bry sig", "hålla med"), which SALDO
+ * lists as a multi-word entry without forms: its base verb's forms with the rest after them
+ * (växer upp, brydde sig; the imperative of a reflexive with "dig": bry dig), the participles
+ * with the particle in front (uppvuxen) — none for a reflexive. Only when SALDO lists the
+ * multi-word verb itself; its class picks the base verb's reading (vbm_3ms1_sy → bry, class 3).
+ */
+export async function multiWordVerbRows(supabaseAdmin, lemma) {
+  const words = key(lemma).split(/\s+/);
+  if (words.length < 2) return [];
+  const own = (await rowsForLemmas(supabaseAdmin, [words.join(" ")])).filter((r) => r.pos === "vbm" && key(r.baseform) === words.join(" "));
+  if (!own.length) return [];
+  const rest = words.slice(1);
+  const reflexive = rest.includes("sig");
+  const particle = rest.length === 1 && PARTICLES.has(rest[0]) ? rest[0] : null;
+  const classes = new Set(own.map((r) => r.paradigm.split("_")[1]?.[0]));
+  const bases = (await saldoEntries(supabaseAdmin, words[0], "verb")).filter((r) => classes.has(r.paradigm.split("_")[1]?.[0]));
+  return bases.map((r) => {
+    const forms = {};
+    for (const [msd, list] of Object.entries(r.forms || {})) {
+      if (/^(pret_part|pres_part)/.test(msd)) { if (particle) forms[msd] = list.map((f) => particle + f); continue; }
+      if (/s-form/.test(msd) && reflexive) continue;
+      const after = msd === "imper" && reflexive ? rest.map((w) => (w === "sig" ? "dig" : w)) : rest;
+      forms[msd] = list.map((f) => [f, ...after].join(" "));
+    }
+    return { ...r, lemgram: own[0].lemgram, baseform: words.join(" "), forms, multiWord: { base: r.lemgram } };
+  });
+}
+
+/**
+ * SALDO rows for a participle entry ("skriven", "avslöjad", "bestående") from the verb it comes
+ * from: an adjective-shaped row (base, neuter, plural, definite form) built from the verb's
+ * perfect participle forms, or the present participle alone. [] unless SALDO has a verb with
+ * exactly this participle.
+ */
+export async function participleRows(supabaseAdmin, lemma, pos) {
+  const k = key(lemma);
+  const out = [];
+  for (const v of (await lemmatize(supabaseAdmin, k)).filter((c) => c.pos === "verb")) {
+    for (const r of await saldoEntries(supabaseAdmin, v.lemma, "verb")) {
+      const f = r.forms || {};
+      if (pos === "perfekt_particip" && (f["pret_part indef sg u nom"] || []).includes(k)) {
+        out.push({ ...r, pos: "av", verb: v.lemma, forms: { "pos indef sg u nom": f["pret_part indef sg u nom"], "pos indef sg n nom": f["pret_part indef sg n nom"] || [], "pos indef pl nom": f["pret_part indef pl nom"] || [], "pos def sg no_masc nom": f["pret_part def sg no_masc nom"] || f["pret_part indef pl nom"] || [] } });
+      }
+      if (pos === "presens_particip" && (f["pres_part nom"] || []).includes(k)) out.push({ ...r, pos: "av", verb: v.lemma, forms: { "pos indef sg u nom": f["pres_part nom"] } });
+    }
+  }
+  return out;
+}
+
 const PARTICLES = new Set(["upp", "ut", "av", "om", "in", "på", "till", "fram", "bort", "ner", "över", "igenom", "undan", "åt", "efter", "ihop", "isär", "tillbaka", "loss", "med", "emot", "förbi", "runt", "iväg", "under"]);
 
 /**
@@ -185,10 +272,11 @@ export function cardFieldsFromSaldo(row, pos) {
     fields.passive = joinVariants(row.forms["inf s-form"]);
     fields.passivePresent = joinVariants(row.forms["pres ind s-form"]);
     const m = row.paradigm.match(/^vb_(\d)[am]/);
-    const pret = (row.forms["pret ind aktiv"] || [])[0] || "";
+    const pret = ((row.forms["pret ind aktiv"] || [])[0] || "").split(" ")[0];   // "tyckte om" → tyckte
     if (m?.[1] === "2") forms.verb_group = pret.endsWith("te") ? "2b" : "2a";
     else if (m) forms.verb_group = m[1];
   }
+  if (group === "verb" || group === "noun") fields.irregular = irregularForms(row, group);
   if (group === "noun") {
     const m = row.paradigm.match(/^nn_(\d)([unv])/);
     if (m && DECLENSION_FROM_SALDO[m[1]]) forms.declension_group = DECLENSION_FROM_SALDO[m[1]];
@@ -196,6 +284,31 @@ export function cardFieldsFromSaldo(row, pos) {
     if (m?.[1] === "0") fields.countability = "uncountable";
   }
   return fields;
+}
+
+/**
+ * Whether SALDO's own forms break the regular pattern of their class, so that a learner's
+ * dictionary rightly calls the word irregular: a preterite that isn't the stem + -de/-te/-dde
+ * (göra → gjorde, lägga → lade, skriva → skrev) or a supine that isn't stem + -t/-tt (ha → haft),
+ * a plural that isn't built on the singular
+ * (far → fäder, man → män, bok → böcker). SALDO files göra under 2a and far under a numbered
+ * noun class; "irregular" (for verbs group 4) is then as right as the number.
+ */
+export function irregularForms(row, group) {
+  const first = (msd) => key((row.forms?.[msd] || [])[0]);
+  if (group === "verb") {
+    const inf = first("inf aktiv"), pret = first("pret ind aktiv"), sup = first("sup aktiv");
+    if (!inf || !pret || /\s/.test(inf)) return false;
+    const stem = inf.replace(/a$/, "");
+    const regularPret = [inf + "de", stem + "de", stem + "te", stem.slice(0, -1) + "de", stem.slice(0, -1) + "te", inf + "dde"];
+    // The supine too: ha → hade looks regular, haft doesn't.
+    const regularSup = [inf + "t", stem + "t", stem.slice(0, -1) + "t", inf + "tt"];
+    return !regularPret.includes(pret) || (Boolean(sup) && !regularSup.includes(sup));
+  }
+  const sg = first("sg indef nom"), pl = first("pl indef nom");
+  if (!sg || !pl) return false;
+  const bases = [sg, sg.replace(/[aeo]$/, ""), sg.length > 3 ? sg.slice(0, -2) + sg.slice(-1) : sg];
+  return !bases.some((b) => pl.startsWith(b));
 }
 
 // Stored group labels came in many spellings ("grupp 1", "första gruppen", "2a" …).
@@ -251,8 +364,12 @@ export function compareWithSaldo(entry, rows) {
     const name = `form:${formType}`;
     if (formType === "verb_group" || formType === "declension_group") {
       // SALDO's "0" (no plural) can't overrule a stored group: mass nouns are often taught with one.
-      check(name, stored, refs.filter((r) => r !== "0").length ? refs.filter((r) => r !== "0") : refs, {
-        same: (a, b) => normalizeGroup(a, formType) === normalizeGroup(b, formType),
+      const groups = refs.filter((r) => r !== "0").length ? refs.filter((r) => r !== "0") : refs;
+      // An irregular word may also be labelled so ("irregular", for verbs group 4) — not when filling.
+      const irregular = String(stored || "").trim() && candidates.some((c) => c.irregular) ? [formType === "verb_group" ? "4" : "irregular"] : [];
+      check(name, stored, [...groups, ...irregular], {
+        // "2" without a subgroup is right for 2a and 2b.
+        same: (a, b) => normalizeGroup(a, formType) === normalizeGroup(b, formType) || (normalizeGroup(a, formType) === "2" && /^2[ab]$/.test(normalizeGroup(b, formType))),
         undecidable: (v) => refs.every((r) => r === "0") && normalizeGroup(v, formType) !== "0",
       });
     } else if (formType === "genus") {

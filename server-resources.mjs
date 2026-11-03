@@ -158,15 +158,17 @@ export function saldoCardFields(saldo, pos) {
  *
  * entry: { type, pos, forms: {type: value}, passiv_s, countability, meaning_zh, meaning_en,
  *          example, swedish_explanation, cefr_level } (booleans for the text fields)
- * saldoRows: SALDO rows for (lemma, pos), [] when SALDO lacks the word.
+ * saldoRows: SALDO rows for (lemma, pos), [] when SALDO lacks the word (or rows built from a
+ * compound's last part, formSource "saldo-compound"); referenceFields: fields already compared
+ * with another dictionary (Lexin, compareWithLexin) when SALDO has nothing, under formSource.
  */
-export async function recordEntryStatus(supabaseAdmin, entryId, entry, { saldoRows = [], generated = true } = {}) {
+export async function recordEntryStatus(supabaseAdmin, entryId, entry, { saldoRows = [], referenceFields = null, formSource = SALDO_SOURCE_ID, generated = true } = {}) {
   try {
     const rows = [];
     const now = new Date().toISOString();
-    const saldoFields = entry.type === "word" ? compareWithSaldo(entry, saldoRows).fields : {};
+    const saldoFields = entry.type !== "word" ? {} : referenceFields && !saldoRows.length ? referenceFields : compareWithSaldo(entry, saldoRows).fields;
     for (const [field, r] of Object.entries(saldoFields)) {
-      rows.push({ learning_object_id: entryId, field, status: r.status, source: r.status === "present" ? (generated ? AI_SOURCE_ID : "existing") : SALDO_SOURCE_ID,
+      rows.push({ learning_object_id: entryId, field, status: r.status, source: r.status === "present" ? (generated ? AI_SOURCE_ID : "existing") : formSource,
         detail: r.status === "verified" ? null : { stored: r.stored, reference: r.reference }, updated_at: now });
     }
     for (const field of requiredFields(entry.type, entry.pos)) {
@@ -184,7 +186,9 @@ export async function recordEntryStatus(supabaseAdmin, entryId, entry, { saldoRo
     if (generated) sources.push({ learning_object_id: entryId, source_id: AI_SOURCE_ID, role: "generated_text" });
     if (saldoRows.length) {
       sources.push({ learning_object_id: entryId, source_id: SALDO_SOURCE_ID, role: "forms",
-        fields: Object.keys(saldoFields), detail: { lemgram: saldoRows.map((r) => r.lemgram) } });
+        fields: Object.keys(saldoFields), detail: { lemgram: saldoRows.map((r) => r.lemgram), ...(formSource !== SALDO_SOURCE_ID ? { via: formSource } : {}) } });
+    } else if (referenceFields && Object.keys(saldoFields).length) {
+      sources.push({ learning_object_id: entryId, source_id: formSource, role: "forms", fields: Object.keys(saldoFields), detail: null });
     }
     if (sources.length) await supabaseAdmin.from("learning_object_sources").upsert(sources, { onConflict: "learning_object_id,source_id,role" });
     await supabaseAdmin.rpc("refresh_resource_summary", { p_ids: [entryId] });
