@@ -160,7 +160,9 @@ test("before saving: another part of speech's sense is taken out, a wrong transl
   assert.equal(zh.translation, "发酵需要时间。");
   const status = (field) => d.tables.resource_field_status.find((s) => s.learning_object_id === entryId && s.field === field);
   assert.equal(status("pos").status, "verified");
-  assert.equal(status("sense").status, "verified");
+  // The AI check passed, but no dictionary's English confirms the meaning: not verified on the AI's word alone.
+  assert.equal(status("sense").status, "present");
+  assert.match(status("sense").source, /no_dictionary_english/);
 });
 
 test("before saving: a check that can't decide leaves the card marked for review, not verified", async () => {

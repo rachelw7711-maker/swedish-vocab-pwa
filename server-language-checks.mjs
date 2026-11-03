@@ -488,8 +488,9 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   }
   card.examples = card.examples.filter((e) => !misfits.includes(e.swedish));
   const unsure = check.verdict === "unsure";
-  // The English meaning against Lexin's English equivalents, independently of the AI check:
-  // no word in common leaves the sense unconfirmed rather than checked.
+  // The English meaning against the dictionaries' English equivalents, independently of the AI
+  // check: no word in common, or no dictionary English at all, leaves the sense unconfirmed
+  // rather than checked — the AI's judgement alone never makes it verified.
   const english = !isPhrase && refs ? englishEquivalents(refs, pos) : [];
   const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
   const detail = { verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits], note: check.note, wiktionary: page.status, en_reference: enReference };
@@ -498,6 +499,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     ok: true, result: card, pos: posCheck, usage,
     sense: unsure ? { status: "mismatch", source: "ai_check", detail }
       : enReference === "unmatched" ? { status: "present", source: `${sources};en_unmatched_lexin`, detail }
+      : enReference === "none" ? { status: "present", source: `${sources};no_dictionary_english`, detail }
       : { status: "verified", source: sources, detail },
   };
 }

@@ -99,3 +99,16 @@ test("SALDO: participles through the verb they come from", async () => {
   assert.ok((await participleRows(null, "bestående", "presens_particip")).length);
   assert.deepEqual(await participleRows(null, "bil", "perfekt_particip"), []);
 });
+
+test("English meanings: core words, compounds and spellings meet the dictionary's", () => {
+  const eq = (...t) => t.map((text) => ({ source: "lexin_en", text }));
+  assert.equal(meaningSupport("not; no", eq("not")).length, 1, "inte");
+  assert.equal(meaningSupport("often", eq("often")).length, 1, "ofta");
+  assert.equal(meaningSupport("give; provide", eq("give")).length, 1, "ge");
+  assert.equal(meaningSupport("motorboat, powerboat", eq("a motor boat")).length, 1);
+  assert.equal(meaningSupport("horse meat", eq("horsemeat")).length, 1);
+  assert.equal(meaningSupport("honourable; respectable", eq("honorable")).length, 1);
+  assert.equal(meaningSupport("establishment; setting up", eq("establish")).length, 1);
+  assert.equal(meaningSupport("to wipe", eq("a drought, a dry season")).length, 0);
+  assert.equal(meaningSupport("doctoral degree, PhD", eq("doctorate")).length, 0, "different words stay apart");
+});

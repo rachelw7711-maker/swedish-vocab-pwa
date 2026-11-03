@@ -169,8 +169,14 @@ export function lexinCountability(refs) {
 
 const GLOSS_STOP = new Set(["a", "an", "the", "to", "of", "and", "or", "in", "on", "at", "for", "with", "by", "be", "is", "sb", "sth", "someone", "something", "somebody", "one", "one's", "oneself", "etc", "us", "uk", "e", "g", "eg", "ie", "used", "especially", "often", "very", "kind", "type", "sort", "person", "thing", "make", "get", "have", "do", "go", "take", "put", "give", "become", "who", "which", "that", "as", "from", "not", "its"]);
 const glossWords = (s) => key(s).replace(/\([^)]*\)|\[[^\]]*\]/g, " ").replace(/[^\p{L}\p{N}' -]/gu, " ").split(/[\s-]+/).map((w) => w.replace(/'s$/, "")).filter((w) => w.length > 1 && !GLOSS_STOP.has(w));
-// A light English stem so "drought"/"droughts", "carry"/"carries"/"carried" meet.
-const stem = (w) => w.replace(/(ies|ied)$/, "y").replace(/(ing|ed|es|s)$/, "").replace(/(.)\1$/, "$1");
+// A light English stem so "drought"/"droughts", "carry"/"carries"/"carried", "establish"/
+// "establishment" and British / American spellings ("honourable"/"honorable") meet.
+const stem = (w) => w.replace(/our/g, "or").replace(/is(e|ed|es|ing|ation)$/, "iz$1").replace(/ment$/, "").replace(/(ies|ied)$/, "y").replace(/(ing|ed|es|s)$/, "").replace(/(.)\1$/, "$1");
+// A meaning made only of words the stop list drops ("not", "often", "give", "become") is
+// compared by those words; "motor boat" and "motorboat" by their letters run together.
+const ARTICLES = new Set(["a", "an", "the", "to"]);
+const plainWords = (s) => key(s).replace(/\([^)]*\)|\[[^\]]*\]/g, " ").replace(/[^\p{L}\p{N}' -]/gu, " ").split(/[\s-]+/).filter((w) => w && !ARTICLES.has(w));
+const compact = (s) => plainWords(s).join("");
 
 /** English equivalents the dictionaries give for this part of speech: [{ source, text }]. */
 export function englishEquivalents(refs, pos) {
@@ -186,9 +192,16 @@ export function englishEquivalents(refs, pos) {
  * stem), so "car; automobile" meets Lexin's "car" and Wiktionary's "an automobile, car".
  */
 export function meaningSupport(meaningEn, equivalents) {
-  const ours = new Set(glossWords(meaningEn).map(stem));
-  if (!ours.size) return [];
-  return equivalents.filter((e) => glossWords(e.text).some((w) => ours.has(stem(w))));
+  const content = glossWords(meaningEn);
+  const ours = new Set(content.map(stem)), oursPlain = new Set(plainWords(meaningEn).map(stem));
+  if (!oursPlain.size) return [];
+  const segments = new Set(String(meaningEn || "").split(/[;,/]/).map(compact).filter((s) => s.length > 3));
+  return equivalents.filter((e) => {
+    const theirs = glossWords(e.text);
+    // Either side only stop-list words: compare all their words.
+    const [mine, words] = theirs.length && content.length ? [ours, theirs] : [oursPlain, plainWords(e.text)];
+    return words.some((w) => mine.has(stem(w))) || String(e.text).split(/[;,/]/).some((t) => segments.has(compact(t)));
+  });
 }
 
 /** Lexin's senses of the headword in this part of speech, short, for a prompt or an AI check. */
