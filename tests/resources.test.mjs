@@ -3,7 +3,7 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { useSaldoFiles, lemmatize, saldoEntries, cardFieldsFromSaldo, compareWithSaldo } from "../server-lexicon.mjs";
-import { expressionMatchKey, normalizeText, resolveWord, findExistingExpression, requiredFields, recordEntryStatus } from "../server-resources.mjs";
+import { expressionMatchKey, normalizeText, resolveWord, findExistingExpression, requiredFields, recordEntryStatus, markDependentsForRecheck } from "../server-resources.mjs";
 import { fakeSupabase } from "./fake-supabase.mjs";
 
 before(async () => { await useSaldoFiles(); });
@@ -147,4 +147,19 @@ test("SALDO comparison: an irregular word may be called irregular, group 2 cover
   assert.equal((await cmp("fågel", "noun", { declension_group: "irregular" }))["form:declension_group"].status, "mismatch");
   // Filling an empty group takes SALDO's number, never "irregular".
   assert.equal((await cmp("göra", "verb", {}))["form:verb_group"].reference, "2a");
+});
+
+test("a changed core fact sends each language's dependent fields back to a re-check", async () => {
+  const db = fakeSupabase({ resource_field_status: [
+    { learning_object_id: "n1", field: "grammar_note_zh", status: "verified" },
+    { learning_object_id: "n1", field: "grammar_note_en", status: "missing" },
+    { learning_object_id: "n1", field: "meaning_zh", status: "verified" },
+  ] });
+  const rows = await markDependentsForRecheck(db, "n1", ["group"], { reason: "group 1→2" });
+  assert.deepEqual(rows.map((r) => r.field), ["grammar_note_zh"], "missing stays missing");
+  const st = Object.fromEntries(db.tables.resource_field_status.map((r) => [r.field, r.status]));
+  assert.equal(st.grammar_note_zh, "present");
+  assert.equal(st.meaning_zh, "verified", "a group change says nothing about the meaning");
+  const pos = await markDependentsForRecheck(db, "n1", ["pos"]);
+  assert.deepEqual(pos.map((r) => r.field).sort(), ["example_en", "example_zh", "grammar_note_zh", "meaning_en", "meaning_zh"]);
 });

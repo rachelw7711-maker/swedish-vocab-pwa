@@ -53,5 +53,5 @@ $$;
 revoke all on function public.refresh_resource_summary(uuid[]) from public;
 grant execute on function public.refresh_resource_summary(uuid[]) to service_role;
 
--- Every entry's summary under the new meaning (forms-only "verified" becomes "partial").
-select public.refresh_resource_summary(array_agg(id)) from public.learning_objects;
+-- Every entry's summary is recomputed by 20261103130000_verified_definition.sql, which
+-- completes this definition (part of speech too) and keeps a backup of the old values.

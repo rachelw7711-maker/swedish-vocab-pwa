@@ -197,6 +197,39 @@ export async function recordEntryStatus(supabaseAdmin, entryId, entry, { saldoRo
   }
 }
 
+// What each explanation language says about a core fact (2026-11-03): when the Swedish core
+// changes — part of speech, sense, forms, a group, countability — these per-language fields
+// may now be wrong. One Swedish core, so one list for every language.
+const DEPENDENTS = {
+  pos: ["meaning", "grammar_note", "example"],
+  sense: ["meaning", "example"],
+  forms: ["grammar_note"],
+  group: ["grammar_note"],
+  countability: ["grammar_note"],
+};
+
+/**
+ * Marks the per-language fields that depend on changed core facts for a re-check: their status
+ * becomes "present" (back from verified, never up from missing or mismatch) with the change in
+ * its detail. Content is not touched. Returns the rows written. Never throws.
+ */
+export async function markDependentsForRecheck(supabaseAdmin, entryId, changed, { languages = ["zh", "en"], reason = "" } = {}) {
+  try {
+    const fields = [...new Set(changed.flatMap((c) => DEPENDENTS[c] || []))].flatMap((f) => languages.map((l) => `${f}_${l}`));
+    if (!fields.length) return [];
+    const { data: current, error: readError } = await supabaseAdmin.from("resource_field_status").select("field, status").eq("learning_object_id", entryId).in("field", fields);
+    if (readError) return [];
+    const now = new Date().toISOString();
+    const rows = fields
+      .filter((f) => !current.some((c) => c.field === f && (c.status === "missing" || c.status === "mismatch")))
+      .map((field) => ({ learning_object_id: entryId, field, status: "present", source: "recheck", detail: { after: changed, ...(reason ? { reason } : {}) }, updated_at: now }));
+    const { error } = await supabaseAdmin.from("resource_field_status").upsert(rows, { onConflict: "learning_object_id,field" });
+    return error ? [] : rows;
+  } catch {
+    return [];
+  }
+}
+
 /** Adds a module membership (a phrase also studied as an expression). Never throws. */
 export async function addModule(supabaseAdmin, entryId, module) {
   try {
