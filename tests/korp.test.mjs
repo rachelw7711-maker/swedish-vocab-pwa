@@ -2,7 +2,7 @@
 //   node --test tests/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { korpCqp, ownForms, judgeAttestation, senseVerdict, meaningParts } from "../server-korp.mjs";
+import { korpCqp, ownForms, judgeAttestation, senseVerdict, meaningParts, judgeForm, comparisonByRule, groupFromForms } from "../server-korp.mjs";
 
 const att = (match, perCorpus, corpusPos) => {
   const byPos = {};
@@ -68,4 +68,36 @@ test("sense: every part of the meaning needs two sentences both readers agree on
   assert.equal(senseVerdict(["space base"], twice, [{ n: 1, glosses: [1] }, { n: 2, glosses: [1] }], yes(["1:1", "2:1"])).ok, false);
   // enough sentences, but all from one corpus
   assert.equal(senseVerdict(["fermentation"], sentences, [{ n: 1, glosses: [1] }, { n: 2, glosses: [1] }], yes(["1:1", "2:1"])).ok, false);
+});
+
+test("forms: the corpus form for this lemma, tagged as that inflection, in two corpora", () => {
+  const r = [
+    { word: "vackrare", msd: "JJ.KOM.UTR+NEU.SIN+PLU.IND+DEF.NOM", corpus: "GP2012", n: 40 }, { word: "vackrare", msd: "JJ.KOM.UTR+NEU.SIN+PLU.IND+DEF.NOM", corpus: "ROMI", n: 30 },
+    { word: "vackert", msd: "AB.POS", corpus: "GP2012", n: 50 }, { word: "vackert", msd: "JJ.POS.NEU.SIN.IND.NOM", corpus: "SUC3", n: 2 },
+  ];
+  assert.equal(judgeForm("comparative", "vackrare", r).ok, true);
+  assert.equal(judgeForm("neuter_form", "vackert", r).ok, false);         // the adverb tags don't count
+  const wrong = judgeForm("comparative", "vackerare", [...r, { word: "vackrare", msd: "JJ.KOM.UTR+NEU.SIN+PLU.IND+DEF.NOM", corpus: "SUC3", n: 5 }]);
+  assert.equal(wrong.ok, false); assert.equal(wrong.corpus_form, "vackrare");
+  const indecl = [{ word: "dåvarande", msd: "PC.PRS.UTR+NEU.SIN+PLU.IND+DEF.NOM", corpus: "GP2012", n: 9 }, { word: "dåvarande", msd: "PC.PRS.UTR+NEU.SIN+PLU.IND+DEF.NOM", corpus: "ROMI", n: 4 }];
+  assert.equal(judgeForm("neuter_form", "dåvarande", indecl).ok, true);
+  const mass = [{ word: "feminism", msd: "NN.UTR.SIN.IND.NOM", corpus: "GP2012", n: 300 }, { word: "feminismer", msd: "NN.UTR.PLU.IND.NOM", corpus: "GP2012", n: 2 }];
+  assert.equal(judgeForm("plural_indefinite", "—", mass).ok, true);
+  assert.equal(judgeForm("plural_indefinite", "—", [...mass, { word: "feminismer", msd: "NN.UTR.PLU.IND.NOM", corpus: "ROMI", n: 40 }]).ok, false);
+});
+
+test("comparison as one paradigm; declension group by rule", () => {
+  const per = { comparative: "mer professionell", superlative_indefinite: "mest professionell", superlative_definite: "mest professionella" };
+  assert.equal(comparisonByRule("professionell", "professionella", per, { comparative: true }), "mer/mest");
+  assert.equal(comparisonByRule("professionell", "professionella", per, {}), null);
+  assert.equal(comparisonByRule("professionell", "professionella", { ...per, superlative_definite: "mest professionell" }, { comparative: true }), null);
+  assert.equal(comparisonByRule("vacker", "vackra", { comparative: "vackrare", superlative_indefinite: "vackrast", superlative_definite: "vackraste" }, { superlative_definite: true }), "-are/-ast/-aste");
+  assert.equal(groupFromForms("flicka", "flickor", "en"), "1");
+  assert.equal(groupFromForms("bil", "bilar", "en"), "2");
+  assert.equal(groupFromForms("pojke", "pojkar", "en"), "2");
+  assert.equal(groupFromForms("park", "parker", "en"), "3");
+  assert.equal(groupFromForms("sko", "skor", "en"), "3");
+  assert.equal(groupFromForms("äpple", "äpplen", "ett"), "4");
+  assert.equal(groupFromForms("hus", "hus", "ett"), "5");
+  assert.equal(groupFromForms("bok", "böcker", "en"), null);   // umlaut: not by rule
 });

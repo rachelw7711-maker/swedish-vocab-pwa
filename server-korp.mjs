@@ -176,3 +176,98 @@ export async function judgeSenseFromSentences({ word, pos, meaningZh, meaningEn,
   return { ...v, parts, method: "parts",
     readings: a.readings.map((r) => ({ n: r.n, glosses: r.glosses, note: r.note, confirmed: Object.fromEntries((r.glosses || []).map((g) => [g, confirmations[`${r.n}:${g}`] ?? null])), note_b: (r.glosses || []).map((g) => notesB[`${r.n}:${g}`]).filter(Boolean).join(" / ") })) };
 }
+
+// ---------------------------------------------------------------------------
+// Forms (2026-11-04): a stored form is attested when the corpus has it, lemmatised to this word
+// and tagged as that very inflection (NN.UTR.PLU.DEF.NOM for a definite plural), in several
+// corpora. A form the corpus never shows for the word stays unconfirmed; when the corpus shows
+// another spelling for that inflection many times instead, that is reported, not applied.
+export const FORM_MSD = {
+  singular_indefinite: /^NN\.(UTR|NEU)\.SIN\.IND\.NOM$/,
+  singular_definite: /^NN\.(UTR|NEU)\.SIN\.DEF\.NOM$/,
+  plural_indefinite: /^NN\.(UTR|NEU)\.PLU\.IND\.NOM$/,
+  plural_definite: /^NN\.(UTR|NEU)\.PLU\.DEF\.NOM$/,
+  base_form: /^(JJ\.POS|PC\.PRF)\.UTR\.SIN\.IND\.NOM$/,
+  en_form: /^(JJ\.POS|PC\.PRF)\.UTR\.SIN\.IND\.NOM$/,
+  // an indeclinable adjective (dåvarande, bra) is tagged for both genders and numbers at once
+  neuter_form: /^(JJ\.POS|PC\.PRF)\.NEU\.SIN\.IND\.NOM$|^(JJ\.POS|PC\.PRS)\.UTR\+NEU\.SIN\+PLU\.IND\+DEF\.NOM$/,
+  ett_form: /^(JJ\.POS|PC\.PRF)\.NEU\.SIN\.IND\.NOM$/,
+  plural_form: /^(JJ\.POS|PC\.PRF)\.UTR\+NEU\.(PLU\.IND\+DEF|SIN\.DEF)\.NOM$|^(JJ\.POS|PC\.PRS)\.UTR\+NEU\.SIN\+PLU\.IND\+DEF\.NOM$/,
+  comparative: /^JJ\.KOM\./,
+  superlative_indefinite: /^JJ\.SUV\..*\.IND\.NOM$/,
+  superlative_definite: /^JJ\.SUV\..*\.DEF\.NOM$/,
+  infinitive: /^VB\.INF\.AKT$/,
+  present: /^VB\.PRS\.AKT$/,
+  preteritum: /^VB\.PRT\.AKT$/,
+  supinum: /^VB\.SUP\.AKT$/,
+  imperative: /^VB\.IMP\.AKT$/,
+};
+// Pure: the comparison as one paradigm. When one of comparative / superlatives is attested and the
+// three are built by the same rule — mer/mest + the positive and its -a form, or -are / -ast /
+// -aste — the others follow from it (a predicative "mest professionell" is rare in any corpus).
+export function comparisonByRule(base, plural, forms, attested) {
+  const [c, si, sd] = ["comparative", "superlative_indefinite", "superlative_definite"].map((t) => String(forms[t] || "").trim().toLowerCase());
+  const b = String(base).toLowerCase(), p = String(plural || "").toLowerCase();
+  const periphrastic = c === `mer ${b}` && si === `mest ${b}` && p && sd === `mest ${p}`;
+  const stem = c.endsWith("are") ? c.slice(0, -3) : null;
+  const synthetic = stem && si === `${stem}ast` && sd === `${stem}aste`;
+  if (!(periphrastic || synthetic)) return null;
+  return ["comparative", "superlative_indefinite", "superlative_definite"].some((t) => attested[t]) ? (periphrastic ? "mer/mest" : "-are/-ast/-aste") : null;
+}
+
+export const FORM_THRESHOLD = { hits: 3, corpora: 2, contradicted: { hits: 20, corpora: 3 } };
+const LEMMA_TAGS = { noun: "NN", adjective: "JJ|PC", perfekt_particip: "PC|JJ", presens_particip: "PC|JJ", verb: "VB" };
+
+// Every form of the lemma in the corpora: [{ word, msd, corpus, n }].
+export async function korpFormReadings(lemma, pos, { corpora = KORP_CORPORA } = {}) {
+  const tags = LEMMA_TAGS[pos];
+  if (!tags) return { cqp: null, readings: [] };
+  const cqp = `[lemma contains "${q(String(lemma).toLowerCase())}" & pos="${tags}"]`;
+  const d = await korpJson("count", { corpus: corpora.join(","), group_by: "word,msd", cqp });
+  const readings = [];
+  for (const [corpus, v] of Object.entries(d.corpora || {})) for (const r of v.rows || []) readings.push({ word: String(r.value.word?.[0] || "").toLowerCase(), msd: r.value.msd?.[0] || "", corpus, n: r.absolute });
+  return { cqp, readings };
+}
+
+// Hits and corpora of an exact word sequence ("mer abstrakt", "de kursiva stilarna").
+export async function korpSequence(words, { corpora = KORP_CORPORA } = {}) {
+  const cqp = String(words).trim().split(/\s+/).map((w) => `[word="${q(w)}"%c]`).join(" ");
+  const d = await korpJson("count", { corpus: corpora.join(","), group_by: "word", cqp });
+  const perCorpus = Object.fromEntries(Object.entries(d.corpora || {}).map(([c, v]) => [c, v.sums?.absolute || 0]));
+  return { cqp, hits: d.combined?.sums?.absolute || 0, corpora: Object.values(perCorpus).filter((n) => n > 0).length };
+}
+
+// Pure: one single-word form against the lemma's readings. "—" (no plural) is confirmed when the
+// word is common enough and its plural all but absent (under 2% of its uses).
+export function judgeForm(formType, value, readings) {
+  const pattern = FORM_MSD[formType];
+  if (!pattern) return { ok: null, reason: `no tag for ${formType}` };
+  if (/^[—–-]$/.test(String(value).trim())) {
+    if (!/^plural/.test(formType)) return { ok: null, reason: "no form" };
+    const total = readings.reduce((n, r) => n + r.n, 0), plural = readings.filter((r) => /\.PLU\./.test(r.msd)).reduce((n, r) => n + r.n, 0);
+    const ok = total >= 20 && plural / total < 0.02;
+    return { ok, hits: plural, corpora: 0, reason: `plural ${plural} of ${total} uses (${total ? Math.round((plural / total) * 1000) / 10 : 0}%)` };
+  }
+  const word = String(value).trim().toLowerCase();
+  const mine = readings.filter((r) => r.word === word && pattern.test(r.msd));
+  const hits = mine.reduce((s, r) => s + r.n, 0), corpora = new Set(mine.map((r) => r.corpus)).size;
+  const t = FORM_THRESHOLD;
+  if (hits >= t.hits && corpora >= t.corpora) return { ok: true, hits, corpora, reason: `${hits} hits as ${formType} in ${corpora} corpora` };
+  const others = {};
+  for (const r of readings) if (r.word !== word && pattern.test(r.msd)) (others[r.word] ||= { hits: 0, corpora: new Set() }).hits += r.n, others[r.word].corpora.add(r.corpus);
+  const [alt, a] = Object.entries(others).sort((x, y) => y[1].hits - x[1].hits)[0] || [];
+  const contradicted = !hits && a && a.hits >= t.contradicted.hits && a.corpora.size >= t.contradicted.corpora;
+  return { ok: false, hits, corpora, reason: `${hits} hits as ${formType} in ${corpora} corpora`, ...(contradicted ? { corpus_form: alt, corpus_form_hits: a.hits } : {}) };
+}
+
+// The noun's declension group from its forms (null when the forms don't decide it).
+export function groupFromForms(sing, pl, genus) {
+  const s = String(sing || "").toLowerCase(), p = String(pl || "").toLowerCase();
+  if (!s || !p || /\s|\//.test(p)) return null;
+  if (p === s) return "5";
+  if (p === s.replace(/a$/, "") + "or" && s.endsWith("a")) return "1";
+  if (p === s + "ar" || p === s.replace(/[ae]$/, "") + "ar" || p === s.replace(/e([lnr])$/, "$1") + "ar") return "2";
+  if (genus === "ett" && p === s + "n") return "4";
+  if (p === s + "er" || p === s + "r" || p === s.replace(/e([lnr])$/, "$1") + "er" || p === s.replace(/um$/, "") + "er") return "3";
+  return null;
+}
