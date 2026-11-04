@@ -30,17 +30,17 @@ insert into public.resource_sources (id, name, publisher, version, licence, url,
    'https://sprakresurser.isof.se/lexin/engelska/', 'Lexin: Svensk-engelskt lexikon, Institutet för språk och folkminnen (CC BY 4.0).', true, 'allowed_with_attribution',
    'English equivalents per sense: independent check of English meanings (public.reference_entries).'),
   ('folkets-lexikon', 'Folkets lexikon (sv–en)', 'KTH', '1.0.4488 (2024-12-14)', 'CC BY-SA 2.5',
-   'https://folkets-lexikon.csc.kth.se/folkets/', 'Folkets lexikon, KTH (CC BY-SA 2.5).', true, 'evidence_only',
-   'Built on Lexin (same evidence family). Local files in scripts only; text never copied.'),
+   'https://folkets-lexikon.csc.kth.se/folkets/', 'Folkets lexikon, KTH (CC BY-SA 2.5).', true, 'share_alike',
+   'Evidence only. Built on Lexin (same evidence family). Local files in scripts only; text never copied.'),
   ('en-wiktionary', 'English Wiktionary, Swedish entries (wiktextract / kaikki.org)', 'Wiktionary contributors', 'dump 2026-10-01', 'CC BY-SA 4.0',
-   'https://kaikki.org/dictionary/Swedish/', 'Wiktionary (CC BY-SA 4.0).', true, 'evidence_only',
-   'Parts of speech and English glosses as evidence in scripts; text never copied.'),
+   'https://kaikki.org/dictionary/Swedish/', 'Wiktionary (CC BY-SA 4.0).', true, 'share_alike',
+   'Evidence only. Parts of speech and English glosses in scripts; text never copied.'),
   ('sv-wiktionary', 'Svenska Wiktionary', 'Wiktionary contributors', 'live', 'CC BY-SA 4.0',
-   'https://sv.wiktionary.org/', 'Wiktionary (CC BY-SA 4.0).', true, 'evidence_only',
-   'Parts of speech, senses and forms via the MediaWiki API (server-wiktionary.mjs); text never copied.'),
+   'https://sv.wiktionary.org/', 'Wiktionary (CC BY-SA 4.0).', true, 'share_alike',
+   'Evidence only. Parts of speech, senses and forms via the MediaWiki API (server-wiktionary.mjs); text never copied.'),
   ('korp', 'Korp corpora', 'Språkbanken Text, University of Gothenburg', 'live', 'query results; corpus licences vary',
-   'https://spraakbanken.gu.se/korp/', 'Korp, Språkbanken Text.', false, 'evidence_only',
-   'Frequencies (plural share, attestation) and word-picture relations as evidence; no corpus text stored.')
+   'https://spraakbanken.gu.se/korp/', 'Korp, Språkbanken Text.', false, 'unclear',
+   'Evidence only. Frequencies (plural share, attestation), word-picture relations and short contexts as evidence.')
 on conflict (id) do nothing;
 
 commit;

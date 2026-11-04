@@ -490,7 +490,8 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   const unsure = check.verdict === "unsure";
   // The English meaning against the dictionaries' English equivalents, independently of the AI
   // check: no word in common, or no dictionary English at all, leaves the sense unconfirmed
-  // rather than checked — the AI's judgement alone never makes it verified.
+  // rather than checked — the AI's judgement alone never makes it verified. detail.open marks it
+  // for scripts/korp-verify.mjs, where corpus use can still verify it (2026-11-04).
   const english = !isPhrase && refs ? englishEquivalents(refs, pos) : [];
   const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
   const detail = { verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits], note: check.note, wiktionary: page.status, en_reference: enReference };
@@ -498,8 +499,8 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   return {
     ok: true, result: card, pos: posCheck, usage,
     sense: unsure ? { status: "mismatch", source: "ai_check", detail }
-      : enReference === "unmatched" ? { status: "present", source: `${sources};en_unmatched_lexin`, detail }
-      : enReference === "none" ? { status: "present", source: `${sources};no_dictionary_english`, detail }
+      : enReference === "unmatched" ? { status: "present", source: `${sources};en_unmatched_lexin`, detail: { ...detail, open: "dictionary_english_differs" } }
+      : enReference === "none" ? { status: "present", source: `${sources};no_dictionary_english`, detail: { ...detail, open: "no_dictionary_english" } }
       : { status: "verified", source: sources, detail },
   };
 }
