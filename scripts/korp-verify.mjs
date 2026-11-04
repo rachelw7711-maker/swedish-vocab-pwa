@@ -47,6 +47,8 @@ async function pageAll(build) {
 }
 // pos of expressions: korp_hits_* / not_queried were exact-spelling counts (2026-11-02); the lemma
 // sequence counts inflected uses too.
+// The audit of 2026-11-02 left senses it had no reference for as "present" without an open reason.
+const unreferenced = (d) => d?.audit === "no_reference_for_expression" || (d?.referenced === false && !(d.issues || []).length);
 const OPEN = { pos: ["no_reference", "korp_hits_0", "korp_hits_1", "korp_hits_2", "not_queried"], sense: ["no_dictionary_english", "dictionary_english_differs"] };
 // --mismatch: senses the content audit called unsupported or another part of speech's (still
 // detail.remaining after the evidence round, 2026-11-04). Every part of the meaning shown by real
@@ -57,7 +59,7 @@ const statuses = MISMATCH
   ? (await pageAll(() => db.from("resource_field_status").select("learning_object_id, field, status, source, detail").eq("field", "sense").eq("status", "mismatch")))
     .filter((s) => (s.detail?.remaining || []).some((r) => SENSE_KINDS.includes(r.kind) || r.kind === "example_does_not_fit"))   // the latter for sentences to replace it from
   : (await pageAll(() => db.from("resource_field_status").select("learning_object_id, field, status, source, detail").in("field", FIELDS).eq("status", "present")))
-    .filter((s) => OPEN[s.field]?.includes(s.detail?.open));
+    .filter((s) => OPEN[s.field]?.includes(s.detail?.open) || (s.field === "sense" && !s.detail?.open && unreferenced(s.detail)));
 const ids = [...new Set(statuses.map((s) => s.learning_object_id))].slice(0, LIMIT);
 console.log({ statuses: statuses.length, entries: ids.length, write: WRITE, maxUsd: MAX_USD });
 
@@ -121,7 +123,8 @@ for (const id of again) {
 }
 save();
 
-const unjudged = (id) => cache[id]?.sense?.attestOnly;
+// attested only, or checked before its sense row was picked (pos only)
+const unjudged = (id) => cache[id]?.sense?.attestOnly || (!cache[id]?.sense && statuses.some((s) => s.learning_object_id === id && s.field === "sense"));
 // an entry checked before its pos row was picked (expressions, 2026-11-04) is counted again
 const needsPos = (id) => statuses.some((s) => s.learning_object_id === id && s.field === "pos") && !(cache[id]?.pos && typeof cache[id].pos === "object");
 const todo = ATTEST_ONLY ? ids.filter((id) => !cache[id] || needsPos(id)) : spend.usd < MAX_USD ? ids.filter((id) => !cache[id] || unjudged(id) || needsPos(id)) : [];

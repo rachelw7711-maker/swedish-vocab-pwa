@@ -180,3 +180,12 @@ test("a new countable noun gets all four forms from the compound analysis or Lex
   assert.deepEqual(completeNounForms(mjolk, { countability: "uncountable", lexinNounForms: { singular_definite: "x-en", plural_indefinite: "x-ar" } }).map((a) => a.type), ["singular_definite"]);
   assert.deepEqual(completeNounForms([{ type: "singular_indefinite", value: "y" }], { countability: "countable" }), []);
 });
+
+test("a plural-only noun (SALDO nn_rp) gets no gender or group", async () => {
+  const [row] = await saldoEntries(null, "kläder", "noun");
+  const f = cardFieldsFromSaldo(row, "noun").forms;
+  assert.equal(f.genus, "plurale_tantum");
+  assert.equal(f.declension_group, "plurale_tantum");
+  assert.equal(f.plural_definite, "kläderna");
+  assert.equal(f.singular_indefinite, undefined);
+});

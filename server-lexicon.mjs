@@ -282,6 +282,8 @@ export function cardFieldsFromSaldo(row, pos) {
     if (m && DECLENSION_FROM_SALDO[m[1]]) forms.declension_group = DECLENSION_FROM_SALDO[m[1]];
     if (m && m[2] !== "v") forms.genus = m[2] === "u" ? "en" : "ett";
     if (m?.[1] === "0") fields.countability = "uncountable";
+    // nn_rp…: plural only (kläder, anor): no gender, no group — not the AI's guess from a singular
+    if (/^nn_rp/.test(row.paradigm)) { forms.genus = "plurale_tantum"; forms.declension_group = "plurale_tantum"; }
   }
   return fields;
 }
