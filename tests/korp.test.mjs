@@ -2,7 +2,7 @@
 //   node --test tests/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { korpCqp, ownForms, judgeAttestation, senseVerdict } from "../server-korp.mjs";
+import { korpCqp, ownForms, judgeAttestation, senseVerdict, meaningParts } from "../server-korp.mjs";
 
 const att = (match, perCorpus, corpusPos) => {
   const byPos = {};
@@ -45,17 +45,24 @@ test("part of speech: enough hits with the tag, a real share, in more than one c
   assert.equal(judgeAttestation(att("multiword", { A: 9, B: 9 }, { A: {}, B: {} }), null).pos.ok, null);
 });
 
-test("sense: every sense needs two confirmed sentences, from two corpora", () => {
-  const senses = [{ zh: "发酵", en: "fermentation" }, { zh: "酝酿", en: "ferment (unrest)" }];
+test("meaning parts: split at semicolons, each judged on its own", () => {
+  assert.deepEqual(meaningParts("steam; steam along; steam."), ["steam", "steam along"]);
+  assert.deepEqual(meaningParts("a cozy, relaxing evening, usually at home"), ["a cozy, relaxing evening, usually at home"]);
+});
+
+test("sense: every part of the meaning needs two sentences both readers agree on, from two corpora", () => {
+  const parts = ["loose weight", "sold by weight rather than in packages"];
   const sentences = [1, 2, 3, 4, 5].map((n) => ({ n, corpus: n <= 2 ? "GP2012" : "ROMI", text: "" }));
-  const yes = { 1: true, 2: true, 3: true, 4: true, 5: true };
-  // only the first sense attested
-  let v = senseVerdict(senses, sentences, [{ n: 1, sense: 1 }, { n: 3, sense: 1 }, { n: 4, sense: 0 }], yes);
-  assert.equal(v.ok, false); assert.deepEqual(v.unattested, ["ferment (unrest)"]);
-  v = senseVerdict(senses, sentences, [{ n: 1, sense: 1 }, { n: 3, sense: 1 }, { n: 4, sense: 2 }, { n: 5, sense: 2 }], yes);
+  const yes = (pairs) => Object.fromEntries(pairs.map((k) => [k, true]));
+  // only the second part shown: a wrong gloss beside a right one does not pass
+  let v = senseVerdict(parts, sentences, [{ n: 1, glosses: [2] }, { n: 3, glosses: [2] }, { n: 4, glosses: [] }], yes(["1:2", "3:2"]));
+  assert.equal(v.ok, false); assert.deepEqual(v.unattested, ["loose weight"]);
+  // synonyms: one sentence may show several parts
+  const syn = ["forest industry", "forestry industry"];
+  v = senseVerdict(syn, sentences, [{ n: 1, glosses: [1, 2] }, { n: 3, glosses: [1, 2] }], yes(["1:1", "1:2", "3:1", "3:2"]));
   assert.equal(v.ok, true);
-  // the second reader did not confirm one of the readings
-  assert.equal(senseVerdict(senses, sentences, [{ n: 1, sense: 1 }, { n: 3, sense: 1 }, { n: 4, sense: 2 }, { n: 5, sense: 2 }], { ...yes, 5: false }).ok, false);
+  // the second reader did not confirm one mark
+  assert.equal(senseVerdict(syn, sentences, [{ n: 1, glosses: [1, 2] }, { n: 3, glosses: [1, 2] }], yes(["1:1", "1:2", "3:1"])).ok, false);
   // enough sentences, but all from one corpus
-  assert.equal(senseVerdict([senses[0]], sentences, [{ n: 1, sense: 1 }, { n: 2, sense: 1 }], yes).ok, false);
+  assert.equal(senseVerdict(["fermentation"], sentences, [{ n: 1, glosses: [1] }, { n: 2, glosses: [1] }], yes(["1:1", "2:1"])).ok, false);
 });

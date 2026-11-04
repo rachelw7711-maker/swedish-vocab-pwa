@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { korpAttestation, judgeAttestation, korpCqp, korpSentences, judgeSenseFromSentences } from "../server-korp.mjs";
+import { korpAttestation, judgeAttestation, korpCqp, korpSentences, judgeSenseFromSentences, meaningParts } from "../server-korp.mjs";
 import { callOpenAIJson } from "../server-native.mjs";
 
 const opt = (name, d = null) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : d; };
@@ -74,14 +74,34 @@ async function check(id) {
       const cqp = attestation.match === "multiword" ? attestation.cqp : korpCqp(o.swedish, pos, { spelling: attestation.match === "spelling", forms });
       const sentences = await korpSentences(cqp, { count: 12 });
       const judged = await judgeSenseFromSentences({ word: o.swedish, pos, meaningZh: m.zh || "", meaningEn: m.en || "", sentences }, ai);
-      out.sense = { ok: judged.ok, ...(judged.ok ? {} : { open: "korp_sense_unconfirmed" }), cqp, reason: judged.reason, senses: judged.senses, unattested: judged.unattested, corpora: judged.corpora,
-        sentences: sentences.map((s) => ({ ...s, ...(judged.readings.find((r) => r.n === s.n) || {}) })) };
+      out.sense = senseResult(judged, cqp, sentences);
     }
   }
   return out;
 }
 
-const todo = ids.filter((id) => !cache[id]);
+function senseResult(judged, cqp, sentences) {
+  return { ok: judged.ok, ...(judged.ok ? {} : { open: "korp_sense_unconfirmed" }), method: judged.method, cqp, reason: judged.reason, parts: judged.parts, unattested: judged.unattested, corpora: judged.corpora,
+    sentences: sentences.map((s) => ({ ...s, ...(judged.readings.find((r) => r.n === s.n) || {}) })) };
+}
+
+// Senses passed by the first method (2026-11-04), whose reader grouped the meaning itself, are
+// judged again part by part on the same sentences; a one-part meaning was judged the same way already.
+const again = ids.filter((id) => cache[id]?.sense?.ok && cache[id].sense.method !== "parts");
+for (const id of again) {
+  const c = cache[id];
+  const o = must(await db.from("learning_objects").select("swedish, learning_object_translations(native_language, meaning)").eq("id", id).single());
+  const m = Object.fromEntries(o.learning_object_translations.map((t) => [t.native_language, t.meaning]));
+  if (meaningParts(m.en).length <= 1) { c.sense.method = "parts"; c.sense.parts = meaningParts(m.en); continue; }
+  const sentences = c.sense.sentences.map(({ n, corpus, position, text }) => ({ n, corpus, position, text }));
+  try {
+    c.sense = senseResult(await judgeSenseFromSentences({ word: o.swedish, pos: c.part_of_speech ?? (typeof c.pos === "string" ? c.pos : null), meaningZh: m.zh || "", meaningEn: m.en || "", sentences }, ai), c.sense.cqp, sentences);
+  } catch (e) { if (/spending cap/.test(e.message)) { console.log(e.message); break; } console.error(id, e.message); }
+  if (again.indexOf(id) % 20 === 19) { save(); console.log("judged again", again.indexOf(id) + 1, "of", again.length, `$${spend.usd.toFixed(3)}`); }
+}
+save();
+
+const todo = spend.usd < MAX_USD ? ids.filter((id) => !cache[id]) : [];
 let done = 0;
 async function worker() {
   while (todo.length) {
@@ -100,7 +120,7 @@ const tally = {};
 for (const s of statuses) {
   const r = cache[s.learning_object_id]?.[s.field];
   if (r && typeof r !== "object") continue;   // (results cached before 2026-11-04 kept the part of speech under "pos")
-  const k = `${s.field}:${r ? (r.ok ? "verified" : r.open) : "unchecked"}`;
+  const k = `${s.field}:${r ? (r.ok ? (s.field === "sense" && r.method !== "parts" ? "awaiting_part_check" : "verified") : r.open) : "unchecked"}`;
   tally[k] = (tally[k] || 0) + 1;
 }
 console.log(tally, `spent $${spend.usd.toFixed(3)} in ${spend.calls} calls`);
@@ -111,7 +131,8 @@ if (WRITE) {
   for (const s of statuses) {
     const c = cache[s.learning_object_id], r = c?.[s.field];
     if (!r || typeof r !== "object") continue;
-    const korp = { checked_at: c.at, attestation: c.attestation, existence: c.verdict.exists, pos: c.verdict.pos, ...(s.field === "sense" ? { sense: { cqp: r.cqp, reason: r.reason, senses: r.senses, unattested: r.unattested, corpora: r.corpora, sentences: r.sentences } } : {}) };
+    if (s.field === "sense" && r.ok && r.method !== "parts") continue;   // not yet judged part by part
+    const korp = { checked_at: c.at, attestation: c.attestation, existence: c.verdict.exists, pos: c.verdict.pos, ...(s.field === "sense" ? { sense: { cqp: r.cqp, method: r.method, reason: r.reason, parts: r.parts || r.senses, unattested: r.unattested, corpora: r.corpora, sentences: r.sentences } } : {}) };
     const next = { status: r.ok ? "verified" : "present", source: r.ok ? `${s.source};korp` : s.source, detail: { ...(s.detail || {}), open: r.ok ? undefined : r.open, korp } };
     // still the row we read (not changed by someone else meanwhile)
     const { data: cur } = await db.from("resource_field_status").select("status, detail").eq("learning_object_id", s.learning_object_id).eq("field", s.field).maybeSingle();
