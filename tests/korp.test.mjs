@@ -101,3 +101,8 @@ test("comparison as one paradigm; declension group by rule", () => {
   assert.equal(groupFromForms("hus", "hus", "ett"), "5");
   assert.equal(groupFromForms("bok", "böcker", "en"), null);   // umlaut: not by rule
 });
+
+test("a pattern's slot (+ verb) is a placeholder, regex signs never reach the query", () => {
+  assert.equal(korpCqp("vara utformat för att + verb"), korpCqp("vara utformat för att"));
+  assert.doesNotMatch(korpCqp("ha lust (att)"), /[()]/);
+});

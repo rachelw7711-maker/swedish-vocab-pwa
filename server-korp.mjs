@@ -42,7 +42,8 @@ export function ownForms(text, forms = []) {
 }
 
 // "Jaha!", "Det ska bli spännande att ..." → the words themselves.
-const bare = (text) => String(text).replace(/[!?.,;:…"”“]+/g, " ").replace(/\s+/g, " ").trim();
+// A slot written "+ verb" / "+ inf." stands for words like "något"; other regex signs are dropped.
+const bare = (text) => String(text).replace(/\+\s*[\p{L}.]+/gu, " x ").replace(/[!?.,;:…"”“+*()[\]{}|\\^$]+/g, " ").replace(/\s+/g, " ").trim();
 
 // One token per word; "något" / "någon" stand for 1–3 words, "sig" for any reflexive.
 export function korpCqp(text, pos = null, { spelling = false, forms = [] } = {}) {

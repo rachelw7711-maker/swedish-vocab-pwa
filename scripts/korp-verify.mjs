@@ -115,7 +115,7 @@ save();
 
 const unjudged = (id) => cache[id]?.sense?.attestOnly;
 // an entry checked before its pos row was picked (expressions, 2026-11-04) is counted again
-const needsPos = (id) => statuses.some((s) => s.learning_object_id === id && s.field === "pos") && typeof cache[id]?.pos !== "object";
+const needsPos = (id) => statuses.some((s) => s.learning_object_id === id && s.field === "pos") && !(cache[id]?.pos && typeof cache[id].pos === "object");
 const todo = ATTEST_ONLY ? ids.filter((id) => !cache[id] || needsPos(id)) : spend.usd < MAX_USD ? ids.filter((id) => !cache[id] || unjudged(id) || needsPos(id)) : [];
 let done = 0;
 async function worker() {
