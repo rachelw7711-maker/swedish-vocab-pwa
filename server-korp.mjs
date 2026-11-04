@@ -41,9 +41,13 @@ export function ownForms(text, forms = []) {
     .filter((f) => /^[\p{L}-]+$/u.test(f) && (f === head || !["en", "ett"].includes(f)));
 }
 
+// "Jaha!", "Det ska bli spännande att ..." → the words themselves.
+const bare = (text) => String(text).replace(/[!?.,;:…"”“]+/g, " ").replace(/\s+/g, " ").trim();
+
 // One token per word; "något" / "någon" stand for 1–3 words, "sig" for any reflexive.
 export function korpCqp(text, pos = null, { spelling = false, forms = [] } = {}) {
-  const words = String(text).trim().split(/\s+/);
+  text = bare(text);
+  const words = text.split(/\s+/);
   while (words.length > 1 && PLACEHOLDER.test(words[words.length - 1])) words.pop();
   while (words.length > 1 && PLACEHOLDER.test(words[0])) words.shift();
   if (words.length > 1) {
@@ -52,7 +56,7 @@ export function korpCqp(text, pos = null, { spelling = false, forms = [] } = {})
   const tags = pos ? KORP_POS[pos] : null;
   const tag = tags ? ` & (${tags.map((t) => `pos="${t}"`).join(" | ")})` : "";
   const own = `word="${ownForms(text, forms).join("|")}"%c`;
-  return spelling ? `[${own}${tag}]` : `[lemma contains "${q(text)}" & ${own}${tag}]`;
+  return spelling ? `[${own}${tag}]` : `[lemma contains "${q(text.toLowerCase())}" & ${own}${tag}]`;
 }
 
 async function korpJson(path, params, { timeout = 180000, tries = 3 } = {}) {
@@ -73,7 +77,7 @@ async function korpJson(path, params, { timeout = 180000, tries = 3 } = {}) {
 // Counts per corpus and per part of speech. Lemma first; a word the lemmatiser does not know is
 // counted by its spelling (headword + forms) and marked as such.
 export async function korpAttestation(text, { forms = [], corpora = KORP_CORPORA } = {}) {
-  const multiword = /\s/.test(String(text).trim());
+  const multiword = /\s/.test(bare(text));
   const run = async (cqp) => {
     const d = await korpJson("count", { corpus: corpora.join(","), group_by: "pos", cqp });
     const byPos = {}, corpusPos = {}, perCorpus = {};

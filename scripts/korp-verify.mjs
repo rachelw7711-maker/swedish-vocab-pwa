@@ -62,7 +62,7 @@ async function check(id) {
   const forms = o.word_forms.map((f) => f.form_value);
   const attestation = await korpAttestation(o.swedish, { forms });
   const verdict = judgeAttestation(attestation, pos);
-  const out = { lemma: o.swedish, pos, object_type: o.object_type, at: new Date().toISOString(),
+  const out = { lemma: o.swedish, part_of_speech: pos, object_type: o.object_type, at: new Date().toISOString(),
     attestation: { cqp: attestation.cqp, match: attestation.match, total: attestation.total, perCorpus: attestation.perCorpus, byPos: attestation.byPos }, verdict };
   if (mine.some((s) => s.field === "pos")) out.pos = verdict.exists.ok && verdict.pos.ok ? { ok: true } : { ok: false, open: !verdict.exists.ok ? "korp_not_attested" : verdict.pos.differs ? "korp_pos_differs" : "korp_pos_unconfirmed" };
   if (mine.some((s) => s.field === "sense")) {
@@ -99,6 +99,7 @@ save();
 const tally = {};
 for (const s of statuses) {
   const r = cache[s.learning_object_id]?.[s.field];
+  if (r && typeof r !== "object") continue;   // (results cached before 2026-11-04 kept the part of speech under "pos")
   const k = `${s.field}:${r ? (r.ok ? "verified" : r.open) : "unchecked"}`;
   tally[k] = (tally[k] || 0) + 1;
 }
@@ -109,7 +110,7 @@ if (WRITE) {
   let written = 0;
   for (const s of statuses) {
     const c = cache[s.learning_object_id], r = c?.[s.field];
-    if (!r) continue;
+    if (!r || typeof r !== "object") continue;
     const korp = { checked_at: c.at, attestation: c.attestation, existence: c.verdict.exists, pos: c.verdict.pos, ...(s.field === "sense" ? { sense: { cqp: r.cqp, reason: r.reason, senses: r.senses, unattested: r.unattested, corpora: r.corpora, sentences: r.sentences } } : {}) };
     const next = { status: r.ok ? "verified" : "present", source: r.ok ? `${s.source};korp` : s.source, detail: { ...(s.detail || {}), open: r.ok ? undefined : r.open, korp } };
     // still the row we read (not changed by someone else meanwhile)
