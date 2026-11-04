@@ -45,7 +45,9 @@ async function pageAll(build) {
     if (part.length < 1000) return rows;
   }
 }
-const OPEN = { pos: ["no_reference"], sense: ["no_dictionary_english", "dictionary_english_differs"] };
+// pos of expressions: korp_hits_* / not_queried were exact-spelling counts (2026-11-02); the lemma
+// sequence counts inflected uses too.
+const OPEN = { pos: ["no_reference", "korp_hits_0", "korp_hits_1", "korp_hits_2", "not_queried"], sense: ["no_dictionary_english", "dictionary_english_differs"] };
 const statuses = (await pageAll(() => db.from("resource_field_status").select("learning_object_id, field, status, source, detail").in("field", FIELDS).eq("status", "present")))
   .filter((s) => OPEN[s.field]?.includes(s.detail?.open));
 const ids = [...new Set(statuses.map((s) => s.learning_object_id))].slice(0, LIMIT);
@@ -66,8 +68,15 @@ async function check(id) {
   const verdict = judgeAttestation(attestation, pos);
   const out = { lemma: o.swedish, part_of_speech: pos, object_type: o.object_type, at: new Date().toISOString(),
     attestation: { cqp: attestation.cqp, match: attestation.match, total: attestation.total, perCorpus: attestation.perCorpus, byPos: attestation.byPos }, verdict };
-  if (mine.some((s) => s.field === "pos")) out.pos = verdict.exists.ok && verdict.pos.ok ? { ok: true } : { ok: false, open: !verdict.exists.ok ? "korp_not_attested" : verdict.pos.differs ? "korp_pos_differs" : "korp_pos_unconfirmed" };
-  if (mine.some((s) => s.field === "sense")) {
+  // A multi-word entry labelled phrase / other is that by being a multi-word unit: its existence is
+  // the check. A specific label (preposition, conjunction) is not shown by counts: not judged.
+  const generic = attestation.match === "multiword" && ["phrase", "other"].includes(o.part_of_speech);
+  if (mine.some((s) => s.field === "pos")) out.pos = generic ? (verdict.exists.ok ? { ok: true, rule: "multi-word unit, attested" } : { ok: false, open: "korp_not_attested" })
+    : attestation.match === "multiword" ? { ok: false, open: "korp_label_not_judged" }
+    : verdict.exists.ok && verdict.pos.ok ? { ok: true } : { ok: false, open: !verdict.exists.ok ? "korp_not_attested" : verdict.pos.differs ? "korp_pos_differs" : "korp_pos_unconfirmed" };
+  const judged = cache[id]?.sense && !cache[id].sense.attestOnly ? cache[id].sense : null;   // kept, never re-judged
+  if (judged) out.sense = judged;
+  else if (mine.some((s) => s.field === "sense")) {
     const posOk = !pos || verdict.pos.ok || posRow?.status === "verified";
     if (!verdict.exists.ok) out.sense = { ok: false, open: "korp_not_attested" };
     else if (!posOk) out.sense = { ok: false, open: "korp_pos_unconfirmed" };
@@ -105,7 +114,9 @@ for (const id of again) {
 save();
 
 const unjudged = (id) => cache[id]?.sense?.attestOnly;
-const todo = ATTEST_ONLY ? ids.filter((id) => !cache[id]) : spend.usd < MAX_USD ? ids.filter((id) => !cache[id] || unjudged(id)) : [];
+// an entry checked before its pos row was picked (expressions, 2026-11-04) is counted again
+const needsPos = (id) => statuses.some((s) => s.learning_object_id === id && s.field === "pos") && typeof cache[id]?.pos !== "object";
+const todo = ATTEST_ONLY ? ids.filter((id) => !cache[id] || needsPos(id)) : spend.usd < MAX_USD ? ids.filter((id) => !cache[id] || unjudged(id) || needsPos(id)) : [];
 let done = 0;
 async function worker() {
   while (todo.length) {

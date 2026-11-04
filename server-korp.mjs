@@ -59,13 +59,34 @@ export function korpCqp(text, pos = null, { spelling = false, forms = [] } = {})
   return spelling ? `[${own}${tag}]` : `[lemma contains "${q(text.toLowerCase())}" & ${own}${tag}]`;
 }
 
+// One answer per query, shared by every script (KORP_CACHE_DIR, default data/reports/korp-cache):
+// the same count or sample is never asked of Språkbanken twice. The corpora don't change.
+const CACHE_DIR = process.env.KORP_CACHE_DIR || "data/reports/korp-cache";
+async function cached(url) {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    return JSON.parse(await readFile(`${CACHE_DIR}/${await digest(url)}.json`, "utf8"));
+  } catch { return null; }
+}
+async function store(url, d) {
+  try {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    await mkdir(CACHE_DIR, { recursive: true });
+    await writeFile(`${CACHE_DIR}/${await digest(url)}.json`, JSON.stringify(d));
+  } catch { /* a cache that can't be written only costs a query */ }
+}
+const digest = async (s) => (await import("node:crypto")).createHash("sha1").update(s).digest("hex");
+
 async function korpJson(path, params, { timeout = 180000, tries = 3 } = {}) {
   const url = `${KORP}/${path}?${new URLSearchParams(params)}`;
+  const hit = await cached(url);
+  if (hit) return hit;
   for (let n = 1; ; n++) {
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(timeout) });
       const d = await r.json();
       if (d.ERROR) throw new Error(d.ERROR.value || "korp error");
+      await store(url, d);
       return d;
     } catch (e) {
       if (n >= tries) throw e;
