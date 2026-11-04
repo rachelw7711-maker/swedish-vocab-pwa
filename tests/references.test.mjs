@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { useSaldoFiles, compoundRows, compareWithSaldo, multiWordVerbRows, participleRows } from "../server-lexicon.mjs";
 import {
   useReferenceFiles, referenceEntries, posFamilies, lexinForms, compareWithLexin, lexinCountability,
-  englishEquivalents, meaningSupport, lexinSenses, lexinPromptLine, expressionInReferences, collocationInLexin,
+  englishEquivalents, meaningSupport, lexinSenses, lexinPromptLine, expressionInReferences, collocationInLexin, compoundMeaningSupport,
 } from "../server-references.mjs";
 
 before(async () => { await useSaldoFiles(); await useReferenceFiles("data/reference", { extra: true }); });
@@ -111,4 +111,13 @@ test("English meanings: core words, compounds and spellings meet the dictionary'
   assert.equal(meaningSupport("establishment; setting up", eq("establish")).length, 1);
   assert.equal(meaningSupport("to wipe", eq("a drought, a dry season")).length, 0);
   assert.equal(meaningSupport("doctoral degree, PhD", eq("doctorate")).length, 0, "different words stay apart");
+});
+
+test("a transparent compound's meaning from its parts; not a compound whose meaning is something else", async () => {
+  const eq = async (w, p) => englishEquivalents(await referenceEntries(null, w), p);
+  assert.equal(compoundMeaningSupport("language course", { first: "språk", firstEquivalents: await eq("språk", "noun"), headEquivalents: await eq("kurs", "noun") }), true);
+  assert.equal(compoundMeaningSupport("yoga studio", { first: "yoga", firstEquivalents: [], headEquivalents: await eq("studio", "noun") }), true);
+  assert.equal(compoundMeaningSupport("strawberry", { first: "jord", firstEquivalents: await eq("jord", "noun"), headEquivalents: await eq("gubbe", "noun") }), false);
+  // every part of the meaning: "language course; evening class" — the second part has neither
+  assert.equal(compoundMeaningSupport("language course; evening class", { first: "språk", firstEquivalents: await eq("språk", "noun"), headEquivalents: await eq("kurs", "noun") }), false);
 });

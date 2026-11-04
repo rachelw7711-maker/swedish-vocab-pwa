@@ -204,6 +204,27 @@ export function meaningSupport(meaningEn, equivalents) {
   });
 }
 
+/**
+ * A transparent compound's meaning from its parts (2026-11-04): språkkurs = språk + kurs, and
+ * "language course" says both — "course" is an English equivalent of kurs, "language" of språk.
+ * Every part of the meaning (split at ";") must carry a word from the head's equivalents and
+ * another word from the first part's (or the first part itself, a loan kept in English:
+ * yogastudio → "yoga studio"). A compound whose meaning is not its parts' (jordgubbe,
+ * "strawberry") does not pass: its sense needs other evidence.
+ */
+export function compoundMeaningSupport(meaningEn, { first, firstEquivalents, headEquivalents }) {
+  const parts = String(meaningEn || "").split(";").map((x) => x.trim()).filter(Boolean);
+  const words = (texts) => new Set(texts.flatMap((t) => glossWords(t).map(stem)));
+  const head = words(headEquivalents.map((e) => e.text)), firstSet = words(firstEquivalents.map((e) => e.text));
+  const loan = stem(key(first).replace(/s$/, ""));
+  return parts.length > 0 && parts.every((part) => {
+    const mine = glossWords(part).map(stem);
+    const h = mine.filter((w) => head.has(w));
+    const f = mine.filter((w) => firstSet.has(w) || w === loan || w === stem(key(first)));
+    return h.some((x) => f.some((y) => y !== x));
+  });
+}
+
 /** Lexin's senses of the headword in this part of speech, short, for a prompt or an AI check. */
 export function lexinSenses(refs, pos, { limit = 6 } = {}) {
   const english = (refs.lexin_en || []).filter((e) => posMatches(e.pos, pos));

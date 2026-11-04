@@ -18,6 +18,8 @@ const WRITE = process.argv.includes("--write");
 const MAX_USD = Number(opt("--max-usd", "0"));
 const FIELDS = opt("--fields", "pos,sense").split(",");
 const LIMIT = Number(opt("--limit", "0")) || Infinity;
+// --attest-only: existence and part of speech only (no AI); the sense is judged on a later run.
+const ATTEST_ONLY = process.argv.includes("--attest-only");
 const OUT = "data/reports/korp-verify/";
 mkdirSync(OUT, { recursive: true });
 const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
@@ -69,6 +71,7 @@ async function check(id) {
     const posOk = !pos || verdict.pos.ok || posRow?.status === "verified";
     if (!verdict.exists.ok) out.sense = { ok: false, open: "korp_not_attested" };
     else if (!posOk) out.sense = { ok: false, open: "korp_pos_unconfirmed" };
+    else if (ATTEST_ONLY) out.sense = { ok: false, open: "korp_sense_unjudged", attestOnly: true };
     else {
       const m = Object.fromEntries(o.learning_object_translations.map((t) => [t.native_language, t.meaning]));
       const cqp = attestation.match === "multiword" ? attestation.cqp : korpCqp(o.swedish, pos, { spelling: attestation.match === "spelling", forms });
@@ -87,7 +90,7 @@ function senseResult(judged, cqp, sentences) {
 
 // Senses passed by the first method (2026-11-04), whose reader grouped the meaning itself, are
 // judged again part by part on the same sentences; a one-part meaning was judged the same way already.
-const again = ids.filter((id) => cache[id]?.sense?.ok && cache[id].sense.method !== "parts");
+const again = ATTEST_ONLY ? [] : ids.filter((id) => cache[id]?.sense?.ok && cache[id].sense.method !== "parts");
 for (const id of again) {
   const c = cache[id];
   const o = must(await db.from("learning_objects").select("swedish, learning_object_translations(native_language, meaning)").eq("id", id).single());
@@ -101,7 +104,8 @@ for (const id of again) {
 }
 save();
 
-const todo = spend.usd < MAX_USD ? ids.filter((id) => !cache[id]) : [];
+const unjudged = (id) => cache[id]?.sense?.attestOnly;
+const todo = ATTEST_ONLY ? ids.filter((id) => !cache[id]) : spend.usd < MAX_USD ? ids.filter((id) => !cache[id] || unjudged(id)) : [];
 let done = 0;
 async function worker() {
   while (todo.length) {
@@ -132,6 +136,7 @@ if (WRITE) {
     const c = cache[s.learning_object_id], r = c?.[s.field];
     if (!r || typeof r !== "object") continue;
     if (s.field === "sense" && r.ok && r.method !== "parts") continue;   // not yet judged part by part
+    if (s.field === "sense" && r.attestOnly) continue;                    // attested, sense not judged yet
     const korp = { checked_at: c.at, attestation: c.attestation, existence: c.verdict.exists, pos: c.verdict.pos, ...(s.field === "sense" ? { sense: { cqp: r.cqp, method: r.method, reason: r.reason, parts: r.parts || r.senses, unattested: r.unattested, corpora: r.corpora, sentences: r.sentences } } : {}) };
     const next = { status: r.ok ? "verified" : "present", source: r.ok ? `${s.source};korp` : s.source, detail: { ...(s.detail || {}), open: r.ok ? undefined : r.open, korp } };
     // still the row we read (not changed by someone else meanwhile)
