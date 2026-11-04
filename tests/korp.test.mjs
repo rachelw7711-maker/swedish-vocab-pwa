@@ -63,6 +63,9 @@ test("sense: every part of the meaning needs two sentences both readers agree on
   assert.equal(v.ok, true);
   // the second reader did not confirm one mark
   assert.equal(senseVerdict(syn, sentences, [{ n: 1, glosses: [1, 2] }, { n: 3, glosses: [1, 2] }], yes(["1:1", "1:2", "3:1"])).ok, false);
+  // the same sentence twice counts once
+  const twice = [{ n: 1, corpus: "GP2012", text: "Uppskjutning från [rymdbasen] Bajkonur." }, { n: 2, corpus: "GP2012", text: "Uppskjutning från [rymdbasen] Bajkonur." }, { n: 3, corpus: "ROMI", text: "Annat." }];
+  assert.equal(senseVerdict(["space base"], twice, [{ n: 1, glosses: [1] }, { n: 2, glosses: [1] }], yes(["1:1", "2:1"])).ok, false);
   // enough sentences, but all from one corpus
   assert.equal(senseVerdict(["fermentation"], sentences, [{ n: 1, glosses: [1] }, { n: 2, glosses: [1] }], yes(["1:1", "2:1"])).ok, false);
 });

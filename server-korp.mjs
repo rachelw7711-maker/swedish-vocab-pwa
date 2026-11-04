@@ -147,8 +147,10 @@ const schemaB = { type: "object", additionalProperties: false, required: ["items
 // those sentences come from enough corpora. confirmations: { "n:gloss": true | false }.
 export function senseVerdict(parts, sentences, readings, confirmations) {
   const t = THRESHOLDS.sense;
+  // the same sentence twice (a news item repeated) is one piece of evidence
+  const textOf = (n) => String(sentences.find((s) => s.n === n)?.text || n).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const agreed = readings.flatMap((r) => (r.glosses || []).filter((g) => g >= 1 && g <= parts.length && confirmations[`${r.n}:${g}`] === true).map((g) => ({ n: r.n, g })));
-  const perPart = parts.map((p, i) => new Set(agreed.filter((x) => x.g === i + 1).map((x) => x.n)).size);
+  const perPart = parts.map((p, i) => new Set(agreed.filter((x) => x.g === i + 1).map((x) => textOf(x.n))).size);
   const corpora = new Set(agreed.map((x) => sentences.find((s) => s.n === x.n)?.corpus).filter(Boolean));
   const unattested = parts.filter((p, i) => perPart[i] < t.perSense);
   const ok = parts.length > 0 && !unattested.length && corpora.size >= t.corpora;
