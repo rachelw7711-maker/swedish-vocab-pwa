@@ -11,9 +11,9 @@ import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
 import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar } from "./server-language-checks.mjs";
-import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey } from "./server-resources.mjs";
+import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
 import { saldoEntries, perfectParticipleDeclension, compoundRows } from "./server-lexicon.mjs";
-import { referenceEntries, referencePos, lexinPromptLine, lexinCountability, compareWithLexin, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
+import { referenceEntries, referencePos, lexinPromptLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
@@ -334,6 +334,13 @@ If the input names a part of speech and the sense a text uses, write the entry f
     const grammar = pos === "noun" ? nounGrammar({ saldoCountability: fromSaldo?.countability, lexinCountability: refs ? lexinCountability(refs) : null, aiCountability: result.countability, forms, aiPosDetail: result.pos_detail }) : null;
     if (grammar?.countability === "uncountable") {
       for (let i = forms.length - 1; i >= 0; i--) if (/^plural_/.test(forms[i].type) && grammar.countabilitySource === "ai" && !fromSaldo) forms.splice(i, 1);
+    }
+    // A countable noun is shown with all four forms: what the model left out comes from the
+    // compound analysis or Lexin (completeNounForms), or stays missing — never made up.
+    if (pos === "noun" && !fromSaldo) {
+      const lexinNoun = (refs?.lexin_sv || []).map((e) => lexinForms(e, "noun")).find((x) => x.forms.singular_definite || x.forms.plural_indefinite);
+      const added = completeNounForms(forms, { countability: grammar?.countability, compoundRow: compound[0] || null, lexinNounForms: lexinNoun && !lexinNoun.noPlural ? lexinNoun.forms : lexinNoun ? { singular_definite: lexinNoun.forms.singular_definite } : null });
+      if (added.length) console.warn("[native] noun forms completed", lemma, added);
     }
     // One learning point once, each complete (meaning in both languages and an example).
     const { kept: collocationList, dropped: droppedCollocations } = cleanCollocations(result.collocations, [...LANGUAGES]);

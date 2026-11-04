@@ -3,7 +3,8 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { useSaldoFiles, lemmatize, saldoEntries, cardFieldsFromSaldo, compareWithSaldo } from "../server-lexicon.mjs";
-import { expressionMatchKey, normalizeText, resolveWord, findExistingExpression, requiredFields, recordEntryStatus, markDependentsForRecheck } from "../server-resources.mjs";
+import { expressionMatchKey, normalizeText, resolveWord, findExistingExpression, requiredFields, recordEntryStatus, markDependentsForRecheck, completeNounForms } from "../server-resources.mjs";
+import { compoundRows } from "../server-lexicon.mjs";
 import { fakeSupabase } from "./fake-supabase.mjs";
 
 before(async () => { await useSaldoFiles(); });
@@ -162,4 +163,20 @@ test("a changed core fact sends each language's dependent fields back to a re-ch
   assert.equal(st.meaning_zh, "verified", "a group change says nothing about the meaning");
   const pos = await markDependentsForRecheck(db, "n1", ["pos"]);
   assert.deepEqual(pos.map((r) => r.field).sort(), ["example_en", "example_zh", "grammar_note_zh", "meaning_en", "meaning_zh"]);
+});
+
+test("a new countable noun gets all four forms from the compound analysis or Lexin, never made up", async () => {
+  const [row] = (await compoundRows(null, "yogastudio", "noun")).filter((r) => !r.compound.ambiguous);
+  assert.ok(row, "SALDO splits yogastudio");
+  const forms = [{ type: "singular_indefinite", value: "yogastudio" }, { type: "singular_definite", value: "yogastudion" }];
+  const added = completeNounForms(forms, { countability: "countable", compoundRow: row });
+  assert.deepEqual(added.map((a) => [a.type, a.value, a.source]), [["plural_indefinite", "yogastudior", "saldo-compound"], ["plural_definite", "yogastudiorna", "saldo-compound"]]);
+  // same as the singular is a real plural (hus – husen), from Lexin
+  const hus = [{ type: "singular_indefinite", value: "lekhus" }];
+  completeNounForms(hus, { countability: "countable", lexinNounForms: { singular_definite: "lekhuset", plural_indefinite: "lekhus", plural_definite: "lekhusen" } });
+  assert.deepEqual(hus.map((f) => f.value), ["lekhus", "lekhuset", "lekhus", "lekhusen"]);
+  // uncountable: no plural asked for; nothing to go on: stays missing
+  const mjolk = [{ type: "singular_indefinite", value: "x" }];
+  assert.deepEqual(completeNounForms(mjolk, { countability: "uncountable", lexinNounForms: { singular_definite: "x-en", plural_indefinite: "x-ar" } }).map((a) => a.type), ["singular_definite"]);
+  assert.deepEqual(completeNounForms([{ type: "singular_indefinite", value: "y" }], { countability: "countable" }), []);
 });

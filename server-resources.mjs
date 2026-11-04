@@ -136,6 +136,28 @@ export function saldoPromptLine(saldo, pos) {
   return `Reference (SALDO): lemma "${saldo.baseform}", forms ${shown || "none"}. Use this lemma; forms are filled in from SALDO, so return forms: [].`;
 }
 
+/**
+ * A new noun's four forms, complete (2026-11-04): a form the model left out — a countable noun
+ * with only its singular — comes from SALDO's analysis of the compound or from Lexin's forms of
+ * the word, never invented; an uncountable noun needs no plural. Adds to `forms` in place and
+ * returns what it added ({ type, value, source }); what neither has stays missing.
+ */
+export function completeNounForms(forms, { countability, compoundRow = null, lexinNounForms = null }) {
+  const want = countability === "uncountable" ? ["singular_definite"] : ["singular_definite", "plural_indefinite", "plural_definite"];
+  const have = new Set(forms.filter((f) => String(f.value || "").trim()).map((f) => f.type));
+  const fromCompound = compoundRow ? cardFieldsFromSaldo(compoundRow, "noun").forms : {};
+  const added = [];
+  for (const type of want) {
+    if (have.has(type)) continue;
+    const value = fromCompound[type] || lexinNounForms?.[type];
+    if (!value || /^[—–-]$/.test(String(value).trim())) continue;
+    forms.push({ type, value });
+    added.push({ type, value, source: fromCompound[type] ? "saldo-compound" : LEXIN_SOURCE });
+  }
+  return added;
+}
+const LEXIN_SOURCE = "lexin-sv-2020";
+
 /** Card fields SALDO decides for a new entry: { forms: [{type, value}], passive, countability }. */
 export function saldoCardFields(saldo, pos) {
   if (!saldo) return null;
