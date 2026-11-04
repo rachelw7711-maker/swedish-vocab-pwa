@@ -77,7 +77,11 @@ async function check(id) {
         results.push({ v, ok: seq.hits >= FORM_THRESHOLD.hits && seq.corpora >= FORM_THRESHOLD.corpora, hits: seq.hits, corpora: seq.corpora, reason: `${seq.hits} hits of the sequence in ${seq.corpora} corpora`, cqp: seq.cqp });
       }
     }
-    const fix = results.length === 1 && results[0].corpus_form && results[0].via !== "verb" ? results[0].corpus_form : null;
+    // A noun's definite singular follows its gender (en → -en/-n, ett → -et/-t): the corpus's
+    // "juliet" (the name Juliet, tagged NN) is no definite form of en juli.
+    const genus = forms.genus?.form_value;
+    const fitsGender = (w) => type !== "singular_definite" || !genus || (genus === "en" ? /n$/i.test(w) : genus === "ett" ? /t$/i.test(w) : true);
+    const fix = results.length === 1 && results[0].corpus_form && results[0].via !== "verb" && fitsGender(results[0].corpus_form) ? results[0].corpus_form : null;
     out.forms[type] = { value: f.form_value, ok: results.length > 0 && results.every((r) => r.ok), variants: results, ...(fix ? { fix } : {}) };
   }
   // The comparison as one paradigm (comparisonByRule), when the -a form it builds on is checked.
