@@ -48,8 +48,16 @@ async function pageAll(build) {
 // pos of expressions: korp_hits_* / not_queried were exact-spelling counts (2026-11-02); the lemma
 // sequence counts inflected uses too.
 const OPEN = { pos: ["no_reference", "korp_hits_0", "korp_hits_1", "korp_hits_2", "not_queried"], sense: ["no_dictionary_english", "dictionary_english_differs"] };
-const statuses = (await pageAll(() => db.from("resource_field_status").select("learning_object_id, field, status, source, detail").in("field", FIELDS).eq("status", "present")))
-  .filter((s) => OPEN[s.field]?.includes(s.detail?.open));
+// --mismatch: senses the content audit called unsupported or another part of speech's (still
+// detail.remaining after the evidence round, 2026-11-04). Every part of the meaning shown by real
+// sentences refutes those findings; other findings (an example) stay.
+const MISMATCH = process.argv.includes("--mismatch");
+const SENSE_KINDS = ["unsupported_sense", "other_pos_sense"];
+const statuses = MISMATCH
+  ? (await pageAll(() => db.from("resource_field_status").select("learning_object_id, field, status, source, detail").eq("field", "sense").eq("status", "mismatch")))
+    .filter((s) => (s.detail?.remaining || []).some((r) => SENSE_KINDS.includes(r.kind) || r.kind === "example_does_not_fit"))   // the latter for sentences to replace it from
+  : (await pageAll(() => db.from("resource_field_status").select("learning_object_id, field, status, source, detail").in("field", FIELDS).eq("status", "present")))
+    .filter((s) => OPEN[s.field]?.includes(s.detail?.open));
 const ids = [...new Set(statuses.map((s) => s.learning_object_id))].slice(0, LIMIT);
 console.log({ statuses: statuses.length, entries: ids.length, write: WRITE, maxUsd: MAX_USD });
 
@@ -149,12 +157,18 @@ if (WRITE) {
     if (s.field === "sense" && r.ok && r.method !== "parts") continue;   // not yet judged part by part
     if (s.field === "sense" && r.attestOnly) continue;                    // attested, sense not judged yet
     const korp = { checked_at: c.at, attestation: c.attestation, existence: c.verdict.exists, pos: c.verdict.pos, ...(s.field === "sense" ? { sense: { cqp: r.cqp, method: r.method, reason: r.reason, parts: r.parts || r.senses, unattested: r.unattested, corpora: r.corpora, sentences: r.sentences } } : {}) };
-    const next = { status: r.ok ? "verified" : "present", source: r.ok ? `${s.source};korp` : s.source, detail: { ...(s.detail || {}), open: r.ok ? undefined : r.open, korp } };
+    let next = { status: r.ok ? "verified" : "present", source: r.ok ? `${s.source};korp` : s.source, detail: { ...(s.detail || {}), open: r.ok ? undefined : r.open, korp } };
+    if (MISMATCH) {
+      const left = r.ok ? s.detail.remaining.filter((x) => !SENSE_KINDS.includes(x.kind)) : s.detail.remaining;
+      const refuted = r.ok ? s.detail.remaining.filter((x) => SENSE_KINDS.includes(x.kind)) : [];
+      next = { status: left.length ? "mismatch" : "verified", source: left.length ? s.source : `${s.source};korp`,
+        detail: { ...s.detail, remaining: left.length ? left : undefined, refuted_by_korp: refuted.length ? refuted : undefined, korp } };
+    }
     // still the row we read (not changed by someone else meanwhile)
     const { data: cur } = await db.from("resource_field_status").select("status, detail").eq("learning_object_id", s.learning_object_id).eq("field", s.field).maybeSingle();
-    if (cur?.status !== "present" || cur.detail?.open !== s.detail?.open) continue;
+    if (cur?.status !== s.status || cur.detail?.open !== s.detail?.open) continue;
     must(await db.from("content_audit_archive").insert({ batch_id: batch, learning_object_id: s.learning_object_id, table_name: "resource_field_status", field: s.field,
-      old_value: JSON.stringify({ status: s.status, source: s.source, open: s.detail?.open }), new_value: JSON.stringify({ status: next.status, open: next.detail.open || null }), reason: "korp_evidence" }));
+      old_value: JSON.stringify({ status: s.status, source: s.source, open: s.detail?.open }), new_value: JSON.stringify({ status: next.status, open: next.detail.open || null }), reason: MISMATCH ? "korp_evidence_on_audit_finding" : "korp_evidence" }));
     must(await db.from("resource_field_status").update({ ...next, updated_at: at }).eq("learning_object_id", s.learning_object_id).eq("field", s.field));
     written++;
   }
