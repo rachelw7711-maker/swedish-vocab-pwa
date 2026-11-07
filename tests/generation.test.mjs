@@ -172,3 +172,17 @@ test("before saving: a check that can't decide leaves the card marked for review
   const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", chargeQuota: false });
   assert.equal(d.tables.resource_field_status.find((s) => s.learning_object_id === entryId && s.field === "sense").status, "mismatch");
 });
+
+test("related words: never the headword's own forms; the part of speech is always the last bracket", async () => {
+  const { relatedLines, relatedMeaning } = await import("../server-native.mjs");
+  const lines = relatedLines([
+    { word: "lampor", zh: "灯（复数）", pos: "noun" },
+    { word: "Lampa", zh: "灯", pos: "noun" },
+    { word: "lampskärm", zh: "灯罩", pos: "noun" },
+    { word: "lysande", zh: "闪亮的", pos: "present_participle" },
+  ], { lemma: "lampa", forms: [{ type: "plural_indefinite", value: "lampor" }, { type: "present_participle", value: "lysande" }] }, "zh");
+  assert.equal(lines, "lampskärm | 灯罩（名词）\nlysande | 闪亮的（现在分词）");
+  assert.equal(relatedMeaning({ zh: "规定（复数）", pos: "noun" }, "zh"), "规定（复数）（名词）");
+  assert.equal(relatedMeaning({ en: "creamy (adjective)", pos: "adjective" }, "en"), "creamy (adjective)");
+  assert.equal(relatedMeaning({ en: "written", pos: "perfect_participle" }, "en"), "written (past participle)");
+});

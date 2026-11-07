@@ -1,5 +1,5 @@
 // Minimal in-memory stand-in for the supabase-js query builder (tests only):
-// from().select().eq/neq/in/ilike/is/gte/limit, insert/upsert/update, rpc.
+// from().select().eq/neq/in/ilike/is/gte/lt/limit, insert/upsert/update, rpc.
 export function fakeSupabase(tables = {}) {
   const calls = [];
   const like = (value, pattern) => String(value ?? "").toLowerCase() === String(pattern).toLowerCase();
@@ -21,7 +21,7 @@ export function fakeSupabase(tables = {}) {
         }
         return { data: list, error: null };
       }
-      if (op === "update") { rows().filter(matches).forEach((r) => Object.assign(r, payload)); return { data: null, error: null }; }
+      if (op === "update") { const hit = rows().filter(matches); hit.forEach((r) => Object.assign(r, payload)); return { data: hit.map((r) => ({ ...r })), error: null }; }
       return { data: null, error: null };
     };
     const builder = {
@@ -32,7 +32,9 @@ export function fakeSupabase(tables = {}) {
       ilike(k, v) { filters.push((r) => like(r[k], v)); return builder; },
       is(k, v) { filters.push((r) => (r[k] ?? null) === v); return builder; },
       gte(k, v) { filters.push((r) => r[k] >= v); return builder; },
+      lt(k, v) { filters.push((r) => r[k] < v); return builder; },
       or() { return builder; },
+      order() { return builder; },
       limit(n) { limitN = n; return builder; },
       insert(p) { op = "insert"; payload = p; return builder; },
       upsert(p, o = {}) { op = "upsert"; payload = p; conflict = o.onConflict || null; return builder; },

@@ -80,6 +80,8 @@ export async function referencePartsOfSpeech(supabaseAdmin, lemma, { askWiktiona
 // ("anställd", "vuxen"). Not evidence for the part of speech, not against it either.
 const DERIVED = { adverb: ["adjective"], noun: ["adjective"] };
 
+const FUNCTION_CLASSES = new Set(["adverb", "preposition", "conjunction", "subjunction"]);
+
 export function checkKeywordPos({ pos, glossaryPos = null, referencePos = [], wiktionaryStatus = "found" }) {
   const known = new Set(referencePos);
   if (glossaryPos) {
@@ -90,6 +92,10 @@ export function checkKeywordPos({ pos, glossaryPos = null, referencePos = [], wi
   if (!known.size) return { pos, status: "unconfirmed", reason: wiktionaryStatus === "found" || wiktionaryStatus === "missing" ? "no_reference" : `wiktionary_${wiktionaryStatus}` };
   if (known.has(pos)) return { pos, status: "confirmed", reason: "references" };
   if ((DERIVED[pos] || []).some((p) => known.has(p))) return { pos, status: "unconfirmed", reason: `derived_from_${[...known].join("/")}` };
+  // Function-word classes are drawn differently from one dictionary to the next ("oavsett":
+  // adverb to the AI, preposition to SALDO): the one class the references give is taken.
+  const functionClasses = (list) => list.filter((p) => FUNCTION_CLASSES.has(p));
+  if (FUNCTION_CLASSES.has(pos) && functionClasses([...known]).length === 1) return { pos: functionClasses([...known])[0], status: "corrected", reason: `references_say_${functionClasses([...known])[0]}` };
   // Wiktionary not reached: SALDO alone doesn't reject.
   if (wiktionaryStatus !== "found" && wiktionaryStatus !== "missing") return { pos, status: "unconfirmed", reason: `wiktionary_${wiktionaryStatus}` };
   return { pos, status: "rejected", reason: `references_say_${[...known].join("/")}` };

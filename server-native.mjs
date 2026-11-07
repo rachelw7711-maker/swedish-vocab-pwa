@@ -156,17 +156,36 @@ function wordCardSchema() {
 }
 
 // Part of speech of a related word, kept as the trailing note the apps already read:
-// "gräddig | 奶油般的（形容词）", "gräddig | creamy (adjective)".
-const RELATED_POS = ["noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction", "numeral", "interjection", "other"];
+// "gräddig | 奶油般的（形容词）", "gräddig | creamy (adjective)" — always the last
+// bracket, from this fixed list (2026-11-07): a remark the meaning ends with ("（复数）")
+// used to take its place, and the app then showed the remark as the part of speech.
+// Participles used as words of their own are named as such, as in Fördjupning.
+const RELATED_POS = ["noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction", "numeral", "interjection", "present_participle", "perfect_participle", "other"];
 const POS_NOTE = {
-  zh: { noun: "名词", verb: "动词", adjective: "形容词", adverb: "副词", pronoun: "代词", preposition: "介词", conjunction: "连词", numeral: "数词", interjection: "感叹词" },
-  en: { noun: "noun", verb: "verb", adjective: "adjective", adverb: "adverb", pronoun: "pronoun", preposition: "preposition", conjunction: "conjunction", numeral: "numeral", interjection: "interjection" },
+  zh: { noun: "名词", verb: "动词", adjective: "形容词", adverb: "副词", pronoun: "代词", preposition: "介词", conjunction: "连词", numeral: "数词", interjection: "感叹词", present_participle: "现在分词", perfect_participle: "过去分词" },
+  en: { noun: "noun", verb: "verb", adjective: "adjective", adverb: "adverb", pronoun: "pronoun", preposition: "preposition", conjunction: "conjunction", numeral: "numeral", interjection: "interjection", present_participle: "present participle", perfect_participle: "past participle" },
 };
-function relatedMeaning(r, lang) {
+export function relatedMeaning(r, lang) {
   const meaning = String(r[lang] || "").trim();
   const note = (POS_NOTE[lang] || POS_NOTE.en)[r.pos];
-  if (!note || /[（(][^（(]*[）)]\s*$/.test(meaning)) return meaning;
+  if (!note) return meaning;
+  const notes = Object.values(POS_NOTE[lang] || POS_NOTE.en);
+  const last = meaning.match(/[（(]([^（()）]*)[）)]\s*$/)?.[1]?.trim();
+  if (last && notes.includes(last)) return meaning;
   return lang === "zh" ? `${meaning}（${note}）` : `${meaning} (${note})`;
+}
+
+/**
+ * The related_words lines of a new card (2026-11-07): never the headword itself or one of
+ * its own inflected forms ("lampor" on lampa, "rättvist" on rättvis) — those are its
+ * grammar, not its family. Its participles stay when the model lists them: they are
+ * words of their own (uppmuntrande, bokförd) and say so in their part of speech.
+ */
+export function relatedLines(related, { lemma, forms = [] }, lang) {
+  const own = new Set([lemma, ...forms.filter((f) => !/participle/.test(f.type)).flatMap((f) => String(f.value || "").split("/"))]
+    .map((w) => String(w || "").trim().toLowerCase()).filter(Boolean));
+  return (related || []).filter((r) => r.word && !own.has(String(r.word).trim().toLowerCase()))
+    .map((r) => `${r.word} | ${relatedMeaning(r, lang)}`).join("\n");
 }
 
 export async function callOpenAIJson({ schemaName, schema, system, user, maxOutputTokens = 2500 }) {
@@ -283,7 +302,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 - countability (nouns only, else ""): "countable" (räknebart), "uncountable" (oräknebart: a mass or abstract noun normally without plural, e.g. koldioxid, nederbörd) or "both" (one sense countable and another a mass sense, e.g. kaffe: the drink / "två kaffe"). Don't call a noun uncountable just because its plural is rare, and don't give an uncountable noun plural forms.
 - examples: 2 natural Swedish sentences, each with a Chinese (zh) and an English (en) translation of the whole sentence.
 - collocations: up to 5 combinations a learner must learn as units — a fixed verb, preposition or particle choice, or a typical strong partner word — with Chinese (zh) and English (en) meanings and a Swedish example that contains it. Not free combinations any noun or adjective would allow ("en stor bil"), never two that differ only in inflection or in någon/något, and fewer (even none) rather than weak ones.
-- related: 3–6 word-family members or related words with Chinese (zh) and English (en) meanings and each word's part of speech (pos; "other" for multi-word expressions).
+- related: 3–6 word-family members or related words with Chinese (zh) and English (en) meanings and each word's part of speech (pos; "other" for multi-word expressions). pos is that word's own part of speech, never the headword's. Never the headword itself or one of its own inflected forms (plural, definite, neuter, tense forms, comparative): those are its grammar. A participle only when it is used as a word of its own, with pos present_participle or perfect_participle. A meaning gives the sense only — no part of speech or grammar remark in it.
 - memory_tip_zh / memory_tip_en: the same short mnemonic in Chinese and in English, or "" for both.
 Every zh field is Chinese only and every en field English only. If uncertain about a sense, prefer the most common one.
 If the input names a part of speech and the sense a text uses, write the entry for exactly that part of speech and give that sense first.`,
@@ -428,7 +447,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         meaning: String(result[`meaning_${l}`] || "").trim(),
         learning_tip: String(result[`memory_tip_${l}`] || "").trim(),
         collocations: (result.collocations || []).filter((c) => c.phrase).map((c) => [c.phrase, c[l], c.example].filter(Boolean).join(" | ")).join("\n"),
-        related_words: (result.related || []).filter((r) => r.word).map((r) => `${r.word} | ${relatedMeaning(r, l)}`).join("\n"),
+        related_words: relatedLines(result.related, { lemma, forms }, l),
       });
     }
 

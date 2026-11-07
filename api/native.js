@@ -1,6 +1,7 @@
 import {
   adminClient, assessPronunciation, deleteAccount, generateWordEntry, normalizeLanguage, requireUser, sendJson,
 } from "../server-native.mjs";
+import { ANALYSIS_VERSION } from "../server-reading.mjs";
 
 // Native iOS v1 endpoints in ONE serverless function (the Vercel plan allows 12
 // functions; separate files pushed the project over the limit). POST /api/native
@@ -8,6 +9,8 @@ import {
 //   "generate-entry"  { word, nativeLanguage }        → { entryId, created }
 //   "delete-account"  {}                               → { deleted }
 //   "assess"          { referenceText, audioBase64 }   → pronunciation scores
+//   "reading-version" {}                               → { analysisVersion } (the reading selection
+//                     rules the server analyses with; an app built earlier learns of a newer one here)
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
@@ -21,6 +24,8 @@ export default async function handler(req, res) {
         return sendJson(res, 200, await deleteAccount({ supabaseAdmin, userId }));
       case "assess":
         return sendJson(res, 200, await assessPronunciation({ supabaseAdmin, userId, referenceText: body.referenceText, audioBase64: body.audioBase64 }));
+      case "reading-version":
+        return sendJson(res, 200, { analysisVersion: ANALYSIS_VERSION });
       default:
         return sendJson(res, 400, { error: "Okänd åtgärd." });
     }

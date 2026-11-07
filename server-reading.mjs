@@ -38,6 +38,14 @@ export const MAX_AUTO_ANALYSIS_WORDS = LENGTH_TIERS.long.maxWords;
 export const MAX_SAVE_WORDS = LENGTH_TIERS.overlong.maxWords;
 const MAX_KEY_VOCABULARY = 15;
 
+// The selection rules an analysis was made with (text_analysis.analysis_version). An
+// analysis made with older rules is made again with the current ones the next time a
+// reader opens it — its summary is kept, only the selection runs again (2026-11-07:
+// SALDO occurrences, A1 rule, reserves, expression overlap). Nothing else is versioned.
+// 3 (2026-11-07): the accepted V4 keyword prompt, expression base forms and recovery, a
+// 60-word pool, adverbs kept as their own headwords.
+export const ANALYSIS_VERSION = 3;
+
 /**
  * How many keywords a text may have at most (2026-11-02): about one per 40 words (at least
  * 3), one or two more for a dense text (many B2–C2 dictionary words per 100 words), never
@@ -454,14 +462,85 @@ export function extractCandidateTokens(cleanedText) {
     freq.set(token, (freq.get(token) || 0) + 1);
     if (!firstSeenCapitalized.has(token)) firstSeenCapitalized.set(token, /^[A-ZÅÄÖ]/.test(raw));
   });
-  return { freq, firstSeenCapitalized };
+  return { freq, firstSeenCapitalized, properNouns: properNouns(cleanedText) };
+}
+
+// Names: words the text only ever writes with a capital, at least once inside a sentence
+// ("i Malmö", "Anna och Erik"). A capital at the start of a sentence says nothing — the
+// old rule (capital the first time + once in the text) left out every word that happened
+// to open a sentence ("Arbetslösheten ökar …").
+export function properNouns(text) {
+  const lower = new Set();
+  const inside = new Set();
+  for (const t of textTokens(text)) {
+    if (!/^\p{Lu}/u.test(t.raw)) lower.add(t.form);
+    else if (t.i > 0) inside.add(t.form);
+  }
+  return new Set([...inside].filter((form) => !lower.has(form)));
+}
+
+// Every word of the text where it stands: sentence number s, place i in the sentence, the
+// form in lower case. Occurrences and overlaps with expressions are counted on these.
+export function textTokens(text) {
+  return splitSentences(text).flatMap((sentence, s) =>
+    (sentence.match(/\p{L}+(?:-\p{L}+)?/gu) || []).map((raw, i) => ({ s, i, form: raw.toLowerCase(), raw })));
+}
+
+// SALDO gives participles as adjectives, and an adjective's -t form is also the adverb.
+const POS_READINGS = { presens_particip: ["adjective", "verb"], perfekt_particip: ["adjective", "verb"], adverb: ["adjective"], noun: ["adjective"] };
+const fitsPos = (reading, pos) => !pos || reading === pos || (POS_READINGS[pos] || []).includes(reading);
+// Endings a word SALDO doesn't know can have in the text (klimatkris → klimatkrisen).
+const INFLECTION_ENDING = /^(?:|e|n|en|er|et|r|ar|or|na|ns|s|t|de|te|da|ta|des|tes|ade|at|are|arna|erna|orna|ens|ets|ena|ets)$/;
+
+/**
+ * Where a word occurs in the text (2026-11-07), by SALDO's readings of each form — "skrev"
+ * is skriva, "gick" gå, "bröt" bryta — never by how a form begins, so "planet" counts
+ * for plan only because SALDO reads it so. { at: tokens, posFits }: posFits is false when
+ * SALDO reads every occurrence as another part of speech than `pos` (the text has the
+ * verb, not the noun). A word no form of the text is a SALDO reading of (a compound or new
+ * word SALDO lacks) is found as a form SALDO doesn't know either: the word itself, or it
+ * with an inflectional ending.
+ */
+export function occurrences(lemma, pos, tokens, readings) {
+  const word = String(lemma || "").trim().toLowerCase();
+  if (!word) return { at: [], posFits: false };
+  const readingsOf = (t) => readings.get(t.form) || [];
+  const parts = word.split(/\s+/);
+  if (parts.length > 1) {
+    // A particle verb or other multi-word lemma: all its words in one sentence.
+    const per = parts.map((w) => occurrences(w, null, tokens, readings).at);
+    const sentences = per.map((list) => new Set(list.map((t) => t.s)));
+    const at = per[0].filter((t) => sentences.every((set) => set.has(t.s)));
+    return { at, posFits: true };
+  }
+  const withLemma = tokens.filter((t) => t.form === word || readingsOf(t).some((r) => r.lemma.toLowerCase() === word));
+  if (withLemma.length) {
+    const fitting = withLemma.filter((t) => t.form === word || !readingsOf(t).length
+      || readingsOf(t).some((r) => r.lemma.toLowerCase() === word && fitsPos(r.pos, pos)));
+    return fitting.length ? { at: fitting, posFits: true } : { at: withLemma, posFits: false };
+  }
+  const stem = word.length > 3 && /[aeo]$/.test(word) ? word.slice(0, -1) : word;
+  const at = tokens.filter((t) => !readingsOf(t).length && t.form.startsWith(stem) && INFLECTION_ENDING.test(t.form.slice(stem.length)));
+  return { at, posFits: true };
 }
 
 // 规范§3/§8: check user's own word state, then the main dictionary, before
 // ever considering AI. Batches the lookup instead of one query per token.
-export async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage = "zh") {
-  const found = new Map(); // token -> { id, swedish, pos, chinese, cefr_level, frequency_rank }
+// Every entry a form of the text can be (2026-11-07): token → [entries]. "var" is the
+// adverb, the noun, the pronoun and a form of vara — the first one found used to stand for
+// all of them. With SALDO's readings of the form, an entry the form can't be (a stray
+// word_forms row) is left out; the AI picks among the rest by the sentence.
+export async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage = "zh", readings = new Map()) {
+  const found = new Map();
   if (!tokens.length) return found;
+  const add = (token, row) => {
+    const list = found.get(token) || found.set(token, []).get(token);
+    if (list.some((w) => w.id === row.id)) return;
+    const own = row.swedish.toLowerCase() === token;
+    const r = readings.get(token) || [];
+    if (!own && r.length && !r.some((x) => x.lemma.toLowerCase() === row.swedish.toLowerCase() && fitsPos(x.pos, row.part_of_speech))) return;
+    list.push({ id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: pickMeaning(row), cefr_level: row.cefr_level, frequency_rank: row.frequency_rank });
+  };
 
   // chinese here is really "native-language meaning" (legacy field name) —
   // the learning_objects.chinese column stays zh-only, so a non-zh request
@@ -475,31 +554,50 @@ export async function matchAgainstCorpus(supabaseAdmin, tokens, nativeLanguage =
   };
   const selectCols = "id, swedish, part_of_speech, chinese, cefr_level, frequency_rank, learning_object_translations(meaning, native_language)";
 
-  const { data: exact } = await supabaseAdmin
-    .from("learning_objects")
-    .select(selectCols)
-    .eq("object_type", "word")
-    .in("swedish", tokens);
-  (exact || []).forEach((row) => found.set(row.swedish.toLowerCase(), { id: row.id, swedish: row.swedish, pos: row.part_of_speech, chinese: pickMeaning(row), cefr_level: row.cefr_level, frequency_rank: row.frequency_rank }));
-
-  const remaining = tokens.filter((t) => !found.has(t));
-  if (remaining.length) {
-    const { data: forms } = await supabaseAdmin.from("word_forms").select("learning_object_id, form_value").in("form_value", remaining);
-    const stillMissingIds = [...new Set((forms || []).map((f) => f.learning_object_id))];
-    if (stillMissingIds.length) {
-      const { data: baseWords } = await supabaseAdmin
-        .from("learning_objects")
-        .select(selectCols)
-        .in("id", stillMissingIds);
-      const byId = new Map((baseWords || []).map((w) => [w.id, w]));
-      (forms || []).forEach((f) => {
-        const base = byId.get(f.learning_object_id);
-        if (!base) return;
-        const token = f.form_value.toLowerCase();
-        if (!found.has(token)) found.set(token, { id: base.id, swedish: base.swedish, pos: base.part_of_speech, chinese: pickMeaning(base), cefr_level: base.cefr_level, frequency_rank: base.frequency_rank });
-      });
-    }
+  const chunks = (list, n = 150) => Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n));
+  for (const part of chunks(tokens)) {
+    const { data: exact } = await supabaseAdmin
+      .from("learning_objects")
+      .select(selectCols)
+      .eq("object_type", "word")
+      .neq("status", "retired")
+      .in("swedish", part);
+    (exact || []).forEach((row) => add(row.swedish.toLowerCase(), row));
   }
+  // Every token's forms too, also when a headword has its spelling ("var" is also vara's).
+  for (const part of chunks(tokens)) {
+    const { data: forms } = await supabaseAdmin.from("word_forms").select("learning_object_id, form_value").in("form_value", part);
+    const ids = [...new Set((forms || []).map((f) => f.learning_object_id))];
+    if (!ids.length) continue;
+    const { data: baseWords } = await supabaseAdmin
+      .from("learning_objects")
+      .select(selectCols)
+      .eq("object_type", "word")
+      .neq("status", "retired")
+      .in("id", ids);
+    const byId = new Map((baseWords || []).map((w) => [w.id, w]));
+    (forms || []).forEach((f) => {
+      const base = byId.get(f.learning_object_id);
+      if (base) add(f.form_value.toLowerCase(), base);
+    });
+  }
+  // A form the entry's word_forms don't list ("exponerades", "ifrågasatts"): the headwords
+  // SALDO reads it as (2026-11-07 test run: exponera and ifrågasätta never reached the list).
+  const byLemma = new Map();
+  for (const token of tokens) for (const r of readings.get(token) || []) {
+    const lemma = r.lemma.toLowerCase();
+    if (lemma !== token) (byLemma.get(lemma) || byLemma.set(lemma, new Set()).get(lemma)).add(token);
+  }
+  for (const part of chunks([...byLemma.keys()])) {
+    const { data: rows } = await supabaseAdmin
+      .from("learning_objects")
+      .select(selectCols)
+      .eq("object_type", "word")
+      .neq("status", "retired")
+      .in("swedish", part);
+    (rows || []).forEach((row) => byLemma.get(row.swedish.toLowerCase())?.forEach((token) => add(token, row)));
+  }
+  for (const [token, list] of found) if (!list.length) found.delete(token);
   return found;
 }
 
@@ -552,8 +650,14 @@ const LOW_VALUE_TIME_WORDS = new Set([
 // The pool is shared by everyone who reads this text, so it is never filtered by
 // one reader's mastered words — each reader's own mastered words are swapped for
 // other candidates on their device (2026-10-30).
-// How many dictionary words found in a text are offered to the AI (most texts have fewer).
-const POOL_SIZE = 40;
+// How many dictionary words found in a text are offered to the AI (most texts have
+// fewer): more for a longer text, so a word there isn't cut before the AI sees it.
+// The AI also adds words from the text that aren't offered, but seldom (4 % of its picks).
+// A B2–C1 text of standard length has over 100 such words, and at 40 the common abstract
+// ones were cut first ("utveckling", "förutsättning", "insats", "omständighet": frequent,
+// so worth little in the pool's order); at 60, 96 % of the reference words reach the AI
+// instead of 90 % (2026-11-07, 36 texts).
+export const POOL_SIZE = { standard: 60, long: 60, overlong: 80 };
 
 // The candidates in the order their words first occur in the text (freq keeps that order).
 export function inTextOrder(pool, freq) {
@@ -561,44 +665,48 @@ export function inTextOrder(pool, freq) {
   return [...pool].sort((a, b) => (position.get(a.token) ?? 0) - (position.get(b.token) ?? 0));
 }
 
-export function rankFoundWords(found, freq, firstSeenCapitalized, limit) {
+// How likely a dictionary word found in the text is worth a learner's attention, for
+// cutting the pool before the AI sees it: rarer (Kelly rank) and harder (CEFR) first, a
+// word used more than once a little higher. Occurring once never removes a word — the
+// old order (occurrences first) cut a key term the text names once.
+const CEFR_WEIGHT = { A1: 0, A2: 0.1, B1: 0.2, B2: 0.35, C1: 0.45, C2: 0.5 };
+// An entry without a frequency rank counted as the rarest (2026-11-07 test): "ta", "vara"
+// and "ge" took places in most pools (77 places over 30 texts). Without a rank the level
+// stands in: A1–A2 count as common, others as fairly rare.
+export function poolValue(c) {
+  const f = c.word.frequency_rank;
+  const rank = f ? Math.min(f, 20000) / 20000 : ({ A1: 0, A2: 0.3 }[c.word.cefr_level] ?? 0.8);
+  return rank + (CEFR_WEIGHT[c.word.cefr_level] ?? 0.3) + 0.1 * Math.min(c.occurrences, 4);
+}
+
+export function rankFoundWords(found, freq, properNounSet, limit) {
   const excludedPos = new Set(["preposition", "conjunction", "pronoun", "numeral", "interjection"]);
-  const candidates = [...found.entries()]
+  const pairs = [...found.entries()].flatMap(([token, words]) => (Array.isArray(words) ? words : [words]).map((word) => [token, word]));
+  const candidates = pairs
     .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !excludedPos.has(word.pos))
-    // Sentence-initial connectives ("Trots att...", "Däremot är...") are
-    // capitalized+singleton just as often as real proper nouns are — this
-    // heuristic can't tell them apart, so the curated set bypasses it too.
-    .filter(([token]) => HIGH_VALUE_CONNECTIVES.has(token) || !firstSeenCapitalized.get(token) || freq.get(token) > 1)
+    // Names (only ever capitalised, also inside a sentence); a capital at the start of a
+    // sentence doesn't make a word a name ("Trots att …", "Arbetslösheten …").
+    .filter(([token]) => HIGH_VALUE_CONNECTIVES.has(token) || !properNounSet.has(token))
     .filter(([token, word]) => HIGH_VALUE_CONNECTIVES.has(token) || !word.frequency_rank || word.frequency_rank > VERY_COMMON_FREQUENCY_RANK)
     .filter(([token]) => !LOW_VALUE_TIME_WORDS.has(token))
     .map(([token, word]) => ({ token, word, occurrences: freq.get(token) || 1 }));
 
-  // Dedupe by underlying word id: two surface forms of the same base word
-  // (e.g. "ledighet" and "ledigheten" both resolving via word_forms to the
-  // same learning_object) would otherwise both survive as separate
-  // candidates and waste two of the final slots on one word.
+  // One candidate per entry: its forms in the text together ("ledighet", "ledigheten").
   const byWordId = new Map();
   for (const c of candidates) {
     const existing = byWordId.get(c.word.id);
-    if (!existing || c.occurrences > existing.occurrences) byWordId.set(c.word.id, c);
+    if (!existing) byWordId.set(c.word.id, { ...c });
+    else existing.occurrences += c.occurrences;
   }
   const deduped = [...byWordId.values()];
 
   deduped.sort((a, b) => {
-    // Connectives are common by definition (that's why calibration scores
-    // them 80-100 despite low rarity) — if they had to compete with rare
-    // content words on occurrence/rarity here, they'd always lose and get
-    // truncated away before the AI Worth Learning step ever saw them. So
-    // they're bucketed first, guaranteeing they reach the AI; genuine
-    // worth-learning judgment still happens there, this only protects their
-    // spot in the candidate pool.
+    // Connectives are common by definition: bucketed first so they reach the AI (the
+    // AI still decides whether one earns a place in this text).
     const aConn = HIGH_VALUE_CONNECTIVES.has(a.token);
     const bConn = HIGH_VALUE_CONNECTIVES.has(b.token);
     if (aConn !== bConn) return aConn ? -1 : 1;
-    if (a.occurrences !== b.occurrences) return b.occurrences - a.occurrences;
-    // Rarer words (higher frequency_rank) sort first among ties — more
-    // specifically worth learning than a merely-somewhat-common word.
-    return (b.word.frequency_rank || 0) - (a.word.frequency_rank || 0);
+    return poolValue(b) - poolValue(a);
   });
   return deduped.slice(0, limit);
 }
@@ -609,26 +717,30 @@ export function rankFoundWords(found, freq, firstSeenCapitalized, limit) {
 // genuinely worth learning each word is IN THIS ARTICLE. Since 2026-10-30 this
 // runs inside selectReadingContent's single call and the AI may also add words the
 // dictionary doesn't have; since 2026-10-31 it is a relative order, not a 0-100 score.
-const WORTH_LEARNING_DIMENSIONS = `1. Does it genuinely help understand THIS article — a word central to this article's specific meaning/topic ranks above one that's merely present?
-2. Transfer value — will this word likely reappear across many other articles (connective/discourse words like "däremot", "dessutom", "samtidigt" rank very high here)?
-3. Is it a genuine native-speaker expression or collocation-forming word, not just a plain dictionary entry?
-4. Is it a common "reading obstacle" word — one learners typically recognize on sight but keep forgetting (often abstract nouns, adverbs) — these should be prioritized?
-5. Does it easily expand into a useful word family (e.g. a verb with common related noun/adjective/participle forms)?
+// Reading selection (2026-11-07): ranked by what a learner gains from saving a word and
+// meeting it again; being on the text's topic is no reason by itself. The earlier ranking put
+// the text's subject terms first, and they took most places (17 of 49 shown words were narrow
+// subject terms, against 9 with this one, on the 12 test texts).
+const WORTH_LEARNING_DIMENSIONS = `1. Transfer value — will the learner meet and use this word again across many other texts, in speaking and in writing?
+2. Does it help understand THIS text — does a sentence's meaning or a main point depend on it?
+3. Is it a word learners need actively, to say or write things themselves (verbs, adjectives, adverbs, connectives that express a stance or relation), not only to recognise?
+4. Is it a common "reading obstacle" word — one learners recognize on sight but keep forgetting (often abstract nouns, adverbs)?
+5. Does it easily expand into a useful word family?
 
-Calibration — rank by how much a word actually determines whether the reader understands the article, NOT by how common, short, or grammatically "simple" it looks:
-- "och", "väldigt" → bottom of the list or left out. Generic, replaceable, contributes almost nothing specific.
-- "regering" → middle of the list if the article is genuinely about government/policy; otherwise low.
-- "däremot", "trots" → worth a place even though they're short, frequent, and CEFR A2-B1: a connective that flips or qualifies the meaning of a sentence can single-handedly determine whether the reader understands it correctly. A connective that only adds or sums up ("dessutom", "alltså", "också") steers far less; take it only when the text has little else. Connectives never push out the terms the text's subject is discussed in.
-- The specific terms a text discusses its subject in (for a text about health, e.g. "blodtryck", "kost", "förebygga"; for one about work, "arbetsmarknad", "anställning", "lön") → the top of the list: they are what the text is about and what a reader must understand to follow it. A general word that only names things in everyday terms ("problem", "fördel", "stor", "öka", "rik") is below them, and left out when the text has such specific terms.
-- A phrasal/idiomatic verb sense (e.g. "lägga ner", "komma fram till") → near the top — these carry far more meaning than any single component word.
-- A basic everyday word used in its ordinary sense (e.g. "barn", "mamma", "hus", "dag", "ofta", "aldrig", "göra", "tycka", "gå", "bra", "stor") → leave it out, even if it occurs often or the story is about it: a reader who can read this text already knows it, so it teaches nothing here.
-Simplicity alone neither qualifies nor disqualifies a word: a short connective that steers a sentence's meaning belongs near the top, a basic content word in its everyday sense does not belong at all. How often a word occurs in the text is never a reason to include it.
+Calibration:
+- "och", "väldigt" → left out. Generic, contributes nothing specific.
+- "tvärtom", "trots", "emellertid" → near the top: a connective that flips or qualifies a sentence's meaning is used in every kind of text. A connective that only adds, orders or sums up ("också", "alltså", "först") steers far less; take it only when the text has little else.
+- A verb, adjective or adverb that carries a main point or the writer's stance ("avgöra", "hindra", "sårbar", "omfattande") → near the top.
+- The term naming what the text is about ("blodtryck" in a health text, "koldioxid" in a climate text) → among the shown words, but one or two, not every term of the subject.
+- A word that only names everyday things in the subject area, or a transparent compound of known parts → left out.
+- A phrasal verb sense ("lägga ner", "komma fram till") → near the top.
+- A basic everyday word used in its ordinary sense ("barn", "hus", "dag", "ofta", "göra", "gå", "bra", "stor") → left out: a reader who can read this text already knows it.
+How often a word occurs in the text is never a reason to include it.
 
-Category exclusions (V2.1 阅读AI提取规则 §四, 2026-08-11) — leave the word out regardless of capitalization or frequency if it is:
-- A person name, place name, or country/nationality name (e.g. "Jonas", "Catrin", "Stockholm", "Darfur").
-- A month or weekday name, a specific date, or a plain cardinal/ordinal number used as a quantity (e.g. "december", "måndag", "2019", "femton", "15:e").
-- A very common deictic time word (e.g. "idag", "nu", "sedan") that isn't doing anything unusual here.
-Exception: if the name/date/number carries real idiomatic weight in this specific text (e.g. it's part of a fixed expression like "på tu man hand"), that belongs in Fraser & Uttryck as a phrase — leave the isolated word out here regardless, the expression is a separate extraction.`;
+Category exclusions — leave the word out if it is:
+- A person name, place name, or country/nationality name.
+- A month or weekday name, a specific date, or a plain number used as a quantity.
+- A very common deictic time word ("idag", "nu", "sedan") doing nothing unusual here.`;
 
 // One bundled call per article (2026-10-30): keywords (ordered dictionary
 // candidates + words the AI adds itself), collocations, idioms, key sentences,
@@ -656,42 +768,109 @@ const expressionKey = (text) => String(text || "").toLowerCase().replace(/[^\p{L
 
 // One expression is one knowledge point: shown once, in the first list that has it
 // (Fasta fraser before Idiomatiska uttryck), and not when the book's word list has it.
+// An expression inside another one is the same knowledge point too (2026-11-07 test: "ha
+// svårt att" and "ha svårt att andas", "vara med om" and "vara med om något"): the one
+// earlier in the lists stays, the other is left out.
 export function distinctExpressions(collocations = [], idioms = [], glossary = []) {
   const seen = new Set([...glossaryForms(glossary)].map(expressionKey));
+  const kept = [];
+  const words = (key) => key.split(" ").filter((w) => !EXPRESSION_PLACEHOLDERS.has(w));
+  const inside = (a, b) => a.length > 0 && a.length <= b.length && b.some((_, i) => a.every((w, j) => b[i + j] === w));
   const keep = (list) => list.filter((e) => {
     const key = expressionKey(e.expression_text);
     if (!key || seen.has(key)) return false;
+    const w = words(key);
+    if (kept.some((k) => inside(w, k) || inside(k, w))) return false;
     seen.add(key);
+    kept.push(w);
     return true;
   });
   return { collocations: keep(collocations), idioms: keep(idioms) };
 }
 
+/**
+ * An expression in the form a learner saves it (2026-11-07 test: "ifrågasatts av", "återgår
+ * till", "Oavsett utgång" came back as the text has them): a first word
+ * SALDO reads only as a form of one verb becomes its infinitive — an s-form the s-infinitive
+ * ("ifrågasatts av" → "ifrågasättas av"), a supine or participle excepted — and a capital first letter a small one, unless the
+ * word is a name or an abbreviation (no lower-case reading).
+ */
+export function expressionBaseForm(text, readings) {
+  const words = String(text || "").trim().split(/\s+/);
+  if (!words[0] || !readings) return String(text || "").trim();
+  const lower = words[0].toLowerCase();
+  const own = readings.get(lower) || [];
+  if (words[0] !== lower && words[0].slice(1) === lower.slice(1) && own.length) words[0] = lower;
+  const verbs = [...new Set(own.filter((r) => r.pos === "verb").map((r) => r.lemma.toLowerCase()))];
+  // A supine or participle stays: as the first word it is mostly a preposition of its own
+  // ("jämfört med", "beroende på"), which an infinitive would turn into another expression.
+  const participle = /(?:t|nde)$/.test(lower);
+  if (words[0] === lower && !participle && own.length && verbs.length === 1 && own.every((r) => r.pos === "verb") && verbs[0] !== lower && !verbs[0].includes(" ")) {
+    const lemma = verbs[0];
+    words[0] = lower.endsWith("s") && !lemma.endsWith("s") ? `${lemma}s` : lemma;
+  }
+  return words.join(" ");
+}
+
 const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"];
-// Why a keyword earns its place (the AI labels each one). A word the dictionary rates A1
-// is one every reader of the text already knows: it is kept only when it is one of the
-// connectives that steer a sentence's meaning (trots, däremot …) — the AI's own label
-// let "alltid", "igen" and "lära" through as "specific use" (2026-11-01).
+// Why a keyword earns its place (the AI labels each one).
+const VALUE_ORDER = `Order the list by what a learner gains from saving the word and meeting it again — in other texts and in their own speaking and writing — together with how much this text depends on it; being related to the topic is not by itself a reason to take a word:
+  (a) Words of transferable value come first: they help to understand this text AND are used across many other texts and situations — verbs, adjectives, adverbs and connectives that carry a main point, a relation or the writer's stance ("kräva", "hota", "hindra", "tveksam", "tvärtom"), and general nouns of wide use ("förutsättning", "anledning"). The part of speech is never a quota: a widely used noun beats a narrow verb.
+  (b) The subject term(s) the text cannot be understood without — the word naming what it is about ("elpris" in a text about electricity prices, "vaccin" in one about a vaccination programme) — belong among the shown words too, even though they are seldom used outside the subject: usually one or two, as many as the text really needs, never every term of the subject.
+  (c) A word earns nothing for being on the topic: a word that merely names something in the subject area, a word a reader around this text's level almost certainly knows already ("hjälpa", "kostnad" for a B1 reader), or one they can read off from parts they know (a transparent compound such as "skolgård" or "sommarlov") is left out.
+Fewer is better than weaker: the number is a maximum, never a target.`;
+
 const VOCABULARY_REASONS = ["topic", "specific_use", "connective", "new_word"];
 
-// A keyword the AI added itself must occur in the text in some form (its stem): one
-// that doesn't was made up ("åtgärd" for a text without it).
-export function occursInText(lemma, freq) {
-  const word = String(lemma || "").toLowerCase();
-  if (freq.has(word)) return true;
-  const stem = word.slice(0, Math.max(3, word.length - 2));
-  return [...freq.keys()].some((token) => token.startsWith(stem));
+/**
+ * The AI's reasons, held to what they mean (2026-11-07 test, 18 new texts): "topic" — which
+ * keeps a word in an advanced reader's list whatever its level — was given to 44 of 93 words,
+ * "berätta", "öka" and "kontakta" among them, and "connective" to verbs ("kombinera"). Only
+ * the first three "topic" words in the AI's order keep it, and a noun, verb or adjective is
+ * never a connective; both become "new_word".
+ */
+export function tidyReasons(vocabulary = []) {
+  let topics = 0;
+  return vocabulary.map((v) => {
+    if (v.reason === "topic" && ++topics > 3) return { ...v, reason: "new_word" };
+    if (v.reason === "connective" && ["noun", "verb", "adjective"].includes(v.pos)) return { ...v, reason: "new_word" };
+    return v;
+  });
+}
+
+/**
+ * A word the dictionary rates A1 (2026-11-07): left out in its plain everyday use, kept
+ * when it does something a learner must notice — one of the connectives that steer a
+ * sentence (trots, däremot …), a connective use of a function word, or a use the AI
+ * contrasts with the everyday sense (everyday_sense false: "gå" in "det gick bra", "hålla"
+ * in "hålla med"). The bare "specific use" label let "alltid", "igen" and "lära" through
+ * (2026-11-01); asking whether the use is the everyday one doesn't.
+ */
+export function keepsA1Word(v, entry, textCefr = null) {
+  if (HIGH_VALUE_CONNECTIVES.has(String(entry?.swedish || v.swedish || "").toLowerCase())) return true;
+  // A connective of any function-word class ("vilket" in "vilket i sin tur" is a pronoun).
+  if (v.reason === "connective" && !["noun", "verb", "adjective"].includes(v.pos)) return true;
+  // A use other than the everyday one, whatever the AI's reason: "gick" in "det gick bra",
+  // "det" as a formal subject, "man" as the generic pronoun.
+  if (v.everyday_sense === false) return true;
+  // The term a beginners' text (A1–A2) is about, whose readers may not know it yet ("får" the
+  // sheep in a text about a farm); "topic" is only given to the text's key terms.
+  return v.reason === "topic" && /^A[12]/.test(String(textCefr || ""));
 }
 const READING_POS = ["verb", "noun", "adjective", "adverb", "pronoun", "preposition", "conjunction", "numeral", "interjection", "other"];
 
-export async function selectReadingContent(cleanedText, tier, glossary = [], vocabularyPool = [], nativeLanguage = "zh") {
+// Reserves beyond what is shown (2026-11-07): each reader's device swaps out words the
+// reader has mastered or that are far below their level for these, in order. Half as many
+// again plus two, at least four (a short text's two reserves ran out at the first swap,
+// 2026-11-07 test run) — not so many that weak words come in (asking for more invited
+// padding, 2026-11-01); they meet the same bar as the rest.
+export const reserveFor = (shown) => Math.max(4, Math.ceil(shown / 2) + 2);
+
+export async function selectReadingContent(cleanedText, tier, glossary = [], vocabularyPool = [], nativeLanguage = "zh", textCefr = null) {
   const langName = languageName(nativeLanguage);
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const vocabMax = keywordLimit(countWords(cleanedText), tier, vocabularyPool);
-  // A few more than are shown, so each reader's mastered words can be swapped out.
-  // No extra candidates beyond what the length tier shows: asking for more invited
-  // padding with basic words (2026-11-01).
-  const vocabCandidates = vocabMax;
+  const vocabCandidates = vocabMax + reserveFor(vocabMax);
   const [sentMin, sentMax] = tierConfig.keySentences;
   const schema = {
     type: "object",
@@ -717,9 +896,10 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
             pos: { type: "string", enum: READING_POS },
             meaning: { type: "string" },
             reason: { type: "string", enum: VOCABULARY_REASONS },
+            everyday_sense: { type: "boolean" },
             sentence: { type: "string" },
           },
-          required: ["swedish", "pos", "meaning", "reason", "sentence"],
+          required: ["swedish", "pos", "meaning", "reason", "everyday_sense", "sentence"],
         },
       },
       key_sentences: {
@@ -767,11 +947,13 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
     maxOutputTokens: 6000,
     systemPrompt: `You select what is worth learning in a Swedish text for a ${langName}-speaking learner — never invent content, everything must actually appear in the text. Every field named *_zh below (meaning_zh, source_sentence_zh, translation_zh) and every "meaning" must be written entirely in ${langName} regardless of its name — never in Chinese unless ${langName} is Chinese, and never let a stray Swedish or ${langName} word drift into a field written in the other language.
 
-Every list below is ordered from most to least worth learning IN THIS TEXT: how much understanding the text's topic and core content depends on the item comes first. Difficulty is only a secondary hint (the dictionary level is given for listed candidates). There is no target number for any list — the text decides: a plain text may have only a few items, a dense one more. Never add an item to reach a number.
+Every list below is ordered from most to least worth learning IN THIS TEXT — the vocabulary as its own paragraph says, the other lists by how much understanding the text depends on the item. Difficulty is only a secondary hint (the dictionary level is given for listed candidates). There is no target number for any list — the text decides: a plain text may have only a few items, a dense one more. Never add an item to reach a number.${textCefr ? `
+
+The text as a whole is about ${textCefr} level, so its readers are learners around that level. Use that for the words of middling importance: a word well below ${textCefr} used in its everyday sense is one such a reader already knows and teaches nothing here; a word around or above ${textCefr} that the text needs is worth a place. Never leave out the subject term(s) the text cannot be understood without because of their level, and never pick a word only because it is rare.` : ""}
 
 0. article: first read the whole text and work out what it is about — topic (one line), core_points (its main points, a few short lines) and key_terms (the words and terms in the text that carry those points, as they appear in it). Everything below is chosen with this in mind.
 
-1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. Start from article.key_terms: the words that carry the text's topic and main points come first, whether common or rare, listed as candidates or not, in the book's word list or not. A word earns a place only if it does at least one of these: carries this text's topic or core content; is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists the dictionary words found in the text as "lemma (parts of speech, CEFR)", in the order they occur — it is not a ranking, and many of the text's most important words (compounds, rarer terms) are not in it. Take a listed word with its lemma exactly as given, and add any other word from the text that deserves a place just as readily — give its dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. pos = the part of speech the word has in ITS sentence in this text — a spelling can have several ("torka (noun/verb)": "svår torka" is the noun, "torka håret" the verb); decide from the sentence, never from the list order. sentence = that sentence, quoted exactly from the text. meaning = a short ${langName} meaning (a few words) as used in that sentence, for that part of speech, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. Most listed candidates are simply words that occur in the text; expect to leave most of them out. How difficult a word is only helps choose between words of similar importance to this text; it never removes a word the text's topic depends on, and a word is never left out just because it looks simple — what counts is what it does in this text. A word that is only there as part of a fixed phrase ("exempel" in "till exempel", "eget" in "på mitt eget sätt") is not a keyword — fixed phrases are chosen in a separate step. Use these dimensions together:
+1. vocabulary: the single words in this text genuinely worth a learner's attention, best first, at most ${vocabCandidates}. The first ${vocabMax} are shown; the ones after are reserves, taken only for a reader who already knows some of the first — they must meet exactly the same bar, so stop as soon as no further word does. ${VALUE_ORDER} Words may come from the candidate list or from anywhere else in the text, in the book's word list or not. A word earns a place only if it does at least one of these: is a subject term the text cannot be understood without (b above); is used here in a specific sense, register or construction the reader must notice (not its everyday basic sense); is a connective/discourse word that steers a sentence's meaning; or is a less common word a reader of this text is unlikely to know yet and will meet again. The user message lists the dictionary words found in the text as "lemma (parts of speech, CEFR)", in the order they occur — it is not a ranking, and many of the text's most important words are not in it: compounds and rarer terms, but just as often verbs, adjectives and abstract nouns of wide use that the dictionary lacks. Read the text itself for those before ranking — a word's absence from the list says nothing about its value. Take a listed word with its lemma exactly as given, and add any other word from the text that deserves a place just as readily — give its dictionary lemma (infinitive for verbs, singular indefinite for nouns), not the inflected form in the text. pos = the part of speech the word has in ITS sentence in this text — a spelling can have several ("torka (noun/verb)": "svår torka" is the noun, "torka håret" the verb); decide from the sentence, never from the list order. sentence = that sentence, quoted exactly from the text. meaning = a short ${langName} meaning (a few words) as used in that sentence, for that part of speech, not every sense the word has. reason = which of the four it does: "topic", "specific_use", "connective" or "new_word" — if none honestly fits, the word does not belong in the list. "topic" only for the subject term(s) of (b) — usually one or two, never more than three; any other word, however central to the subject, is "new_word" if it is worth learning at all. "connective" only for a word that links sentences or clauses (a conjunction, an adverb such as "alltså" or "däremot"), never for a noun, verb or adjective. everyday_sense = true when the word is used here in its most ordinary dictionary sense, false when this sentence uses it in another sense or a construction that differs from it ("gick" in "det gick bra", "hålla" in "hålla med"); a word chosen as "specific_use" in its everyday sense is not a specific use. Most listed candidates are simply words that occur in the text; expect to leave most of them out. How difficult a word is only helps choose between words of similar value; it never removes a subject term the text depends on, and a simple-looking word is not left out when this sentence uses it in a sense of its own — what counts is what it does in this text. A word that is only there as part of a fixed phrase ("exempel" in "till exempel", "eget" in "på mitt eget sätt") is not a keyword — fixed phrases are chosen in a separate step. A general word that only frames the subject ("undersöka", "påverka", "visa", "problem" in a research or news text) is not a "topic" word — the terms of the subject itself are. A basic function word every learner knows (a modal or auxiliary verb such as "måste", "kan", "ska"; a personal pronoun; an everyday preposition) is never a keyword unless this sentence uses it in a sense of its own. Use these dimensions together:
 ${WORTH_LEARNING_DIMENSIONS}
 
 Fixed phrases and idioms are chosen in a separate step (selectExpressions), not here.
@@ -821,14 +1003,16 @@ const STRONG_VERBS = new Set(["vara", "ha", "göra", "ta", "gå", "få", "se", "
 // Cyrillic "а"), its sentence is quoted from the text, and each of its words (but a "någon"/
 // "sig" placeholder or a strong verb's infinitive) is in that sentence — so nothing is taken
 // that the text doesn't have ("äga sig åt" for a text with "ägnar sig åt").
-export function expressionInText(e, text) {
+export function expressionInText(e, text, readings = null) {
   const expression = String(e?.expression_text || "").trim();
   if (!/^[\p{Script=Latin}\s'’\-\/]+$/u.test(expression) || expression.split(/\s+/).length < 2) return false;
   const sentence = normalizeSpace(e.source_sentence);
   if (!sentence || !normalizeSpace(text).includes(sentence)) return false;
   const tokens = sentence.match(/\p{L}+/gu) || [];
   const words = expression.toLowerCase().split(/[\s\/]+/).filter((w) => w.length > 1 && !EXPRESSION_PLACEHOLDERS.has(w));
-  const found = (w) => tokens.some((t) => t.startsWith(w.length <= 4 ? w : w.slice(0, -2)));
+  // A form SALDO reads as the word counts too ("kändes" for "kännas", 2026-11-07 test).
+  const lemmaOf = (t) => (readings?.get(t.toLowerCase()) || []).map((r) => r.lemma.toLowerCase());
+  const found = (w) => tokens.some((t) => t.startsWith(w.length <= 4 ? w : w.slice(0, -2)) || lemmaOf(t).some((l) => l === w || `${l}s` === w));
   return words.some(found) && words.every((w) => found(w) || STRONG_VERBS.has(w));
 }
 
@@ -849,37 +1033,62 @@ export function expressionCategory(c) {
   return null;
 }
 
-export function sortExpressions(result, text) {
+export function sortExpressions(result, text, readings = null) {
   const judged = new Map();
   for (const s of result?.scan || []) {
     for (const c of s.candidates || []) {
       const key = expressionKey(c.expression);
-      if (key && !judged.has(key)) judged.set(key, c);
+      if (key && !judged.has(key)) judged.set(key, { ...c, sentence: s.sentence });
     }
   }
+  const sentences = splitSentences(text);
   const collocations = [];
   const idioms = [];
   const placed = new Set();
-  for (const e of [...(result?.collocations || []), ...(result?.idioms || [])]) {
+  // Why each chosen expression was left out: an empty list after a choice is then told
+  // apart from a text with nothing to choose.
+  const dropped = { not_in_text: 0, not_judged: 0, neither: 0, repeated: 0 };
+  let recovered = 0;
+  for (const quoted of [...(result?.collocations || []), ...(result?.idioms || [])]) {
+    // The model sometimes keeps the sentence's number from the prompt ("[4] …", "4] …",
+    // "4. …"): every quote then failed the check and the whole list came back empty
+    // (2026-11-07 test, about 1 call in 8).
+    let quote = { ...quoted, source_sentence: String(quoted.source_sentence || "").replace(/^\s*[\[(]?\d+(?:[\]).:]\s*|\s+)/, "") };
+    const verdict = judged.get(expressionKey(quote.expression_text));
+    // A quote in some other shape (2026-11-07: all six of a text's chosen expressions, each
+    // judged in the scan, were left out once): the sentence the scan found it in, when the
+    // expression is in that sentence.
+    if (!expressionInText(quote, text, readings) && verdict && sentences[verdict.sentence - 1]) {
+      const own = { ...quote, source_sentence: sentences[verdict.sentence - 1] };
+      if (expressionInText(own, text, readings)) { quote = own; recovered++; }
+    }
+    if (!expressionInText(quote, text, readings)) { dropped.not_in_text++; continue; }
+    const e = { ...quote, expression_text: expressionBaseForm(quote.expression_text, readings) };
     const key = expressionKey(e.expression_text);
-    if (placed.has(key) || !expressionInText(e, text)) continue;
+    if (placed.has(key)) { dropped.repeated++; continue; }
     placed.add(key);
-    const category = expressionCategory(judged.get(expressionKey(e.expression_text)));
+    const category = expressionCategory(verdict);
+    if (!category) { dropped[verdict ? "neither" : "not_judged"]++; continue; }
     // Shown as the text's own sentence, never the model's copy of it (a copy that only
     // differs in case or spacing passes the check above).
     const own = textSentence(e.source_sentence, text);
     const kept = own ? { ...e, source_sentence: own } : e;
     if (category === "idiom") idioms.push(kept);
-    else if (category === "collocation") collocations.push(kept);
+    else collocations.push(kept);
   }
-  return { collocations, idioms };
+  return { collocations, idioms, dropped, recovered };
 }
 
-export async function selectExpressions(cleanedText, tier, glossary = [], nativeLanguage = "zh") {
+export async function selectExpressions(cleanedText, tier, glossary = [], nativeLanguage = "zh", readings = null) {
   const langName = languageName(nativeLanguage);
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const collocMax = tierConfig.keyCollocations[1];
   const idiomMax = tierConfig.keyIdioms[1];
+  // Reserves for a reader who already knows some of the shown ones (2026-11-07), asked for
+  // in lists of their own: allowed more in the same lists, the model let weaker expressions
+  // ("handla om", "bo kvar") into the shown places (12-text test, 29 → 25 of 46).
+  const collocReserve = 2;
+  const idiomReserve = 1;
   const sentences = splitSentences(cleanedText);
   const candidate = {
     type: "object",
@@ -918,8 +1127,10 @@ export async function selectExpressions(cleanedText, tier, glossary = [], native
       },
       collocations: { type: "array", items: pick },
       idioms: { type: "array", items: pick },
+      reserve_collocations: { type: "array", items: pick },
+      reserve_idioms: { type: "array", items: pick },
     },
-    required: ["scan", "collocations", "idioms"],
+    required: ["scan", "collocations", "idioms", "reserve_collocations", "reserve_idioms"],
   };
   const glossaryList = [...glossaryForms(glossary)].join(", ");
   const { result, usage } = await callOpenAI({
@@ -939,15 +1150,25 @@ For every candidate, the same steps in this order:
      Also "fast_fras", whatever the glosses say: a group of words that works as one preposition or conjunction in front of a noun or clause ("på grund av", "i stället för", "i samband med", "trots att"), and a light verb + noun that means the same as a verb made from that noun ("ta beslut" = besluta, "ta ansvar" = ansvara, "göra ett försök" = försöka).
    - "neither" for a literal free combination (a verb with its ordinary object or adverb: "försöka igen", "köra bil", "lära sig något"), a phrase so basic every reader knows it ("till exempel", "varje år"), a combination only about this text's own content (a place, event, name or subject: "åka till Berlin", "vinna VM"), or something the textbook's own word list already explains on its own${glossaryList ? `: ${glossaryList}` : ""} (a longer expression around such a word is judged on its own).
 
-Step 2 — choose: collocations = "fast_fras" candidates, idioms = "idiom" candidates, each expression once and in exactly one list, best first (most useful to learn for this text first), at most ${collocMax} collocations and ${idiomMax} idioms. Return fewer, even none, if fewer pass — never add one to reach a number. expression_text as in the scan, after checking it once more: the verb in the infinitive ("breder ut sig" → "breda ut sig"), and no word that could be left out or replaced while the expression stays the same ("ta flera beslut" → "ta beslut"); meaning_zh = its meaning as used here; source_sentence = the sentence quoted exactly from the text, without its [number]; source_sentence_zh = its translation.`,
+Step 2 — choose: collocations = "fast_fras" candidates, idioms = "idiom" candidates, each expression once and in exactly one list, best first (most useful to learn for this text first), at most ${collocMax} collocations and ${idiomMax} idioms. Return fewer, even none, if fewer pass — never add one to reach a number. expression_text as in the scan, after checking it once more: the verb in the infinitive ("breder ut sig" → "breda ut sig"), a reflexive pronoun as "sig" ("skynda dig" → "skynda sig"), no word that could be left out or replaced while the expression stays the same ("ta flera beslut" → "ta beslut"), and nothing after the fixed part: the object or att-clause this sentence fills it with becomes "någon"/"något" or is left out ("lade märke till hennes nya frisyr" → "lägga märke till något"); meaning_zh = its meaning as used here; source_sentence = the sentence quoted exactly from the text, without its [number]; source_sentence_zh = its translation.
+
+Step 3 — reserves, only after step 2 is settled: reserve_collocations (at most ${collocReserve}) and reserve_idioms (at most ${idiomReserve}) = the next "fast_fras" and "idiom" candidates that pass exactly the same test, for a reader who already knows some of the chosen ones, written exactly as step 2 says (the verb in the infinitive, nothing that belongs only to this sentence); never one already chosen, and empty when no further one passes.`,
     userPrompt: sentences.map((sentence, index) => `[${index + 1}] ${sentence}`).join("\n"),
   });
-  const sorted = sortExpressions(result, cleanedText);
+  // The chosen ones first, then the reserves (the scan's verdict still decides each list).
+  const merged = { scan: result?.scan, collocations: [...(result?.collocations || []), ...(result?.reserve_collocations || [])],
+    idioms: [...(result?.idioms || []), ...(result?.reserve_idioms || [])] };
+  const sorted = sortExpressions(merged, cleanedText, readings);
   const { collocations, idioms } = distinctExpressions(sorted.collocations, sorted.idioms, glossary);
+  // Chosen, yet every one left out: not a text without expressions, a fault to look into.
+  if (merged.collocations.length + merged.idioms.length > 0 && !sorted.collocations.length && !sorted.idioms.length) {
+    console.warn("[Reading] every chosen expression was left out", JSON.stringify(sorted.dropped));
+  }
   return {
-    collocations: collocations.slice(0, Math.min(collocMax, MAX_KEY_COLLOCATIONS)),
-    idioms: idioms.slice(0, Math.min(idiomMax, MAX_KEY_IDIOMS)),
-    usage,
+    collocations: collocations.slice(0, collocMax + collocReserve), idioms: idioms.slice(0, idiomMax + idiomReserve), usage,
+    // How many the model judged and chose, and how many passed the checks: an empty list shows where it emptied.
+    counts: { judged: (result?.scan || []).reduce((n, x) => n + (x.candidates || []).length, 0), chosen: merged.collocations.length + merged.idioms.length,
+      passed: sorted.collocations.length + sorted.idioms.length, dropped: sorted.dropped, recovered: sorted.recovered },
   };
 }
 
@@ -991,8 +1212,11 @@ export async function checkLinkedKeywordSenses(supabaseAdmin, keywords, { userId
       const page = await lookupWiktionary(supabaseAdmin, entry.swedish || k.swedish);
       return {
         id: k.word_id, lemma: entry.swedish || k.swedish, pos: entry.part_of_speech || k.pos,
+        // The entry's examples go along as evidence of its sense, not as items to judge: this
+        // check uses only whether the context fits, and a batch answer that left out the
+        // example verdicts was asked again item by item (2026-11-07: 7 calls for 6 keywords).
         entry: { meaning_zh: meaning("zh"), meaning_en: meaning("en"), swedish_explanation: entry.swedish_explanation || "",
-          examples: (examples || []).filter((x) => x.learning_object_id === k.word_id).slice(0, 2).map((x) => ({ sv: x.example_swedish })) },
+          example_sentences: (examples || []).filter((x) => x.learning_object_id === k.word_id).slice(0, 2).map((x) => x.example_swedish) },
         context: { sentence: k.sentence || "", meaning_here: k.chinese || "" },
         references: { wiktionary: wiktionaryEvidence(page) },
       };
@@ -1018,43 +1242,126 @@ export async function checkLinkedKeywordSenses(supabaseAdmin, keywords, { userId
 // the dictionary doesn't have keep word_id null here (the shown ones get a full
 // entry in ensureKeywordEntries). The meaning is always the one for THIS text; the
 // CEFR level is the dictionary's own (none for words it doesn't have).
-export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, freq) {
+// A keyword must occur in the text by SALDO's reading of its forms (2026-11-07: "skrev"
+// is skriva, the stem test lost every strong verb), as the part of speech the AI gives
+// it when SALDO reads the forms at all. `dropped` collects what was left out and why.
+export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, { tokens, readings, textCefr = null }, dropped = []) {
   const key = (swedish, pos) => `${String(swedish || "").toLowerCase()}|${pos || ""}`;
+  scored = await toBaseForms(supabaseAdmin, scored, readings);
   const known = new Map();
-  pool.forEach((c) => known.set(key(c.word.swedish, c.word.pos), { word: c.word, occurrences: c.occurrences }));
+  pool.forEach((c) => known.set(key(c.word.swedish, c.word.pos), c.word));
   const unknownLemmas = [...new Set(scored.filter((v) => !known.has(key(v.swedish, v.pos))).map((v) => v.swedish))];
   if (unknownLemmas.length) {
     const { data: rows } = await supabaseAdmin
       .from("learning_objects")
       .select("id, swedish, part_of_speech, cefr_level")
       .eq("object_type", "word")
+      .neq("status", "retired")
       .in("swedish", unknownLemmas);
     (rows || []).forEach((row) => {
       const k = key(row.swedish, row.part_of_speech);
-      if (!known.has(k)) known.set(k, { word: { id: row.id, swedish: row.swedish, pos: row.part_of_speech, cefr_level: row.cefr_level }, occurrences: freq.get(row.swedish.toLowerCase()) || 1 });
+      if (!known.has(k)) known.set(k, { id: row.id, swedish: row.swedish, pos: row.part_of_speech, cefr_level: row.cefr_level });
     });
   }
   const seen = new Set();
   const candidates = [];
   for (const v of scored) {
+    if (!String(v.swedish || "").trim()) continue;
     const match = known.get(key(v.swedish, v.pos));
-    const dedupeKey = match ? match.word.id : key(v.swedish, v.pos);
-    if (seen.has(dedupeKey) || !String(v.swedish || "").trim()) continue;
-    if (!occursInText(v.swedish, freq)) continue;
-    if (match?.word.cefr_level === "A1" && !HIGH_VALUE_CONNECTIVES.has(match.word.swedish.toLowerCase())) continue;
+    const dedupeKey = match ? match.id : key(v.swedish, v.pos);
+    if (seen.has(dedupeKey)) continue;
+    const found = occurrences(v.swedish, v.pos, tokens, readings);
+    const why = !found.at.length ? "not_in_text" : !found.posFits ? "other_pos_in_text"
+      : match?.cefr_level === "A1" && !keepsA1Word(v, match, textCefr) ? "a1_everyday" : null;
+    if (why) { dropped.push({ swedish: v.swedish, pos: v.pos, reason: v.reason, why }); continue; }
     seen.add(dedupeKey);
     candidates.push({
-      word_id: match?.word.id || null,
-      swedish: match?.word.swedish || v.swedish,
-      pos: match?.word.pos || v.pos,
-      chinese: v.meaning || match?.word.chinese || "",
-      cefr_level: match?.word.cefr_level || null,
+      word_id: match?.id || null,
+      swedish: match?.swedish || v.swedish,
+      pos: match?.pos || v.pos,
+      chinese: v.meaning || match?.chinese || "",
+      cefr_level: match?.cefr_level || null,
       ...(v.sentence ? { sentence: v.sentence } : {}),
       ...(v.pos_check ? { pos_check: v.pos_check } : {}),
-      occurrences: match?.occurrences || freq.get(String(v.swedish).toLowerCase()) || 1,
+      ...(v.reason ? { reason: v.reason } : {}),
+      occurrences: found.at.length,
+      at: found.at.map((t) => [t.s, t.i]),
     });
   }
   return candidates;
+}
+
+/**
+ * A keyword the AI gave as it stands in the text rather than as its dictionary form
+ * ("bostadsbristen") is put in its base form (2026-11-07): by SALDO's reading of the form,
+ * or for a compound SALDO doesn't know, of its last part ("bristen" → brist, so
+ * bostadsbrist). A word already in its base form, or one nothing reads, stays as given.
+ */
+export async function toBaseForms(supabaseAdmin, scored, readings) {
+  const base = (word, pos, list) => {
+    // Read as this part of speech ("skrev" the verb is skriva; skrev the noun is another word).
+    // An adverb is its own headword: SALDO reads "samtidigt" only as a form of the adjective
+    // samtidig, and that base form, kept as an adverb, matched no entry (2026-11-07).
+    const lemmas = [...new Set((list || []).filter((r) => (pos === "adverb" ? r.pos === pos : fitsPos(r.pos, pos))).map((r) => r.lemma.toLowerCase()))];
+    return lemmas.length === 1 && lemmas[0] !== word ? lemmas[0] : null;
+  };
+  const words = (scored || []).map((v) => String(v.swedish || "").trim().toLowerCase());
+  const tails = new Set();
+  words.forEach((w) => { if (!readings.get(w)?.length && !w.includes(" ")) for (let i = 3; i <= w.length - 3; i++) tails.add(w.slice(i)); });
+  const tailReadings = tails.size ? await formReadings(supabaseAdmin, [...tails]) : new Map();
+  return (scored || []).map((v, index) => {
+    const word = words[index];
+    let lemma = base(word, v.pos, readings.get(word));
+    if (!lemma && !readings.get(word)?.length) {
+      // The longest last part SALDO knows decides: an inflected part gives the compound's base form.
+      for (let i = 3; i <= word.length - 3; i++) {
+        const list = tailReadings.get(word.slice(i));
+        if (!list?.length) continue;
+        const tailBase = base(word.slice(i), v.pos, list);
+        if (tailBase) lemma = word.slice(0, i) + tailBase;
+        break;
+      }
+    }
+    return lemma && lemma !== word ? { ...v, swedish: lemma, given_as: v.swedish } : v;
+  });
+}
+
+/**
+ * The places of the text each expression takes up (2026-11-07): in its own sentence, the
+ * forms that are its words (by SALDO's readings: "tog" is ta in "ta beslut"). Map
+ * "sentence:place" → [expression_text].
+ */
+export function expressionPlaces(expressions, tokens, readings, text) {
+  const sentences = splitSentences(text);
+  const places = new Map();
+  for (const e of expressions) {
+    const s = sentences.indexOf(textSentence(e.source_sentence, text));
+    if (s < 0) continue;
+    const words = String(e.expression_text || "").toLowerCase().split(/[\s/]+/).filter((w) => w && !EXPRESSION_PLACEHOLDERS.has(w));
+    for (const t of tokens) {
+      if (t.s !== s) continue;
+      const lemmas = [t.form, ...(readings.get(t.form) || []).map((r) => r.lemma.toLowerCase())];
+      if (!words.some((w) => lemmas.includes(w))) continue;
+      const k = `${t.s}:${t.i}`;
+      (places.get(k) || places.set(k, []).get(k)).push(e.expression_text);
+    }
+  }
+  return places;
+}
+
+/**
+ * For each place a keyword occurs, the expressions that place belongs to ([] when none):
+ * keyword.in_expressions. A keyword is taught by the expressions shown only when every one
+ * of its places is in one of them — "beslut" in "fatta beslut" goes, "beslut" used on its
+ * own elsewhere in the text stays (spelling alone decided before).
+ */
+export function inExpressions(at, places) {
+  return (at || []).map(([s, i]) => places.get(`${s}:${i}`) || []);
+}
+
+export function taughtByExpressions(keyword, shownTexts) {
+  const lists = keyword.in_expressions || [];
+  return lists.length > 0 && lists.every((list) => list.some((text) => shownTexts.has(text)));
 }
 
 // 阅读模块设计想法-专业review-2026-07-27.md §5/§10.2 — when a discovered
@@ -1062,10 +1369,13 @@ export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, f
 // than just leaving the link empty (reading keeps enriching the library;
 // confirmed 2026-10-30). No second AI
 // call is needed — selectReadingContent already generated the phrase text/
-// meaning/example in the same call, this just persists it. New entries get
-// status "ai_generated" (same convention as auto-generated words — see
-// spraklab-ai-review-gate-reminder memory: this review gate isn't enforced
-// yet, so these are immediately visible like everything else).
+// meaning/example in the same call, this just persists it.
+// New entries are drafts (2026-11-07): what the analysis wrote is the short
+// explanation for this text (meaning + this sentence), not a finished entry. The
+// missing fields are recorded (resource_field_status) and filled by the regular AI
+// completion (scripts/ai-complete.mjs), which makes a completed draft "ai_generated".
+// A draft opens and can be studied from the reading that found it; the app keeps it
+// out of the shared Fasta fraser / Idiomatiska uttryck lists and Dagens uttryck.
 // Every shown keyword gets a full dictionary entry (2026-10-31): reused when the
 // shared dictionary has one with this lemma + part of speech in this language,
 // otherwise generated once with the regular word-card generation and saved for
@@ -1135,7 +1445,7 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
       tags: [],
       notebook: "Fraser",
       source: "discovered from reading",
-      status: "ai_generated",
+      status: "draft",
       updated_at: now,
     }));
     const { data: inserted, error: insertError } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish");
@@ -1228,6 +1538,7 @@ async function findPublicAnalysisByHash(supabaseAdmin, hash, nativeLanguage = "z
     .eq("visibility", "public")
     .eq("native_language", nativeLanguage)
     .eq("status", "ready")
+    .gte("analysis_version", ANALYSIS_VERSION)
     .order("analysis_version", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -1319,6 +1630,31 @@ async function generateFastLayer(cleanedText, tier, nativeLanguage = "zh") {
   });
 }
 
+// A row for the current selection rules with an older analysis' summary. Two readers
+// opening the text at once: the second insert fails on the unique key and reads the first.
+// It stays as visible as the old one (a shared library text's analysis is always public).
+export async function upgradeAnalysisRow(supabaseAdmin, old, { shared = false } = {}) {
+  const row = {
+    text_resource_id: old.text_resource_id, analysis_version: ANALYSIS_VERSION, native_language: old.native_language,
+    visibility: shared || old.visibility === "public" ? "public" : "private",
+    status: "summary_ready", headline_zh: old.headline_zh, summary_sv: old.summary_sv, summary_zh: old.summary_zh,
+    key_points: old.key_points || [], text_cefr: old.text_cefr ?? null, summary_generated_at: old.summary_generated_at || new Date().toISOString(),
+  };
+  const { data, error } = await supabaseAdmin.from("text_analysis").insert(row).select().single();
+  if (!error && data) return data;
+  const { data: existing } = await supabaseAdmin.from("text_analysis").select("*")
+    .eq("text_resource_id", old.text_resource_id).eq("native_language", old.native_language).eq("analysis_version", ANALYSIS_VERSION).maybeSingle();
+  if (existing) return existing;
+  throw error || new Error("Analysen kunde inte uppdateras.");
+}
+
+async function starterResource(supabaseAdmin, hash) {
+  const { data } = await supabaseAdmin.from("text_resources")
+    .select("id, word_count, analysis_status, textbook_glossary, is_starter_library")
+    .eq("text_hash", hash).eq("is_starter_library", true).limit(1);
+  return data?.[0] || null;
+}
+
 export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, sourceType = "paste", glossary = [], nativeLanguage = "zh" }) {
   if (glossary.length) glossary = await repairGlossaryLetters(supabaseAdmin, glossary);
   const cleaned = cleanText(text);
@@ -1336,13 +1672,17 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
   // 规范§3/§15 — cache check first, before anything else.
   const { data: existingResource } = await supabaseAdmin
     .from("text_resources")
-    .select("id, word_count, analysis_status, textbook_glossary")
+    .select("id, word_count, analysis_status, textbook_glossary, is_starter_library")
     .eq("user_id", userId)
     .eq("text_hash", hash)
     .maybeSingle();
 
-  let textResource = existingResource;
-  if (textResource && glossary.length && !(textResource.textbook_glossary || []).length) {
+  // A text of the shared reading library (Läsmaterial) is analysed on the library's own
+  // row, once per language for every reader (2026-11-07): each reader used to get a private
+  // copy, and each copy paid for the whole analysis again. The text is public already.
+  let textResource = existingResource || await starterResource(supabaseAdmin, hash);
+  const shared = Boolean(textResource?.is_starter_library);
+  if (textResource && !shared && glossary.length && !(textResource.textbook_glossary || []).length) {
     await supabaseAdmin.from("text_resources").update({ textbook_glossary: glossary }).eq("id", textResource.id);
     textResource = { ...textResource, textbook_glossary: glossary };
   }
@@ -1364,6 +1704,15 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
     .order("analysis_version", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  if (existingAnalysis && (existingAnalysis.analysis_version || 1) < ANALYSIS_VERSION) {
+    // Made with older selection rules: a row for the current rules, with the same summary
+    // (no AI call); the client then asks for the deep layer, which selects again. The old
+    // row stays as it was. Entries are found again by lemma / match key, so nothing is
+    // created twice, and the reader's word states are not touched.
+    const upgraded = await upgradeAnalysisRow(supabaseAdmin, existingAnalysis, { shared });
+    return { textResource, analysis: upgraded, tier, cached: true, deepReady: upgraded.status === "ready" };
+  }
 
   if (existingAnalysis) {
     // Either fully cached (deep layer already ran a previous time, in this
@@ -1409,8 +1758,9 @@ export async function analyzeReadingResourceFast({ supabaseAdmin, userId, text, 
     .from("text_analysis")
     .insert({
       text_resource_id: textResource.id,
-      analysis_version: 1,
+      analysis_version: ANALYSIS_VERSION,
       native_language: nativeLanguage,
+      visibility: shared ? "public" : "private",
       status: "summary_ready",
       headline_zh: result.headline_zh,
       summary_sv: result.summary_sv,
@@ -1562,6 +1912,159 @@ For each entry in "patterns": meaning = a concise ${langName} explanation of the
   return analysisRow;
 }
 
+/**
+ * The deep layer's selection for one text (2026-11-07), in order:
+ * 1. every form of the text with SALDO's readings, and the dictionary entries each form
+ *    can be (all of them: homographs, forms shared by several entries);
+ * 2. the dictionary pool, cut by likely value (not by occurrences), for the AI to choose
+ *    from — it also adds words of the text the pool doesn't have;
+ * 3. two AI calls side by side: keywords (+ reserves, with the text's level as context)
+ *    and expressions (+ reserves), each best first;
+ * 4. keywords: part of speech against the references, then matched to entries by lemma +
+ *    part of speech, kept only when SALDO finds them in the text as that part of speech,
+ *    A1 words only for a use that isn't the everyday one;
+ * 5. expressions: matched to existing entries by match key, else created as drafts;
+ * 6. a keyword all of whose places in the text are inside shown expressions is left out;
+ * 7. linked entries checked against the sense the text uses (one AI call), shown keywords
+ *    without an entry get a full one; a keyword that can't get one gives its place to the
+ *    next reserve that has an entry.
+ * `ensureEntries: false` (evaluation) skips creating keyword entries; with a read-only
+ * client nothing is written at all.
+ */
+export async function runDeepSelection(supabaseAdmin, { cleaned, wordCount, tier, glossary = [], nativeLanguage = "zh", textCefr = null, userId = null, textResourceId = null, ensureEntries = true }) {
+  const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
+  const collocationLimit = Math.min(tierConfig.keyCollocations[1], MAX_KEY_COLLOCATIONS);
+  const idiomLimit = Math.min(tierConfig.keyIdioms[1], MAX_KEY_IDIOMS);
+
+  const { freq, properNouns: names } = extractCandidateTokens(cleaned);
+  const tokens = textTokens(cleaned);
+  const readings = await textReadings(supabaseAdmin, [...new Set(tokens.map((t) => t.form))]);
+  // Every word of the text competes, the ones the textbook's own word list explains too
+  // (2026-11-02): keeping those out removed most of a text's key terms.
+  const found = await matchAgainstCorpus(supabaseAdmin, [...freq.keys()], nativeLanguage, readings);
+  // In text order for the AI (not by how often they occur: that put "problem" and "rik" in front).
+  const pool = inTextOrder(rankFoundWords(found, freq, names, POOL_SIZE[tier === "oversized" ? "overlong" : tier] || POOL_SIZE.standard), freq);
+  // Every part of speech SALDO gives the word as it stands in the text ("torka" → noun/verb).
+  pool.forEach((c) => {
+    const options = (readings.get(c.token) || []).filter((r) => r.lemma.toLowerCase() === c.word.swedish.toLowerCase()).map((r) => r.pos);
+    c.posOptions = [...new Set([c.word.pos, ...options].filter(Boolean))];
+  });
+  const vocabularyLimit = keywordLimit(wordCount, tier, pool);
+
+  const [selection, expressions] = await Promise.all([
+    selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage, textCefr),
+    selectExpressions(cleaned, tier, glossary, nativeLanguage, readings),
+  ]);
+
+  const dropped = [];
+  const checkedVocabulary = await checkKeywordPartsOfSpeech(supabaseAdmin, tidyReasons(selection.vocabulary), glossary);
+  for (const v of selection.vocabulary) if (!checkedVocabulary.some((c) => c.swedish === v.swedish && c.sentence === v.sentence)) dropped.push({ swedish: v.swedish, pos: v.pos, reason: v.reason, why: "pos_rejected" });
+  const scoredVocabulary = await resolveVocabularyCandidates(supabaseAdmin, checkedVocabulary, pool, { tokens, readings, textCefr }, dropped);
+  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, expressions.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
+  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, expressions.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
+  const asExpression = (category) => (e) => ({ ...e, category });
+  const collocationCandidates = resolvedCollocations.map(asExpression("collocation"));
+  const idiomCandidates = resolvedIdioms.map(asExpression("idiom"));
+  // Shown by default: the best ones, as many as the length tier shows; the rest are
+  // reserves for each reader's own list.
+  const selectedExpressions = [...collocationCandidates.slice(0, collocationLimit), ...idiomCandidates.slice(0, idiomLimit)]
+    .map((e, index) => ({ ...e, sort_order: index }));
+  const candidateExpressions = [...collocationCandidates, ...idiomCandidates];
+
+  // V2.1 §六/§十七 "完整表达优先于孤立单词", by place (2026-11-07): a keyword is left out
+  // only when each of its places in the text is inside a shown expression.
+  const places = expressionPlaces(candidateExpressions, tokens, readings, cleaned);
+  const located = scoredVocabulary.map(({ at, ...v }) => ({ ...v, in_expressions: inExpressions(at, places) }));
+  const shownTexts = new Set(selectedExpressions.map((e) => e.expression_text));
+  for (const v of located) if (taughtByExpressions(v, shownTexts)) dropped.push({ swedish: v.swedish, pos: v.pos, reason: v.reason, why: "inside_shown_expression" });
+  const openVocabulary = located.filter((v) => !taughtByExpressions(v, shownTexts));
+
+  // The shown keywords and the reserves that have an entry are checked against the
+  // sense the text uses (one call); only the shown ones get a new entry.
+  const head = openVocabulary.slice(0, vocabularyLimit);
+  const reserves = openVocabulary.slice(vocabularyLimit);
+  const checkedLinks = await checkLinkedKeywordSenses(supabaseAdmin, [...head, ...reserves.filter((v) => v.word_id)], { userId, textResourceId });
+  const checkedHead = checkedLinks.slice(0, head.length);
+  const checkedReserves = [...checkedLinks.slice(head.length), ...reserves.filter((v) => !v.word_id)];
+  const withEntries = ensureEntries
+    ? await ensureKeywordEntries(supabaseAdmin, checkedHead, { userId, textResourceId, nativeLanguage })
+    : checkedHead.map((k) => (k.word_id || k.entry_conflict ? k : { ...k, would_create_entry: true }));
+  const hasEntry = (v) => v.word_id || v.would_create_entry;
+  // A shown keyword always has a full entry: one that couldn't get one gives its place to
+  // the next reserve that has an entry, or the list is just shorter.
+  const shownVocabulary = withEntries.filter(hasEntry);
+  shownVocabulary.push(...checkedReserves.filter((v) => v.word_id).slice(0, Math.max(0, vocabularyLimit - shownVocabulary.length)));
+  const candidateVocabulary = [
+    ...shownVocabulary,
+    ...checkedReserves.filter((v) => v.word_id && !shownVocabulary.includes(v)),
+    ...withEntries.filter((v) => !hasEntry(v)),
+    ...checkedReserves.filter((v) => !v.word_id),
+  ];
+  return {
+    selectedVocabulary: shownVocabulary.map((v, index) => ({ ...v, sort_order: index })),
+    selectedExpressions,
+    candidateVocabulary,
+    candidateExpressions,
+    selectedSentences: selection.keySentences.map((s, index) => ({ ...s, sort_order: index })),
+    selectedPatterns: selection.languagePatterns.map((p, index) => ({ ...p, sort_order: index })),
+    usage: { selection: selection.usage, expressions: expressions.usage },
+    diagnostics: { pool: pool.map((c) => `${c.word.swedish}|${c.word.pos}`), aiVocabulary: selection.vocabulary, article: selection.article, expressionCounts: expressions.counts, dropped, vocabularyLimit },
+  };
+}
+
+// One deep analysis per row (2026-11-07): two requests for the same row (a double tap, a
+// retry while the first still runs) each paid for the whole selection. The first claims the
+// row with one conditional update (text_analysis.deep_started_at, migration
+// 20261107120000); another one waits for its result instead of running the AI again, and
+// runs itself only when the first failed (the claim is released) or went stale (a function
+// that died keeps no one out for longer than the platform's 5-minute limit).
+export const DEEP_CLAIM_STALE_MS = 5 * 60 * 1000;
+export const DEEP_UNCLAIMED = "1970-01-01T00:00:00.000Z";
+
+export async function claimDeepAnalysis(supabaseAdmin, analysisId, now = Date.now()) {
+  const { data, error } = await supabaseAdmin.from("text_analysis")
+    .update({ deep_started_at: new Date(now).toISOString() })
+    .eq("id", analysisId).neq("status", "ready").lt("deep_started_at", new Date(now - DEEP_CLAIM_STALE_MS).toISOString())
+    .select("id");
+  // Before the migration (no such column), or any failure of the claim itself: the analysis
+  // runs unclaimed, as it always did, rather than not at all.
+  if (error) return "unclaimed";
+  return data?.length ? "claimed" : "busy";
+}
+
+export async function releaseDeepClaim(supabaseAdmin, analysisId) {
+  try {
+    await supabaseAdmin.from("text_analysis").update({ deep_started_at: DEEP_UNCLAIMED }).eq("id", analysisId);
+  } catch (error) {
+    console.warn("[Reading] deep claim not released (it goes stale)", error.message);
+  }
+}
+
+/** Runs `work` (which returns the finished row) once per row; { row, waited }. */
+export async function deepOnce(supabaseAdmin, analysisId, work, { waitMs = 90000, pollMs = 2000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  let claim = await claimDeepAnalysis(supabaseAdmin, analysisId);
+  if (claim === "busy") {
+    for (let waited = 0; waited < waitMs; waited += pollMs) {
+      await sleep(pollMs);
+      const { data: row } = await supabaseAdmin.from("text_analysis").select("*").eq("id", analysisId).maybeSingle();
+      if (row?.status === "ready") return { row, waited: true };
+      if (!row || row.deep_started_at === DEEP_UNCLAIMED) break;   // the other request failed
+    }
+    claim = await claimDeepAnalysis(supabaseAdmin, analysisId);
+    if (claim === "busy") {
+      const error = new Error("Analysen pågår redan. Försök igen om en stund.");
+      error.status = 409;
+      throw error;
+    }
+  }
+  try {
+    return { row: await work(), waited: false };
+  } catch (error) {
+    if (claim === "claimed") await releaseDeepClaim(supabaseAdmin, analysisId);
+    throw error;
+  }
+}
+
 // Deep layer — the original heavy vocabulary/expressions/sentences/patterns
 // work, unchanged in substance, now operating on a text_resource +
 // text_analysis row the fast layer already created, UPDATING that same row
@@ -1573,17 +2076,17 @@ For each entry in "patterns": meaning = a concise ${langName} explanation of the
 export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textResourceId, nativeLanguage = "zh" }) {
   const { data: textResource, error: resourceError } = await supabaseAdmin
     .from("text_resources")
-    .select("id, cleaned_text, word_count, textbook_glossary")
+    .select("id, cleaned_text, word_count, textbook_glossary, user_id, is_starter_library")
     .eq("id", textResourceId)
-    .eq("user_id", userId)
     .maybeSingle();
-  if (resourceError || !textResource) {
+  // The reader's own text, or one of the shared reading library.
+  if (resourceError || !textResource || (textResource.user_id !== userId && !textResource.is_starter_library)) {
     const error = new Error("Texten hittades inte.");
     error.status = 404;
     throw error;
   }
 
-  const { data: existingAnalysis } = await supabaseAdmin
+  let { data: existingAnalysis } = await supabaseAdmin
     .from("text_analysis")
     .select("*")
     .eq("text_resource_id", textResource.id)
@@ -1596,6 +2099,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     error.status = 409;
     throw error;
   }
+  if ((existingAnalysis.analysis_version || 1) < ANALYSIS_VERSION) existingAnalysis = await upgradeAnalysisRow(supabaseAdmin, existingAnalysis, { shared: textResource.is_starter_library });
 
   const tier = classifyLength(textResource.word_count);
 
@@ -1604,12 +2108,21 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     return { analysis: existingAnalysis, tier };
   }
 
+  const { row: analysisRow } = await deepOnce(supabaseAdmin, existingAnalysis.id, () => completeDeepAnalysis({ supabaseAdmin, userId, textResource, existingAnalysis, nativeLanguage, tier }));
+  await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: analysisRow });
+  return { analysis: analysisRow, tier };
+}
+
+// The AI part of the deep layer: the other language's selection explained, or a selection
+// of its own. Returns the finished row.
+async function completeDeepAnalysis({ supabaseAdmin, userId, textResource, existingAnalysis, nativeLanguage, tier }) {
   const { data: readyOtherLanguage } = await supabaseAdmin
     .from("text_analysis")
     .select("*")
     .eq("text_resource_id", textResource.id)
     .eq("status", "ready")
     .neq("native_language", nativeLanguage)
+    .eq("analysis_version", existingAnalysis.analysis_version || 1)
     .order("analysis_version", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -1617,8 +2130,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   if (readyOtherLanguage) {
     const analysisRow = await explainExistingSelectionInLanguage({ supabaseAdmin, userId, textResource, existingAnalysis, sourceAnalysis: readyOtherLanguage, nativeLanguage });
     await supabaseAdmin.from("text_resources").update({ analysis_status: "ready" }).eq("id", textResource.id);
-    await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: analysisRow });
-    return { analysis: analysisRow, tier };
+    return analysisRow;
   }
 
   const cleaned = textResource.cleaned_text;
@@ -1626,68 +2138,12 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
   const glossary = textResource.textbook_glossary || [];
   const usageLogEntries = [];
 
-  const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
-  let vocabularyLimit = keywordLimit(wordCount, tier);
-  const collocationLimit = Math.min(tierConfig.keyCollocations[1], MAX_KEY_COLLOCATIONS);
-  const idiomLimit = Math.min(tierConfig.keyIdioms[1], MAX_KEY_IDIOMS);
-
-  const { freq, firstSeenCapitalized } = extractCandidateTokens(cleaned);
-  // Every word of the text competes, the ones the textbook's own word list explains too
-  // (2026-11-02): keeping those out removed most of a text's key terms.
-  const found = await matchAgainstCorpus(supabaseAdmin, [...freq.keys()], nativeLanguage);
-  // The dictionary words found in the text, in text order (not by how often they occur:
-  // that put "problem" and "rik" in front), for the AI to choose from; it may add words
-  // the dictionary doesn't have.
-  const pool = inTextOrder(rankFoundWords(found, freq, firstSeenCapitalized, POOL_SIZE), freq);
-  // Every part of speech SALDO gives the word as it stands in the text ("torka" → noun/verb),
-  // not only the one the dictionary entry happens to have.
-  const readings = await textReadings(supabaseAdmin, pool.map((c) => c.token));
-  pool.forEach((c) => {
-    const options = (readings.get(c.token) || []).filter((r) => r.lemma.toLowerCase() === c.word.swedish.toLowerCase()).map((r) => r.pos);
-    c.posOptions = [...new Set([c.word.pos, ...options].filter(Boolean))];
+  const result = await runDeepSelection(supabaseAdmin, {
+    cleaned, wordCount, tier, glossary, nativeLanguage, textCefr: existingAnalysis.text_cefr, userId, textResourceId: textResource.id,
   });
-  vocabularyLimit = keywordLimit(wordCount, tier, pool);
-
-  const [selection, expressions] = await Promise.all([
-    selectReadingContent(cleaned, tier, glossary, pool, nativeLanguage),
-    selectExpressions(cleaned, tier, glossary, nativeLanguage),
-  ]);
-  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_selection", model: MODEL, usage: selection.usage, cacheHit: false });
-  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_expressions", model: MODEL, usage: expressions.usage, cacheHit: false });
-
-  const checkedVocabulary = await checkKeywordPartsOfSpeech(supabaseAdmin, selection.vocabulary, glossary);
-  const scoredVocabulary = await resolveVocabularyCandidates(supabaseAdmin, checkedVocabulary, pool, freq);
-  const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, expressions.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
-  const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, expressions.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
-  const asExpression = (category) => (e) => ({ ...e, category });
-  const collocationCandidates = resolvedCollocations.map(asExpression("collocation"));
-  const idiomCandidates = resolvedIdioms.map(asExpression("idiom"));
-  // Shown by default: the best ones, as many as the length tier shows; the rest
-  // stay as candidates for each reader's own ordering.
-  const selectedExpressions = [...collocationCandidates.slice(0, collocationLimit), ...idiomCandidates.slice(0, idiomLimit)]
-    .map((e, index) => ({ ...e, sort_order: index }));
-  const candidateExpressions = [...collocationCandidates, ...idiomCandidates];
-
-  // V2.1 阅读AI提取规则 §六/§十七 (2026-08-11): "完整表达优先于孤立单词" — if a
-  // word turns up as a component of a shown collocation/idiom, drop the isolated
-  // word in favor of the complete expression rather than showing both.
-  const phraseWordSet = new Set();
-  selectedExpressions.forEach((e) => {
-    (e.expression_text || "").match(/[a-zA-ZåäöÅÄÖ]+/g)?.forEach((w) => phraseWordSet.add(w.toLowerCase()));
-  });
-  const openVocabulary = scoredVocabulary.filter((v) => !phraseWordSet.has(v.swedish.toLowerCase()));
-  const checkedLinks = await checkLinkedKeywordSenses(supabaseAdmin, openVocabulary.slice(0, vocabularyLimit), { userId, textResourceId: textResource.id });
-  const withEntries = await ensureKeywordEntries(supabaseAdmin, checkedLinks, { userId, textResourceId: textResource.id, nativeLanguage });
-  // A shown keyword always has a full entry: one that couldn't get one (e.g. a
-  // misspelt lemma the word-card generation rejects) gives its place to the next
-  // candidate that already has an entry, or the list is just shorter.
-  const rest = openVocabulary.slice(vocabularyLimit);
-  const shownVocabulary = withEntries.filter((v) => v.word_id);
-  shownVocabulary.push(...rest.filter((v) => v.word_id).slice(0, vocabularyLimit - shownVocabulary.length));
-  const candidateVocabulary = [...shownVocabulary, ...withEntries.filter((v) => !v.word_id), ...rest.filter((v) => !shownVocabulary.includes(v))];
-  const selectedVocabulary = shownVocabulary.map((v, index) => ({ ...v, sort_order: index }));
-  const selectedSentences = selection.keySentences.map((s, index) => ({ ...s, sort_order: index }));
-  const selectedPatterns = selection.languagePatterns.map((p, index) => ({ ...p, sort_order: index }));
+  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_selection", model: MODEL, usage: result.usage.selection, cacheHit: false });
+  logUsage(usageLogEntries, { userId, textResourceId: textResource.id, feature: "reading_expressions", model: MODEL, usage: result.usage.expressions, cacheHit: false });
+  const { selectedVocabulary, selectedExpressions, candidateVocabulary, candidateExpressions, selectedSentences, selectedPatterns } = result;
 
   const { data: analysisRow, error: analysisError } = await supabaseAdmin
     .from("text_analysis")
@@ -1722,9 +2178,7 @@ export async function analyzeReadingResourceDeep({ supabaseAdmin, userId, textRe
     cache_hit: false,
   });
   if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
-
-  await materializeReadingAnalysisItems(supabaseAdmin, { userId, analysis: analysisRow });
-  return { analysis: analysisRow, tier };
+  return analysisRow;
 }
 
 // 规范§9.3/§10 — summary is on-demand only, never generated at import time.
@@ -1762,7 +2216,7 @@ export async function generateReadingSummary({ supabaseAdmin, userId, textResour
   if (analysis) {
     await supabaseAdmin.from("text_analysis").update({ summary_sv: result.summary_sv, summary_zh: result.summary_zh, summary_generated_at: new Date().toISOString() }).eq("id", analysis.id);
   } else {
-    await supabaseAdmin.from("text_analysis").insert({ text_resource_id: textResourceId, analysis_version: 1, native_language: nativeLanguage, status: "summary_ready", summary_sv: result.summary_sv, summary_zh: result.summary_zh, summary_generated_at: new Date().toISOString() });
+    await supabaseAdmin.from("text_analysis").insert({ text_resource_id: textResourceId, analysis_version: ANALYSIS_VERSION, native_language: nativeLanguage, status: "summary_ready", summary_sv: result.summary_sv, summary_zh: result.summary_zh, summary_generated_at: new Date().toISOString() });
   }
 
   return { summary_sv: result.summary_sv, summary_zh: result.summary_zh, cached: false };
