@@ -116,7 +116,10 @@ export async function resolveWord(supabaseAdmin, text, pos = null) {
   if (direct) return { entryId: direct.id, lemma: direct.swedish, pos: direct.part_of_speech, saldo: null };
 
   const candidates = (await lemmatize(supabaseAdmin, text)).filter((c) => !pos || c.pos === pos);
-  for (const c of candidates) {
+  // A text that is itself a headword is that word, never another's inflected form: "visa" (a song)
+  // is also visum's plural, and the noun asked for got the entry of visum (2026-11-09).
+  const own = candidates.filter((c) => normalizeText(c.lemma) === normalizeText(text));
+  for (const c of own.length ? own : candidates) {
     const row = await wordRow(supabaseAdmin, c.lemma, c.pos);
     if (row) return { entryId: row.id, lemma: row.swedish, pos: row.part_of_speech, saldo: null };
   }

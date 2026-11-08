@@ -876,6 +876,14 @@ async function corpusEvidence(korp, phrase, ms = 20000) {
   }
 }
 
+/**
+ * The version of the word-card check (2026-11-09, G6): recorded with each check's result
+ * (resource_field_status "sense", detail.check_version), so an entry checked by this version is
+ * never checked — or paid for — again, and one checked by an older version can be told apart.
+ * Raise it when the check's rules change in a way that should re-check reused entries.
+ */
+export const CHECK_VERSION = "2026-11-09b";
+
 export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = null, sense = "", result, forms = [], isPhrase = false, userId = null, textResourceId = null, korp = korpAttestation }) {
   if (!isPhrase && wantedPos && pos !== wantedPos) return { ok: false, reason: `asked_${wantedPos}_got_${pos}` };
   let posCheck = { status: "present", source: "unconfirmed" };
@@ -1076,6 +1084,14 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
       else if (detailCheck.swedish_explanation_without_wrong) open.push({ kind: "swedish_explanation_sense", text: detailCheck.swedish_explanation_without_wrong });
     } else for (const s of wrongSenses) if (now.includes(s)) open.push({ kind: "sense", text: s });
   }
+  // A sense the whole-card check calls unsupported, or another part of speech's, that is still on
+  // the card: open — the check's doubt is never dropped silently (av adverb kept "时不时", the
+  // idiom av och till's meaning, as verified; 2026-11-09).
+  const meaningText = `${card.meaning_zh || ""} ${card.meaning_en || ""} ${card.swedish_explanation || ""}`;
+  for (const quote of [...(check.other_pos_senses || []), ...(check.unsupported_senses || [])]) {
+    const parts = String(quote).split(/[；;\/／|]/).map((x) => x.trim()).filter(Boolean);
+    if (parts.some((p) => meaningText.includes(p)) && !open.some((o) => o.text === quote)) open.push({ kind: "sense_doubted_by_card_check", text: quote });
+  }
 
   // The explanation or an example naming the headword with the other homograph's article
   // ("En lag är …" on the card of ett lag): shown, open.
@@ -1237,7 +1253,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   // for scripts/korp-verify.mjs, where corpus use can still verify it (2026-11-04).
   const english = !isPhrase && refs ? englishEquivalents(refs, pos) : [];
   const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
-  const detail = { verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits, ...ungrammatical], note: check.note, wiktionary: page.status, en_reference: enReference,
+  const detail = { check_version: CHECK_VERSION, verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits, ...ungrammatical], note: check.note, wiktionary: page.status, en_reference: enReference,
     ...(removedSenses.length ? { removed_senses: removedSenses } : {}), ...(ungrammatical.length ? { ungrammatical } : {}), ...(droppedCollocationExamples.length ? { dropped_collocation_examples: droppedCollocationExamples } : {}), ...(relatedMeaningNotes.length ? { related_meaning_notes: relatedMeaningNotes } : {}), ...(commonKept.length ? { common_combinations: commonKept } : {}),
     ...(droppedCollocations.length ? { dropped_collocations: droppedCollocations } : {}), ...(droppedRelated.length ? { dropped_related: droppedRelated } : {}), ...(foreign.length ? { foreign_script: foreign } : {}),
     ...(open.length ? { open_items: open } : {}) };

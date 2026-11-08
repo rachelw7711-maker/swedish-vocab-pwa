@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { useSaldoFiles, compoundRows, compareWithSaldo, multiWordVerbRows, participleRows } from "../server-lexicon.mjs";
 import {
   useReferenceFiles, referenceEntries, posFamilies, lexinForms, compareWithLexin, lexinCountability,
-  englishEquivalents, meaningSupport, lexinSenses, lexinPromptLine, expressionInReferences, collocationInLexin, compoundMeaningSupport,
+  englishEquivalents, meaningSupport, lexinSenses, lexinPromptLine, expressionReferenceLine, expressionInReferences, collocationInLexin, compoundMeaningSupport,
 } from "../server-references.mjs";
 
 before(async () => { await useSaldoFiles(); await useReferenceFiles("data/reference", { extra: true }); });
@@ -48,6 +48,29 @@ test("Lexin senses and the generation prompt line", async () => {
   assert.deepEqual(senses[0].english, ["drought"], "Lexin swe–eng aligned by sense id");
   assert.match(lexinPromptLine(await referenceEntries(null, "kärlek"), "noun"), /no plural/);
   assert.equal(lexinPromptLine(torka, "preposition"), "");
+});
+
+test("G1/G2: separate words of one spelling kept apart, Lexin's idioms and compounds offered", async () => {
+  const lag = await referenceEntries(null, "lag");
+  const line = lexinPromptLine(lag, "noun", { forms: { singular_definite: "laget" } });
+  assert.match(line, /separate words/);
+  assert.match(line, /\(B\) laget, lag: .*team/);
+  assert.match(line, /Write the entry for word \(B\) only/);
+  assert.match(line, /i senaste laget/, "Lexin's idiom of that word");
+  assert.match(line, /fotbollslag/, "Lexin's compound of that word");
+  assert.match(lexinPromptLine(lag, "noun"), /Write the entry for one of these words only/);
+  const fil = lexinPromptLine(await referenceEntries(null, "fil"), "noun");
+  assert.doesNotMatch(fil, /separate words/, "one word, several senses");
+  assert.match(fil, /fil och flingor/);
+});
+
+test("G3: a multi-word expression's reference — its own entry, its particle verb, its head word's idiom", async () => {
+  assert.match(await expressionReferenceLine(null, "lägga av"), /slutar med något/);
+  assert.match(await expressionReferenceLine(null, "stå ut med"), /under "stå ut": .*uthärdar/);
+  assert.match(await expressionReferenceLine(null, "ta hand om", ["tar", "tog", "tagit", "ta"]), /tar hand om någon\/något/);
+  assert.equal(await expressionReferenceLine(null, "gå ut på"), "", "not in Lexin: nothing, and nothing decided");
+  // Each sense with its phrase: "ger till" alone was written as "state (one's name)" (uppge).
+  assert.match(await expressionReferenceLine(null, "ge upp"), /2\. ger till \[ngn ger upp ngt\] phrases: hon gav upp ett skrik/);
 });
 
 test("expressions: headwords and idioms, inflection unified", async () => {
@@ -120,4 +143,15 @@ test("a transparent compound's meaning from its parts; not a compound whose mean
   assert.equal(compoundMeaningSupport("strawberry", { first: "jord", firstEquivalents: await eq("jord", "noun"), headEquivalents: await eq("gubbe", "noun") }), false);
   // every part of the meaning: "language course; evening class" — the second part has neither
   assert.equal(compoundMeaningSupport("language course; evening class", { first: "språk", firstEquivalents: await eq("språk", "noun"), headEquivalents: await eq("kurs", "noun") }), false);
+});
+
+test("G2: a sense Lexin shows only with a particle or only through idioms is marked as not the word's own", async () => {
+  const sv = { pos: "adverb", lexemes: [{ variant: "871", definition: "då och då", constructions: [], examples: [], idioms: [["av och till", "då och då"]], compounds: [] }, { variant: "868", definition: "", constructions: [], examples: ["hon stängde av kranen"], idioms: [], compounds: [] }] };
+  const av = lexinPromptLine({ lexin_sv: [sv], lexin_en: [] }, "adverb");
+  assert.match(av, /no meaning of its own — only in these idioms/);
+  assert.doesNotMatch(av, /1\. då och då/);
+  const en = [{ pos: "verb", variant: "1", definition: "meddela i ord", english: ["say"], examples: [] }, { pos: "verb", variant: "3", definition: "avskeda", english: ["dismiss"], examples: [["100 man har sagts upp", "100 men have been dismissed"]] }];
+  const saga = lexinPromptLine({ lexin_sv: [], lexin_en: en }, "verb");
+  assert.match(saga, /avskeda \(en: dismiss\) phrases: 100 man har sagts upp/);
+  assert.match(saga, /belongs to that particle verb/);
 });

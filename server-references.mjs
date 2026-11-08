@@ -262,13 +262,97 @@ export function lexinSenses(refs, pos, { limit = 6 } = {}) {
   return senses.slice(0, limit);
 }
 
-/** Reference text for the word-card generation prompt (Lexin's senses, plural, constructions). */
-export function lexinPromptLine(refs, pos) {
-  const senses = lexinSenses(refs, pos);
-  if (!senses.length) return "";
-  const list = senses.map((s, i) => `${i + 1}. ${s.definition}${s.english ? ` (en: ${s.english.join(", ")})` : ""}${s.constructions ? ` [${s.constructions.join("; ")}]` : ""}`).join(" ");
+/**
+ * Reference text for the word-card generation prompt: Lexin's senses of the headword with what
+ * Lexin has for each — English, constructions, idioms, example phrases, compounds (2026-11-09, G2:
+ * the model used to write collocations and related words from nothing, the two largest sources of
+ * removed content). Separate words of the same spelling and part of speech (G1: en lag "law" and
+ * ett lag "team") are listed apart, and the model writes one of them only — the one `forms`
+ * (SALDO's singular definite) names when given — never their senses mixed. A sense Lexin shows only
+ * with a particle (säga "dismiss": "100 man har sagts upp") or only through idioms (av "då och då" =
+ * av och till) is not the word's own meaning: the line says so, else the model wrote 解雇 for säga
+ * and 时不时 for av (compare_g1, 2026-11-09).
+ */
+const OWN_SENSES = " A sense whose Lexin phrases show the word only with a particle (\"har sagts upp\") belongs to that particle verb (säga upp), and an idiom's meaning (after =) to the idiom: never write either as a meaning of this word.";
+export function lexinPromptLine(refs, pos, { forms = null } = {}) {
+  const english = (refs.lexin_en || []).filter((e) => posMatches(e.pos, pos));
+  const words = (refs.lexin_sv || []).filter((x) => posMatches(x.pos, pos)).map((e) => ({
+    forms: e.forms || {},
+    senses: (e.lexemes || []).filter((x) => x.definition).map((x) => ({
+      definition: x.definition,
+      english: (english.find((y) => (x.variant && y.variant === x.variant) || key(y.definition) === key(x.definition))?.english || []).slice(0, 4),
+      constructions: (x.constructions || []).slice(0, 2),
+      idioms: (x.idioms || []).slice(0, 3).map((i) => (Array.isArray(i) ? `${i[0]} (= ${i[1]})` : i)),
+      examples: (x.examples || []).slice(0, 2),
+      compounds: (x.compounds || []).slice(0, 4),
+    })),
+  })).filter((w) => w.senses.length);
+  if (!words.length) {
+    const senses = lexinSenses(refs, pos);
+    if (!senses.length) return "";
+    // Lexin's English dictionary alone: its example and idioms for each sense, which show a sense
+    // used only with a particle.
+    const en = english.filter((e) => e.definition);
+    const extra = (s) => { const e = en.find((y) => key(y.definition) === key(s.definition)); if (!e) return "";
+      const ex = (e.examples || []).slice(0, 1).map((x) => (Array.isArray(x) ? x[0] : x));
+      const id = (e.idioms || []).slice(0, 2).map((x) => (Array.isArray(x) ? x[0] : x));
+      return [ex.length && ` phrases: ${ex.join("; ")}`, id.length && ` idioms: ${id.join("; ")}`].filter(Boolean).join(""); };
+    return `Reference (Lexin, Isof): senses of this ${pos}: ${senses.map((s, i) => `${i + 1}. ${s.definition}${s.english ? ` (en: ${s.english.join(", ")})` : ""}${extra(s)}`).join(" ")}. Cover these senses (the common ones first); don't add senses of other parts of speech.${OWN_SENSES}`;
+  }
+  // A sense that is only its idioms' meaning (av 871 "då och då" for "av och till"): no own definition.
+  const onlyIdioms = (s) => s.idioms.some((i) => key(i.replace(/^.*\(= /, "").replace(/\)$/, "")) === key(s.definition)) && !s.examples.length;
+  const sense = (s, i) => [
+    onlyIdioms(s) ? `${i + 1}. (no meaning of its own — only in these idioms)` : `${i + 1}. ${s.definition}`,
+    s.english.length && `(en: ${s.english.join(", ")})`,
+    s.constructions.length && `[${s.constructions.join("; ")}]`,
+    s.idioms.length && `idioms: ${s.idioms.join("; ")}`,
+    s.examples.length && `phrases: ${s.examples.join("; ")}`,
+    s.compounds.length && `compounds: ${s.compounds.join(", ")}`,
+  ].filter(Boolean).join(" ");
+  const label = (w) => [w.forms.singular_definite, w.forms.plural_indefinite].filter((f) => f && f !== "–").join(", ");
   const plural = pos === "noun" && lexinCountability(refs) === "uncountable" ? " Lexin gives this noun no plural." : "";
-  return `Reference (Lexin, Isof): senses of this ${pos}: ${list}.${plural} Cover these senses (the common ones first); don't add senses of other parts of speech.`;
+  const use = ` Prefer Lexin's own idioms, phrases and constructions for the collocations and its compounds for the related words where they fit the sense; add your own only where Lexin has none.${OWN_SENSES}`;
+  const separate = pos === "noun" && words.length > 1 && new Set(words.map((w) => key(w.forms.singular_definite))).size > 1;
+  if (!separate) return `Reference (Lexin, Isof): senses of this ${pos}: ${words.flatMap((w) => w.senses).slice(0, 6).map(sense).join(" ")}.${plural} Cover these senses (the common ones first); don't add senses of other parts of speech.${use}`;
+  const chosen = forms?.singular_definite ? words.findIndex((w) => key(w.forms.singular_definite) === key(forms.singular_definite)) : -1;
+  const list = words.map((w, j) => `(${String.fromCharCode(65 + j)}) ${label(w)}: ${w.senses.slice(0, 4).map(sense).join(" ")}`).join(" | ");
+  return `Reference (Lexin, Isof): these are ${words.length} separate words with this spelling, each its own entry: ${list}. ${chosen >= 0 ? `Write the entry for word (${String.fromCharCode(65 + chosen)}) only — the one SALDO's forms are of` : "Write the entry for one of these words only (the one the request or its sense means, else the most common), with that word's forms"}: only its senses, collocations and examples — never a sense of another of these words.${use}`;
+}
+
+/**
+ * Lexin's reference for a multi-word expression (G3, 2026-11-09): its own entry ("lägga av"),
+ * else the particle verb it starts with ("gå ut" for "gå ut på", "stå ut" for "stå ut med") with
+ * the senses whose constructions name the rest, else the head word's idioms that contain it
+ * ("tar hand om någon/något" for "ta hand om"). `headForms` are the head word's inflected forms,
+ * which an idiom is written with. Not finding it decides nothing: Lexin lists only some.
+ */
+export async function expressionReferenceLine(supabaseAdmin, text, headForms = []) {
+  const words = key(text).split(/\s+/).filter((w) => !/^(någon|något|ngn|ngt|någons|sig)$/.test(w));
+  if (words.length < 2) return "";
+  const own = (await referenceEntries(supabaseAdmin, words.join(" "))).lexin_sv || [];
+  const senses = (entries, rest = []) => entries.flatMap((e) => (e.lexemes || []).filter((x) => x.definition)
+    .filter((x) => !rest.length || (x.constructions || []).some((c) => rest.every((r) => key(c).split(/[^\p{L}]+/u).includes(r))))
+    // Each sense with its first example: a short definition alone is guessed at (ge upp "ger till",
+    // shown by "hon gav upp ett skrik", was written as "state one's name" — uppge; 2026-11-09).
+    .map((x) => `${x.definition}${x.constructions?.length ? ` [${x.constructions.slice(0, 2).join("; ")}]` : ""}${x.examples?.length ? ` phrases: ${x.examples[0]}` : ""}${x.idioms?.length ? ` idioms: ${x.idioms.slice(0, 2).map((i) => (Array.isArray(i) ? `${i[0]} (= ${i[1]})` : i)).join("; ")}` : ""}`));
+  if (own.length) return `Reference (Lexin, Isof): "${words.join(" ")}": ${senses(own).slice(0, 4).map((d, i) => `${i + 1}. ${d}`).join(" ")}. Cover these senses as Lexin's phrases show them, without widening them; prefer Lexin's constructions and idioms for the collocations.${OWN_SENSES}`;
+  for (let n = words.length - 1; n >= 2; n--) {
+    const prefix = words.slice(0, n).join(" "), rest = words.slice(n);
+    const found = senses((await referenceEntries(supabaseAdmin, prefix)).lexin_sv || [], rest);
+    if (found.length) return `Reference (Lexin, Isof): under "${prefix}": ${found.slice(0, 3).map((d, i) => `${i + 1}. ${d}`).join(" ")}. Use these where they are the expression's sense.${OWN_SENSES}`;
+  }
+  const head = new Set([words[0], ...headForms.map(key)]);
+  const tokens = (t) => key(t).split(/[^\p{L}]+/u).filter(Boolean);
+  const hits = [];
+  for (const e of (await referenceEntries(supabaseAdmin, words[0])).lexin_sv || []) for (const x of e.lexemes || []) {
+    for (const i of [...(x.idioms || []), ...(x.constructions || []), ...(x.examples || [])]) {
+      const t = tokens(Array.isArray(i) ? i[0] : i);
+      const at = t.findIndex((w) => head.has(w));
+      if (at >= 0 && words.slice(1).every((w, j) => t[at + 1 + j] === w)) hits.push(Array.isArray(i) ? `${i[0]} (= ${i[1]})` : i);
+    }
+  }
+  if (hits.length) return `Reference (Lexin, Isof): under "${words[0]}": ${[...new Set(hits)].slice(0, 3).join("; ")}. Use this where it is the expression's sense.`;
+  return "";
 }
 
 /**

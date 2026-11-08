@@ -433,14 +433,10 @@ async function sql() {
   const now = new Date().toISOString();
   const statusRows = [...fills.map((f) => [f.id, f.field === "example_sv" ? "example" : f.field, "present"]), ...notApplicable.map((n) => [n.id, n.field, "not_applicable"])].filter(([, f]) => f !== "example_zh" && f !== "comparison_type");
   for (let i = 0; i < statusRows.length; i += 500) out.push(`insert into public.resource_field_status (learning_object_id, field, status, source, detail, updated_at) values\n  ${statusRows.slice(i, i + 500).map(([id, f, s]) => `(${q(id)}, ${q(f)}, ${q(s)}, 'openai-generated', ${q(JSON.stringify({ job: state.id, batch: batchId }))}::jsonb, ${q(now)})`).join(",\n  ")}\n  on conflict (learning_object_id, field) do update set status = excluded.status, source = excluded.source, detail = excluded.detail, updated_at = excluded.updated_at where public.resource_field_status.status = 'missing';`);
-  // A reading-analysis draft (2026-11-07) that this batch completed becomes an ordinary
-  // AI-generated entry; recorded in the archive so the rollback makes it a draft again.
+  // A reading-analysis draft this batch completed stays a draft (2026-11-09, G4): it becomes an
+  // ordinary entry only after the word-card check passes — scripts/check-entries.mjs
+  // --drafts-only --write, run after these fills are applied.
   out.push(`select public.refresh_resource_summary(array(select distinct a.learning_object_id from ${A}));`);
-  out.push(`with promoted as (update public.learning_objects lo set status = 'ai_generated', updated_at = now()
-    where lo.status = 'draft' and lo.content_origin = 'reading_expression' and lo.completeness = 'complete'
-      and lo.id in (select a.learning_object_id from ${A}) returning lo.id)
-  insert into public.content_audit_archive (batch_id, learning_object_id, table_name, field, old_value, new_value, reason)
-    select ${q(batchId)}, id, 'learning_objects', 'status', 'draft', 'ai_generated', ${q(`ai:${state.id}`)} from promoted;`);
   out.push(`insert into public.enrichment_jobs (kind, name, status, model, use_batch_api, spent_usd, params, finished_at) values ('ai_fill', ${q(`AI completion ${state.id}`)}, 'done', ${q(state.model)}, true, ${(usd(state.usageBatch, true) + usd(state.usage)).toFixed(4)}, ${q(JSON.stringify({ job: state.id, batch: batchId, fills: fills.length, notApplicable: notApplicable.length }))}::jsonb, now());`);
   out.push("commit;");
   const dir = dirOf(state.id);

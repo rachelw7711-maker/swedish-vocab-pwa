@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
 import { analyzeReadingResourceFast, analyzeReadingResourceDeep, classifyReadingExpression, generateReadingSummary, extractTextFromImage, calculateCredits } from "./server-reading.mjs";
-import { generateWord, promoteCollocationToPhrase, readPublicWords, markWordsReviewed } from "./server-words.mjs";
+import { readPublicWords, markWordsReviewed } from "./server-words.mjs";
 import { generateShadowingAudio } from "./server-shadowing.mjs";
 
 const PORT = Number(process.env.PORT || 4174);
@@ -179,17 +179,10 @@ async function serveStatic(req, res) {
 
 createServer(async (req, res) => {
   try {
-    if (req.method === "POST" && req.url === "/api/generate-word") {
-      // 2026-08-29 audit fix (SprakLab-Audit-Report.md §3.1): was ungated,
-      // matching the real production api/generate-word.js fix.
-      await readAuthenticatedUser(req);
-      const { word, source } = await readBody(req);
-      if (!word || typeof word !== "string") {
-        sendJson(res, 400, { error: "Skriv ett svenskt ord." });
-        return;
-      }
-      const entry = await generateWord(word.trim(), source);
-      sendJson(res, 200, { entry });
+    // Retired 2026-11-09 (G5), as api/generate-word.js and api/promote-collocation.js: no
+    // dictionaries, no checks; word and phrase cards come from /api/native generate_word.
+    if (req.method === "POST" && (req.url === "/api/generate-word" || req.url === "/api/promote-collocation")) {
+      sendJson(res, 410, { error: "Gone: word and phrase cards are generated through /api/native (generate_word)." });
       return;
     }
 
@@ -295,16 +288,6 @@ createServer(async (req, res) => {
       const { text, voiceId, itemId } = await readBody(req);
       const result = await generateShadowingAudio({ user, userSupabaseClient, text, voiceId, itemId });
       sendJson(res, 200, result);
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/api/promote-collocation") {
-      // 2026-08-29 audit fix (SprakLab-Audit-Report.md §3.3): was ungated,
-      // matching the real production api/promote-collocation.js fix.
-      await readAuthenticatedUser(req);
-      const { sourceWordId, phrase, meaning, exampleSv, cefrLevel } = await readBody(req);
-      const entry = await promoteCollocationToPhrase({ supabaseAdmin, sourceWordId, phrase, meaning, exampleSv, cefrLevel });
-      sendJson(res, 200, { entry });
       return;
     }
 

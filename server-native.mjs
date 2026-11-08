@@ -10,10 +10,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
-import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters } from "./server-language-checks.mjs";
+import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters, CHECK_VERSION } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
-import { saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms } from "./server-lexicon.mjs";
-import { referenceEntries, referencePos, lexinPromptLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
+import { saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms, cardFieldsFromSaldo } from "./server-lexicon.mjs";
+import { referenceEntries, referencePos, lexinPromptLine, expressionReferenceLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
@@ -266,6 +266,30 @@ async function particleVerb(supabaseAdmin, phrase) {
   return (await saldoEntries(supabaseAdmin, verb, "verb")).some((r) => normalizeKey(r.baseform) === verb);
 }
 
+/**
+ * An existing entry reused for a search or a reading (2026-11-09, G6) is shown as it is — never
+ * generated again. Unless its sense check is "verified" or was made by the current check
+ * version, it is marked for that check (resource_field_status "reuse_check", one row per entry,
+ * no AI call here); scripts/check-entries.mjs --reused checks each marked entry once and records
+ * the result with the version, so the same check is never paid for twice and nothing loops.
+ */
+export async function noteReuse(supabaseAdmin, entryId) {
+  try {
+    const { data } = await supabaseAdmin.from("resource_field_status").select("field, status, detail").eq("learning_object_id", entryId).in("field", ["sense", "reuse_check"]);
+    const sense = data?.find((r) => r.field === "sense");
+    if (sense?.status === "verified" || sense?.detail?.check_version === CHECK_VERSION) return "checked";
+    if (data?.some((r) => r.field === "reuse_check" && r.detail?.check_version === CHECK_VERSION)) return "marked";
+    await supabaseAdmin.from("resource_field_status").upsert(
+      { learning_object_id: entryId, field: "reuse_check", status: "present", source: "reuse", detail: { check_version: CHECK_VERSION, requested_at: new Date().toISOString() }, updated_at: new Date().toISOString() },
+      { onConflict: "learning_object_id,field" },
+    );
+    return "marked";
+  } catch (error) {
+    console.warn("[native] reuse not marked", entryId, error.message);
+    return "failed";
+  }
+}
+
 export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLanguage, pos = null, sense = "", source = "ai search", chargeQuota = true, textResourceId = null }) {
   // Look-alike Cyrillic or Greek letters put back ("gällа"); any other letter of another script is not Swedish.
   const text = latinLookalikes(String(word || "").trim());
@@ -280,7 +304,10 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
   const existing = isMultiWord
     ? (await findExistingExpression(supabaseAdmin, text))?.id || null
     : resolved.entryId || (wantedPos ? null : await findExistingEntry(supabaseAdmin, text));
-  if (existing && (await ensureTranslation(supabaseAdmin, existing, lang))) return { entryId: existing, created: false };
+  if (existing && (await ensureTranslation(supabaseAdmin, existing, lang))) {
+    await noteReuse(supabaseAdmin, existing);
+    return { entryId: existing, created: false };
+  }
   const reference = resolved?.saldo || null;
   const headword = reference ? reference.baseform : text;
   const headwordPos = reference ? resolved.pos : wantedPos;
@@ -294,6 +321,15 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
   const promptPos = posChoice ? null : headwordPos || (lexinOnly.length === 1 ? lexinOnly[0] : null);
   // SALDO homographs of that part of speech, which can inflect differently by sense (fot: fötter / fot).
   const homographs = reference && !posChoice ? await saldoEntries(supabaseAdmin, headword, headwordPos) : [];
+  // Which of Lexin's separate words of this spelling the card is (G1, 2026-11-09): the one the
+  // request's own form belongs to ("laget": ett lag), else, without a sense from a text to pick
+  // by, the one of SALDO's forms — unless SALDO's own homographs inflect differently, when the
+  // model picks and returns that word's forms.
+  const ownForm = (headwordRefs?.lexin_sv || []).find((e) => normalizeKey(text) !== normalizeKey(headword) && Object.values(e.forms || {}).some((f) => normalizeKey(f) === normalizeKey(text)));
+  const lexinWord = ownForm ? { singular_definite: ownForm.forms.singular_definite }
+    : !sense && reference && headwordPos === "noun" && !(homographs.length > 1) ? cardFieldsFromSaldo(reference, "noun").forms : null;
+  // A multi-word expression's own Lexin entry, its particle verb's or its head word's idiom (G3).
+  const expressionLine = isMultiWord ? await expressionReferenceLine(supabaseAdmin, text, (await saldoEntries(supabaseAdmin, text.trim().split(/\s+/)[0], "verb")).flatMap((r) => Object.values(r.forms || {}).flat())) : "";
 
   // Concurrency guard: one in-flight generation per (lemma, part of speech, language). With a
   // choice of parts of speech the model decides which word it writes, so the key names none:
@@ -336,7 +372,8 @@ If the input names a part of speech and the sense a text uses, write the entry f
         wantedPos && sense && `Sense used in the text: ${sense}`,
         posChoice ? `Reference (SALDO): "${headword}" is ${posChoice.join(", ")} — words of their own with the same spelling. Write the entry for the one a learner looking up "${text}" most likely means, with only that word's senses (the other gets an entry of its own); its forms are filled in from SALDO, so return forms: [].`
           : saldoPromptLine(reference, headwordPos, homographs),
-        headwordRefs && promptPos ? lexinPromptLine(headwordRefs, promptPos) : "",
+        headwordRefs && promptPos ? lexinPromptLine(headwordRefs, promptPos, { forms: lexinWord }) : "",
+        expressionLine,
       ].filter(Boolean).join("\n"),
     });
     const cost = ((usage.input_tokens || 0) / 1e6) * 0.75 + ((usage.output_tokens || 0) / 1e6) * 4.5;

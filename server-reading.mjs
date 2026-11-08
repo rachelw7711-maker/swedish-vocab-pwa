@@ -4,7 +4,7 @@
 // cache -> user word state -> main dictionary -> AI, AI always last, and
 // only for words genuinely missing from the dictionary.
 import { createHash, randomUUID } from "node:crypto";
-import { generateWordEntry } from "./server-native.mjs";
+import { generateWordEntry, noteReuse } from "./server-native.mjs";
 import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
 import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence, fillExpressionLanguage, latinLookalikes } from "./server-language-checks.mjs";
 import { lookupWiktionary } from "./server-wiktionary.mjs";
@@ -1392,7 +1392,7 @@ async function ensureKeywordEntries(supabaseAdmin, keywords, { userId, textResou
     (data || []).filter((r) => r.meaning).forEach((r) => translated.add(r.learning_object_id));
   }
   return Promise.all(keywords.map(async (k) => {
-    if (k.word_id && translated.has(k.word_id)) return k;
+    if (k.word_id && translated.has(k.word_id)) { await noteReuse(supabaseAdmin, k.word_id); return k; }
     if (k.entry_conflict) return k;
     try {
       const { entryId } = await generateWordEntry({
@@ -1417,6 +1417,7 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
     const matchKey = await expressionMatchKey(supabaseAdmin, item.expression_text);
     const existing = await findExistingExpression(supabaseAdmin, item.expression_text, matchKey);
     if (existing && existing.object_type !== objectType) await addModule(supabaseAdmin, existing.id, module);
+    if (existing) await noteReuse(supabaseAdmin, existing.id);
     return { item, matchKey, id: existing?.id || null };
   }));
 

@@ -101,6 +101,14 @@ test("words: inflections reuse the lemma entry, other parts of speech don't", as
   assert.ok(fresh.saldo);
 });
 
+test("words: a text that is a headword itself is never another word's form (visa, not visum's plural)", async () => {
+  const db = fakeSupabase({ learning_objects: [{ id: "w-visum", swedish: "visum", part_of_speech: "noun", object_type: "word", status: "human_reviewed" }] });
+  const song = await resolveWord(db, "visa", "noun");
+  assert.equal(song.entryId, null);
+  assert.equal(song.lemma, "visa");
+  assert.equal((await resolveWord(db, "visumet", "noun")).entryId, "w-visum");   // a real form still reuses
+});
+
 test("phrases and expressions: found across modules by key or plain spelling", async () => {
   const db = lexiconDb();
   assert.equal((await findExistingExpression(db, "tar hand om ngn"))?.id, "x-tahand");

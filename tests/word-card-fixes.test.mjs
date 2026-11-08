@@ -231,6 +231,15 @@ test("3: one check alone doesn't drop a collocation: kept, open, and the card no
   assert.ok(open.some((o) => o.kind === "related_unverified" && o.text === "lärsighet"));   // no dictionary has it: open, not verified
 });
 
+test("3: a sense the whole-card check calls unsupported and left on the card keeps it from being verified (av)", async () => {
+  const d = fakeSupabase();
+  card = baseCard({ lemma: "fot", forms: [{ type: "plural_indefinite", value: "fötter" }], meaning_zh: "脚；时不时", meaning_en: "foot" });
+  check = okCheck({ unsupported_senses: ["时不时"] });
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "fot", nativeLanguage: "zh", pos: "noun", chargeQuota: false });
+  assert.equal(sense(d, entryId).status, "present");
+  assert.ok(sense(d, entryId).detail.open_items.some((o) => o.kind === "sense_doubted_by_card_check" && o.text === "时不时"));
+});
+
 test("3: an answer leaving out a collocation or related word is not used: asked again, then the card stays unchecked", async () => {
   const item = { key: "i1", lemma: "dö", pos: "verb", entry: { examples: [], collocations: [{ key: "i1.c0", phrase: "dö ut" }], related: [{ key: "i1.r0", word: "död" }] } };
   const answer = okCheck()(item);
