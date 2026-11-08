@@ -6,7 +6,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { generateWordEntry } from "./server-native.mjs";
 import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
-import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence, fillExpressionLanguage } from "./server-language-checks.mjs";
+import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence, fillExpressionLanguage, latinLookalikes } from "./server-language-checks.mjs";
 import { lookupWiktionary } from "./server-wiktionary.mjs";
 import { formReadings } from "./server-lexicon.mjs";
 
@@ -975,7 +975,8 @@ Every source_sentence/sentence must be quoted exactly from the text. Return empt
   });
   return {
     article: result.article,
-    vocabulary: (result.vocabulary || []).slice(0, vocabCandidates),
+    // A look-alike Cyrillic letter in a chosen word ("gällа", 2026-11-07) made it "not in the text".
+    vocabulary: (result.vocabulary || []).slice(0, vocabCandidates).map((v) => ({ ...v, swedish: latinLookalikes(v.swedish), sentence: latinLookalikes(v.sentence) })),
     keySentences: (result.key_sentences || []).slice(0, MAX_KEY_SENTENCES),
     languagePatterns: (result.language_patterns || []).slice(0, MAX_LANGUAGE_PATTERNS),
     usage,
@@ -1000,9 +1001,9 @@ export function splitSentences(text) {
 const STRONG_VERBS = new Set(["vara", "ha", "göra", "ta", "gå", "få", "se", "ge", "komma", "bli", "hålla", "sätta", "lägga", "ligga", "stå", "sitta", "dra", "slå", "säga", "veta", "finnas", "bära", "falla", "låta", "välja", "sälja", "vinna", "äta", "dricka", "skriva", "stiga", "bryta", "gripa", "sticka", "springa", "binda", "finna", "hinna", "försvinna", "be", "dö", "le", "kunna", "vilja", "skola", "böra", "måste"]);
 
 // An expression is kept only if it is written in Swedish letters (one came back with a
-// Cyrillic "а"), its sentence is quoted from the text, and each of its words (but a "någon"/
-// "sig" placeholder or a strong verb's infinitive) is in that sentence — so nothing is taken
-// that the text doesn't have ("äga sig åt" for a text with "ägnar sig åt").
+// Cyrillic "а"; look-alikes are now put back first, latinLookalikes), its sentence is quoted
+// from the text, and each of its words (but a "någon"/"sig" placeholder or a strong verb's
+// infinitive) is in that sentence — so nothing is taken that the text doesn't have ("äga sig åt" for a text with "ägnar sig åt").
 export function expressionInText(e, text, readings = null) {
   const expression = String(e?.expression_text || "").trim();
   if (!/^[\p{Script=Latin}\s'’\-\/]+$/u.test(expression) || expression.split(/\s+/).length < 2) return false;
@@ -1053,7 +1054,7 @@ export function sortExpressions(result, text, readings = null) {
     // The model sometimes keeps the sentence's number from the prompt ("[4] …", "4] …",
     // "4. …"): every quote then failed the check and the whole list came back empty
     // (2026-11-07 test, about 1 call in 8).
-    let quote = { ...quoted, source_sentence: String(quoted.source_sentence || "").replace(/^\s*[\[(]?\d+(?:[\]).:]\s*|\s+)/, "") };
+    let quote = { ...quoted, expression_text: latinLookalikes(quoted.expression_text), source_sentence: latinLookalikes(String(quoted.source_sentence || "").replace(/^\s*[\[(]?\d+(?:[\]).:]\s*|\s+)/, "")) };
     const verdict = judged.get(expressionKey(quote.expression_text));
     // A quote in some other shape (2026-11-07: all six of a text's chosen expressions, each
     // judged in the scan, were left out once): the sentence the scan found it in, when the

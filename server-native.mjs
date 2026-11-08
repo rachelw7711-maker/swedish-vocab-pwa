@@ -10,9 +10,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
 
-import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar } from "./server-language-checks.mjs";
+import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
-import { saldoEntries, perfectParticipleDeclension, compoundRows } from "./server-lexicon.mjs";
+import { saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms } from "./server-lexicon.mjs";
 import { referenceEntries, referencePos, lexinPromptLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
@@ -217,6 +217,11 @@ const normalizeKey = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g,
 // With a part of speech, only that headword + part of speech counts: a same-spelling
 // word of another class is a different entry (2026-10-31). Without one (free-text
 // search), any headword or inflected form does.
+async function entryPartOfSpeech(supabaseAdmin, entryId) {
+  const { data } = await supabaseAdmin.from("learning_objects").select("part_of_speech").eq("id", entryId).neq("status", "retired").maybeSingle();
+  return data?.part_of_speech || null;
+}
+
 async function findExistingEntry(supabaseAdmin, text, pos = null) {
   const key = normalizeKey(text);
   let direct = supabaseAdmin.from("learning_objects").select("id, status").ilike("swedish", key).neq("status", "retired");
@@ -252,9 +257,19 @@ async function ensureTranslation(supabaseAdmin, entryId, nativeLanguage) {
  * no entry yet: it passes the part of speech and the sense the text uses, its own
  * source label, and no quota charge (the analysis itself is the charged action).
  */
+const PLACEHOLDER_WORD = /^(någon|något|någons|ngn|ngt|ngns)(\/(någon|något|ngn|ngt))?$/;
+const PARTICLES = new Set(["upp", "ut", "in", "av", "på", "till", "med", "om", "fram", "över", "igenom", "bort", "ner", "ned", "hem", "iväg", "tillbaka", "undan", "efter", "vid", "för", "åt", "sig", "emot", "mot", "ihop", "isär", "förbi", "runt", "kvar", "fast", "an", "loss", "överens", "ifrån", "från"]);
+/** "gå ut på", "komma fram till": a SALDO verb followed only by particles, prepositions or sig. */
+async function particleVerb(supabaseAdmin, phrase) {
+  const [verb, ...rest] = normalizeKey(phrase).split(/\s+/);
+  if (!rest.length || rest.length > 3 || !rest.every((w) => PARTICLES.has(w))) return false;
+  return (await saldoEntries(supabaseAdmin, verb, "verb")).some((r) => normalizeKey(r.baseform) === verb);
+}
+
 export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLanguage, pos = null, sense = "", source = "ai search", chargeQuota = true, textResourceId = null }) {
-  const text = String(word || "").trim();
-  if (!text || text.length > 60 || !/^[\p{L}\s-]+$/u.test(text)) throw httpError(400, "Skriv ett svenskt ord eller uttryck.");
+  // Look-alike Cyrillic or Greek letters put back ("gällа"); any other letter of another script is not Swedish.
+  const text = latinLookalikes(String(word || "").trim());
+  if (!text || text.length > 60 || !/^[\p{L}\s-]+$/u.test(text) || foreignLetters(text, "sv").length) throw httpError(400, "Skriv ett svenskt ord eller uttryck.");
   const lang = normalizeLanguage(nativeLanguage);
   const wantedPos = POS_VALUES.includes(pos) && pos !== "other" ? pos : null;
 
@@ -269,15 +284,24 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
   const reference = resolved?.saldo || null;
   const headword = reference ? reference.baseform : text;
   const headwordPos = reference ? resolved.pos : wantedPos;
+  // Typed in search, a headword of several parts of speech ("man": pronoun and noun) is not
+  // decided by SALDO's listing order: the prompt names them all and the model writes the one
+  // meant, its forms then taken from SALDO for that part of speech (2026-11-08).
+  const posChoice = !wantedPos && reference && resolved.alsoPos?.length ? [resolved.pos, ...resolved.alsoPos] : null;
   // Lexin's senses of the headword go into the prompt (one part of speech: the asked one, or Lexin's only one).
   const headwordRefs = isMultiWord ? null : await referenceEntries(supabaseAdmin, headword);
   const lexinOnly = headwordRefs ? [...new Set(referencePos(headwordRefs).lexin_sv)] : [];
-  const promptPos = headwordPos || (lexinOnly.length === 1 ? lexinOnly[0] : null);
+  const promptPos = posChoice ? null : headwordPos || (lexinOnly.length === 1 ? lexinOnly[0] : null);
+  // SALDO homographs of that part of speech, which can inflect differently by sense (fot: fötter / fot).
+  const homographs = reference && !posChoice ? await saldoEntries(supabaseAdmin, headword, headwordPos) : [];
 
-  // Concurrency guard: one in-flight generation per (lemma, part of speech, language).
-  const key = headwordPos ? `${normalizeKey(headword)}|${headwordPos}|${lang}` : `${normalizeKey(headword)}|${lang}`;
+  // Concurrency guard: one in-flight generation per (lemma, part of speech, language). With a
+  // choice of parts of speech the model decides which word it writes, so the key names none:
+  // a key naming one must only ever lead to an entry of that part of speech (2026-11-08).
+  const lockPos = wantedPos || (posChoice ? null : headwordPos);
+  const key = lockPos ? `${normalizeKey(headword)}|${lockPos}|${lang}` : `${normalizeKey(headword)}|${lang}`;
   const { data: lock } = await supabaseAdmin.from("generation_requests").select("*").eq("key", key).maybeSingle();
-  if (lock?.status === "done" && lock.entry_id) return { entryId: lock.entry_id, created: false };
+  if (lock?.status === "done" && lock.entry_id && (!lockPos || (await entryPartOfSpeech(supabaseAdmin, lock.entry_id)) === lockPos)) return { entryId: lock.entry_id, created: false };
   if (lock?.status === "pending" && Date.now() - Date.parse(lock.updated_at) < 120_000) {
     throw httpError(409, "Ordkortet skapas just nu. Försök igen om en stund.");
   }
@@ -310,7 +334,8 @@ If the input names a part of speech and the sense a text uses, write the entry f
         text,
         wantedPos && `Part of speech: ${wantedPos}`,
         wantedPos && sense && `Sense used in the text: ${sense}`,
-        saldoPromptLine(reference, headwordPos),
+        posChoice ? `Reference (SALDO): "${headword}" is ${posChoice.join(", ")} — words of their own with the same spelling. Write the entry for the one a learner looking up "${text}" most likely means, with only that word's senses (the other gets an entry of its own); its forms are filled in from SALDO, so return forms: [].`
+          : saldoPromptLine(reference, headwordPos, homographs),
         headwordRefs && promptPos ? lexinPromptLine(headwordRefs, promptPos) : "",
       ].filter(Boolean).join("\n"),
     });
@@ -323,14 +348,30 @@ If the input names a part of speech and the sense a text uses, write the entry f
     if (!result.is_real_word || !String(result.lemma || "").trim() || !String(result[`meaning_${lang}`] || "").trim()) {
       throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
     }
-    const pos = POS_VALUES.includes(result.pos) ? result.pos : "other";
+    let pos = POS_VALUES.includes(result.pos) ? result.pos : "other";
     // SALDO's lemma wins over the model's spelling when the part of speech agrees.
-    const lemma = reference && pos === headwordPos ? reference.baseform : String(result.lemma).trim();
+    let lemma = reference && pos === headwordPos ? reference.baseform : latinLookalikes(String(result.lemma).trim());
+    // A multi-word request keeps its own words (2026-11-09): of six cards of "gå ut på" the model
+    // headed two "gå ut på", two "gå ut på något", one "gå ut på någon/något" (wrong: never a
+    // person) and called three "other" — the same expression under three headwords. Placeholders
+    // the request didn't have are left out, and a verb with only particles after it is a verb.
+    if (isMultiWord) {
+      const asked = normalizeKey(text), got = normalizeKey(lemma);
+      const extra = got.startsWith(`${asked} `) ? got.slice(asked.length + 1).split(/\s+/) : [];
+      if (extra.length && extra.every((w) => PLACEHOLDER_WORD.test(w))) lemma = String(text).trim();
+      if (pos === "other" && await particleVerb(supabaseAdmin, lemma)) pos = "verb";
+    }
+    if (foreignLetters(lemma, "sv").length) throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
     const isPhrase = /\s/.test(lemma);
     // Forms, s-passive and countability come from SALDO whenever it has the word.
     const saldoRows = isPhrase ? [] : await saldoEntries(supabaseAdmin, lemma, pos);
-    const fromSaldo = saldoCardFields(saldoRows[0], pos);
-    const forms = fromSaldo?.forms.length ? fromSaldo.forms : (result.forms || []).filter((f) => f.value && ALL_FORM_TYPES.includes(f.type));
+    // Homographs inflecting differently by sense: the row of the sense written (pickSaldoRow).
+    const fromSaldo = saldoCardFields(pickSaldoRow(saldoRows, pos, result.forms), pos);
+    // A multi-word verb ("gifta sig", "ge upp") takes SALDO's forms too, or at least loses the
+    // model's impossible ones (group 1 for gifta sig, "lärd sig", "tagande upp"), 2026-11-08.
+    const modelForms = (result.forms || []).filter((f) => f.value && ALL_FORM_TYPES.includes(f.type));
+    const phraseVerb = isPhrase && pos === "verb" ? await multiWordVerbForms(supabaseAdmin, lemma, modelForms) : null;
+    const forms = fromSaldo?.forms.length ? fromSaldo.forms : phraseVerb ? phraseVerb.forms : modelForms;
     // Without SALDO: Lexin's forms of this very word replace the model's where they differ, and a
     // compound SALDO doesn't list is checked against its last part (chokladask → ask).
     const refs = isPhrase ? null : normalizeKey(lemma) === normalizeKey(headword) && headwordRefs ? headwordRefs : await referenceEntries(supabaseAdmin, lemma);

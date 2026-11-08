@@ -8,6 +8,7 @@ const { useSaldoFiles } = await import("../server-lexicon.mjs");
 const { useReferenceFiles } = await import("../server-references.mjs");
 const { generateWordEntry } = await import("../server-native.mjs");
 const { fakeSupabase } = await import("./fake-supabase.mjs");
+const { okDetail } = await import("./fake-detail.mjs");
 
 let card = null, prompts = [];
 const okCheck = (item) => ({ key: item.key, lemma: item.lemma, pos: item.pos, pos_supported: true, other_pos_senses: [], unsupported_senses: [],
@@ -21,7 +22,8 @@ before(async () => {
     const body = JSON.parse(init.body);
     const user = body.input.at(-1).content;
     prompts.push({ name: body.text.format.name, user });
-    const answer = body.text.format.name === "sense_check" ? { items: JSON.parse(user).map(okCheck) } : card;
+    const answer = body.text.format.name === "sense_check" ? { items: JSON.parse(user).map(okCheck) }
+      : body.text.format.name === "card_detail_check" ? okDetail(JSON.parse(user)) : card;
     return { ok: true, json: async () => ({ output_text: JSON.stringify(answer), usage: { input_tokens: 500, output_tokens: 400 } }) };
   };
 });

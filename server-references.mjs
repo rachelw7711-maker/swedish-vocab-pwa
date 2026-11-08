@@ -225,6 +225,27 @@ export function compoundMeaningSupport(meaningEn, { first, firstEquivalents, hea
   });
 }
 
+/**
+ * A noun spelled like another noun of the other gender (lag: ett lag "team", en lag "law", en lag
+ * "brine"), as Lexin keeps them apart: the English equivalents of the card's own word and of the
+ * others, by the card's gender (2026-11-09: a card for ett lag held both other words' senses, and
+ * both AI checks called every one "matches the reference" — Lexin has them, under other words).
+ * null when the card's gender or Lexin's homographs don't tell.
+ */
+export function homographEquivalents(refs, cardForms = []) {
+  const gender = (def) => (/t$/.test(def) ? "n" : /n$/.test(def) ? "u" : null);
+  const value = (t) => String((cardForms || []).find((f) => f.type === t)?.value || "").trim().toLowerCase();
+  const indef = value("singular_indefinite");
+  const own = /^ett\s/.test(indef) ? "n" : /^en\s/.test(indef) ? "u" : gender(value("singular_definite"));
+  if (!own) return null;
+  const nouns = (refs?.lexin_sv || []).filter((e) => e.pos === "noun");
+  const genders = nouns.map((e) => gender(String(e.forms?.singular_definite || "").trim().toLowerCase()));
+  if (!genders.includes(own) || !genders.some((g) => g && g !== own)) return null;
+  const english = (refs.lexin_en || []).filter((e) => e.pos === "noun");
+  const eq = (keep) => nouns.filter((_, i) => keep(genders[i])).flatMap((e) => e.lexemes.flatMap((x) => english.filter((y) => (x.variant && y.variant === x.variant) || key(y.definition) === key(x.definition)).flatMap((y) => y.english))).map((text) => ({ source: "lexin_en", text }));
+  return { gender: own, own: eq((g) => g === own), other: eq((g) => g && g !== own) };
+}
+
 /** Lexin's senses of the headword in this part of speech, short, for a prompt or an AI check. */
 export function lexinSenses(refs, pos, { limit = 6 } = {}) {
   const english = (refs.lexin_en || []).filter((e) => posMatches(e.pos, pos));

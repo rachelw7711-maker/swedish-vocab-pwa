@@ -8,20 +8,26 @@ const { useSaldoFiles } = await import("../server-lexicon.mjs");
 const { generateWordEntry } = await import("../server-native.mjs");
 const { resolveExpressionEntries } = await import("../server-reading.mjs");
 const { fakeSupabase } = await import("./fake-supabase.mjs");
+const { okDetail } = await import("./fake-detail.mjs");
 
 let aiCalls = 0, checkCalls = 0, card = null, check = null;
-// The check's answer echoes each item (key, lemma, pos) and each example (key, first words).
+// The check's answer echoes each item (key, lemma, pos), each example (key, first words) and,
+// for a new card, each collocation and related word (key, first word).
 const okCheck = (over = {}) => (item) => ({ key: item.key, lemma: item.lemma, pos: item.pos, pos_supported: true, other_pos_senses: [], unsupported_senses: [],
   meaning_zh_fixed: "", meaning_en_fixed: "", swedish_explanation_fixed: "", context_matches_entry: "n/a", verdict: "ok", note: "",
   examples: item.entry.examples.map((e) => ({ key: e.key, sv_start: e.sv.split(" ").slice(0, 3).join(" "), fits_entry: true, translation_zh_ok: true, translation_en_ok: true,
-    translation_zh_fixed: "", translation_en_fixed: "", ...(over.example?.[e.key] || {}) })), ...over, example: undefined });
+    translation_zh_fixed: "", translation_en_fixed: "", ...(over.example?.[e.key] || {}) })),
+  collocations: (item.entry.collocations || []).map((c) => ({ key: c.key, phrase_start: c.phrase.split(" ")[0], verdict: "keep", zh_fixed: "", en_fixed: "" })),
+  related: (item.entry.related || []).map((r) => ({ key: r.key, word_start: r.word.split(" ")[0], verdict: "keep", zh_fixed: "", en_fixed: "", pos_fixed: "" })),
+  ...over, example: undefined });
 before(async () => {
   await useSaldoFiles();
   // Word-card generation, the AI check before saving (sense_check) and Wiktionary (no page) — no network.
   globalThis.fetch = async (url, init) => {
     if (String(url).includes("wiktionary.org")) return { ok: true, json: async () => ({ error: { code: "missingtitle" } }) };
     const body = JSON.parse(init.body);
-    const answer = body.text.format.name === "sense_check"
+    const answer = body.text.format.name === "card_detail_check" ? okDetail(JSON.parse(body.input.at(-1).content))
+      : body.text.format.name === "sense_check"
       ? (checkCalls++, { items: JSON.parse(body.input.at(-1).content).map((item) => (check || okCheck())(item)) })
       : (aiCalls++, card);
     return { ok: true, json: async () => ({ output_text: JSON.stringify(answer), usage: { input_tokens: 500, output_tokens: 400 } }) };

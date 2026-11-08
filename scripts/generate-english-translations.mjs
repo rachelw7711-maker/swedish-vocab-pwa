@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { grammarNoteConflicts } from "../server-grammar-consistency.mjs";
 import OpenAI from "openai";
 
 // Multi-native-language support, English pilot (Reviews/多母语支持-架构与实施
@@ -92,6 +93,7 @@ Rules:
 - meaning: a short English gloss/definition, same register and length as a dictionary entry (not a full sentence).
 - example_translation: an English translation of the given Swedish example sentence. Leave "" if no Swedish example was given or the Chinese reference example_translation is empty.
 - learning_tip / grammar_note / meaning_note: leave "" if the corresponding Chinese reference field is empty. Otherwise write an equivalent English version (not a literal translation) — these are short prose notes.
+- grammar_note: say exactly the grammar facts the Chinese gives — the same group number, gender and Swedish forms, nothing added, dropped or "corrected" (one entry must not say two things).
 - collocation_meanings: exactly one English meaning per input collocation, same order, each a short gloss matching the corresponding Chinese meaning's intent. Empty array if no collocations given. NEVER use a semicolon or newline inside a meaning string — the app stores these in a "phrase | meaning | example" pipe/newline-delimited text format and a semicolon or newline inside a field corrupts it. If you need to give more than one gloss, join them with a comma or "/" instead (e.g. "feel guilty, have a bad conscience").
 - related_word_meanings: exactly one English meaning per input related word, same order, same rule (comma/slash instead of semicolon, never a newline).
 - second_example_translation: an English translation of the given second Swedish example sentence. Leave "" if none was given.
@@ -129,6 +131,18 @@ async function generateOne(word, zh) {
   });
   const usage = completion.usage;
   const parsed = JSON.parse(completion.choices[0].message.content);
+  // 2026-11-08: the English notes contradicted SALDO in 608 entries, 451 of them where the
+  // Chinese one didn't (a "declension group 4" for group 5): an English note that says what the
+  // Chinese doesn't is left out, for the next run or a reviewer.
+  if (parsed.grammar_note) {
+    const kinds = async (note) => (await grammarNoteConflicts(supabase, { lemma: word.swedish, pos: word.part_of_speech, note })).map((c) => c.kind);
+    const zhKinds = new Set(await kinds(zh?.grammar_note));
+    const added = (await kinds(parsed.grammar_note)).filter((k) => !zhKinds.has(k));
+    if (added.length) {
+      console.log(`  grammar note left out for ${word.swedish}: ${added.join(", ")}`);
+      parsed.grammar_note = "";
+    }
+  }
 
   // Never drop the "example" segment even when empty — the client parser
   // (app.js splitCollocations) infers "phrase | X" (2 parts) as

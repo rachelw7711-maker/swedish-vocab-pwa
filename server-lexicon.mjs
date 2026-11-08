@@ -88,11 +88,49 @@ async function lemgramsForForms(supabaseAdmin, forms) {
 // Lookups
 // ---------------------------------------------------------------------------
 
-/** SALDO entries for this headword, as this SpråkLab part of speech (any when pos is null). */
+// SALDO's homograph number: fot..nn.1 → 1.
+const homographNumber = (row) => Number(String(row?.lemgram || "").match(/\.(\d+)$/)?.[1] || 99);
+
+/**
+ * SALDO entries for this headword, as this SpråkLab part of speech (any when pos is null), in
+ * SALDO's homograph order (..1 first): the database returns them in no fixed order.
+ */
 export async function saldoEntries(supabaseAdmin, lemma, pos = null) {
   const rows = await rowsForLemmas(supabaseAdmin, [lemma]);
   const wanted = pos ? SALDO_FOR_POS[pos] || [] : null;
-  return rows.filter((r) => key(r.baseform) === key(lemma) && (!wanted || wanted.includes(r.pos)));
+  return rows.filter((r) => key(r.baseform) === key(lemma) && (!wanted || wanted.includes(r.pos)))
+    .sort((a, b) => homographNumber(a) - homographNumber(b));
+}
+
+/** Whether homographs of one part of speech inflect differently (fot: fötter / fot). */
+export function saldoFormsDiffer(rows, pos) {
+  const shapes = new Set(rows.map((r) => JSON.stringify(Object.entries(cardFieldsFromSaldo(r, pos).forms).filter(([t]) => !/group$/.test(t)).sort())));
+  return shapes.size > 1;
+}
+
+/**
+ * The SALDO row a new card takes its forms from (2026-11-08). Homographs of one part of speech
+ * inflect differently by sense — fot: fötter (the body part, fot..nn.1) / fot (the unit,
+ * fot..nn.2), bok: böcker / bokar (the tree) — and taking the first row the database returned
+ * gave new cards of "fot" the plural fot. The row agreeing with most of the forms the model
+ * gave for the sense it wrote wins; without such forms, or on a tie (the model gave both sets),
+ * SALDO's first homograph.
+ */
+export function pickSaldoRow(rows, pos, modelForms = []) {
+  if (!rows.length) return null;
+  const sorted = [...rows].sort((a, b) => homographNumber(a) - homographNumber(b));
+  if (sorted.length === 1 || !saldoFormsDiffer(sorted, pos)) return sorted[0];
+  // Every value the model gave counts: one that lists both sets (mus: möss and musar) decides nothing.
+  const given = new Map();
+  for (const f of (modelForms || []).filter((f) => String(f?.value || "").trim())) given.set(f.type, [...(given.get(f.type) || []), ...variants(f.value)]);
+  const score = (row) => Object.entries(cardFieldsFromSaldo(row, pos).forms)
+    .filter(([type, value]) => !/group$/.test(type) && given.has(type) && variants(value).some((v) => given.get(type).includes(v))).length;
+  let best = sorted[0], bestScore = score(best);
+  for (const row of sorted.slice(1)) {
+    const s = score(row);
+    if (s > bestScore) { best = row; bestScore = s; }
+  }
+  return best;
 }
 
 /**
@@ -148,7 +186,15 @@ export async function multiWordVerbRows(supabaseAdmin, lemma) {
   const reflexive = rest.includes("sig");
   const particle = rest.length === 1 && PARTICLES.has(rest[0]) ? rest[0] : null;
   const classes = new Set(own.map((r) => r.paradigm.split("_")[1]?.[0]));
-  const bases = (await saldoEntries(supabaseAdmin, words[0], "verb")).filter((r) => classes.has(r.paradigm.split("_")[1]?.[0]));
+  let bases = (await saldoEntries(supabaseAdmin, words[0], "verb")).filter((r) => classes.has(r.paradigm.split("_")[1]?.[0]));
+  // Of base verbs of that class, the one inflected like the model verb named ("känna sig",
+  // vbm_2ms1_känna: känna..vb as känna, kände — not the one as hända).
+  const models = new Set(own.map((r) => r.paradigm.split("_").slice(2).join("_")));
+  if (bases.some((r) => models.has(r.paradigm.split("_").slice(2).join("_")))) bases = bases.filter((r) => models.has(r.paradigm.split("_").slice(2).join("_")));
+  // A verb SALDO has only with its sig or particle ("bete sig", "förlova sig", "gifta sig": no
+  // verb bete, förlova or gifta of its own) is inflected like the model verb its class names
+  // (vbm_3ms1_sy: as sy, sydde → betedde; vbm_1ms1_laga: as laga → förlovade), 2026-11-08.
+  if (!bases.length) bases = (await Promise.all(own.map((r) => analogyVerbRow(supabaseAdmin, words[0], r.paradigm)))).filter(Boolean);
   return bases.map((r) => {
     const forms = {};
     for (const [msd, list] of Object.entries(r.forms || {})) {
@@ -159,6 +205,68 @@ export async function multiWordVerbRows(supabaseAdmin, lemma) {
     }
     return { ...r, lemgram: own[0].lemgram, baseform: words.join(" "), forms, multiWord: { base: r.lemgram } };
   });
+}
+
+/**
+ * A verb row for `verb` built from the model verb a multi-word paradigm names ("vbm_2ms1_lyfta"
+ * → lyfta): each of the model's forms with the model's ending swapped for the same change on
+ * this verb (lyfta → lyfte, so gifta → gifte; sy → sydde, so bete → betedde). The paradigm keeps
+ * the class, so the verb group reads as for the model. Null when SALDO lacks the model or a form
+ * can't be carried over.
+ */
+async function analogyVerbRow(supabaseAdmin, verb, paradigm) {
+  const [, cls = "", ...rest] = String(paradigm || "").split("_");
+  const model = rest.join("_");
+  const row = model && (await saldoEntries(supabaseAdmin, model, "verb")).find((r) => r.paradigm.split("_")[1]?.[0] === cls[0] && r.paradigm.endsWith(`_${model}`));
+  const inf = row?.forms?.["inf aktiv"]?.[0];
+  if (!inf) return null;
+  const carry = (form) => {
+    let p = 0;
+    while (p < inf.length && p < form.length && inf[p] === form[p]) p++;
+    const strip = inf.slice(p);
+    return verb.endsWith(strip) ? verb.slice(0, verb.length - strip.length) + form.slice(p) : null;
+  };
+  const forms = {};
+  for (const [msd, list] of Object.entries(row.forms || {})) {
+    const out = list.filter((f) => !/\s/.test(f)).map(carry);
+    if (out.some((f) => f === null)) return null;
+    if (out.length) forms[msd] = out;
+  }
+  return { ...row, lemgram: `${verb}..vb.analogy`, baseform: verb, paradigm: `vb_${cls[0]}a_${model}`, forms };
+}
+
+/**
+ * The forms a card of a multi-word verb shows (2026-11-08): SALDO's, by multiWordVerbRows, when
+ * SALDO lists the expression ("gifta sig": gifter sig, gifte sig, gift sig, group 2b; no
+ * participles for a reflexive; "ge upp": uppgivande, uppgiven). Otherwise the model's forms
+ * without what can't be right — a participle of a reflexive ("ångrande sig") or one with its
+ * particle after it ("tagande upp") — and the verb group from SALDO's base verb when its rows
+ * agree. Null for a single word.
+ */
+export async function multiWordVerbForms(supabaseAdmin, lemma, modelForms = []) {
+  const words = key(lemma).split(/\s+/);
+  if (words.length < 2) return null;
+  // SALDO lists "ta för givet", the card "ta något för givet": looked up without the slot, the
+  // forms then written with the card's own words after the verb.
+  const slotless = words.filter((w) => !SLOT_WORDS.has(w));
+  const rows = await multiWordVerbRows(supabaseAdmin, slotless.join(" "));
+  const shapes = new Set(rows.map((r) => JSON.stringify(cardFieldsFromSaldo(r, "verb").forms)));
+  // Base verbs of one class inflecting differently (homographs) decide nothing.
+  if (rows.length && shapes.size === 1) {
+    const rest = (type) => words.slice(1).map((w) => (type === "imperative" && w === "sig" ? "dig" : w));
+    const own = (type, value) => (slotless.length === words.length || !/\s/.test(value) ? value
+      : value.split(" / ").map((v) => [v.split(" ")[0], ...rest(type)].join(" ")).join(" / "));
+    return { forms: Object.entries(cardFieldsFromSaldo(rows[0], "verb").forms).map(([type, value]) => ({ type, value: own(type, value) })), source: "saldo" };
+  }
+  const reflexive = words.includes("sig");
+  const forms = (modelForms || []).filter((f) => f?.value && !(/participle/.test(f.type) && (reflexive || /\s/.test(String(f.value).trim()))));
+  const groups = new Set((await saldoEntries(supabaseAdmin, words[0], "verb")).map((r) => cardFieldsFromSaldo(r, "verb").forms.verb_group).filter(Boolean));
+  if (groups.size === 1) {
+    const group = { type: "verb_group", value: [...groups][0] };
+    const at = forms.findIndex((f) => f.type === "verb_group");
+    if (at >= 0) forms[at] = group; else forms.push(group);
+  }
+  return { forms, source: groups.size === 1 ? "saldo-group" : "model" };
 }
 
 /**
@@ -182,6 +290,7 @@ export async function participleRows(supabaseAdmin, lemma, pos) {
   return out;
 }
 
+const SLOT_WORDS = new Set(["någon", "något", "några", "någons", "ngn", "ngt", "ngns", "någon/något", "ngn/ngt"]);
 const PARTICLES = new Set(["upp", "ut", "av", "om", "in", "på", "till", "fram", "bort", "ner", "över", "igenom", "undan", "åt", "efter", "ihop", "isär", "tillbaka", "loss", "med", "emot", "förbi", "runt", "iväg", "under"]);
 
 /**

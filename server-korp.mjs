@@ -79,9 +79,13 @@ async function store(url, d) {
 const digest = async (s) => (await import("node:crypto")).createHash("sha1").update(s).digest("hex");
 
 async function korpJson(path, params, { timeout = 180000, tries = 3 } = {}) {
+  // KORP_OFFLINE: Korp is not asked (tests; an operator's switch): callers get an error, decide nothing.
+  if (process.env.KORP_OFFLINE) throw new Error("korp offline");
   const url = `${KORP}/${path}?${new URLSearchParams(params)}`;
   const hit = await cached(url);
   if (hit) return hit;
+  // KORP_CACHE_ONLY: only what was asked before (a replay that must give the same answers).
+  if (process.env.KORP_CACHE_ONLY) throw new Error("korp: not cached");
   for (let n = 1; ; n++) {
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(timeout) });

@@ -9,7 +9,7 @@
 //      from dedup),
 //   2. SALDO (local reference: lemma, part of speech, forms),
 //   3. AI only for the learning content that is still missing.
-import { lemmatize, saldoEntries, compareWithSaldo, cardFieldsFromSaldo, SALDO_SOURCE_ID } from "./server-lexicon.mjs";
+import { lemmatize, saldoEntries, compareWithSaldo, cardFieldsFromSaldo, saldoFormsDiffer, SALDO_SOURCE_ID } from "./server-lexicon.mjs";
 
 export const AI_SOURCE_ID = "openai-generated";
 
@@ -105,8 +105,9 @@ async function wordRow(supabaseAdmin, lemma, pos) {
 /**
  * Resolves a word (as written in a text or typed in search) to an existing entry
  * or to the lemma a new entry should get:
- *   { entryId, lemma, pos, saldo } — entryId null when nothing exists yet; saldo is
- *   the SALDO row for (lemma, pos) when SALDO has one.
+ *   { entryId, lemma, pos, saldo, alsoPos } — entryId null when nothing exists yet; saldo is
+ *   the SALDO row for (lemma, pos) when SALDO has one; alsoPos the other parts of speech
+ *   SALDO has the same headword as (the pos is then only one of them).
  * An inflected form is never a new word; a same-spelling word of another part of
  * speech is never the same entry.
  */
@@ -123,17 +124,28 @@ export async function resolveWord(supabaseAdmin, text, pos = null) {
   const pick = candidates.find((c) => normalizeText(c.lemma) === normalizeText(text)) || candidates[0];
   if (pick) {
     const [saldo] = await saldoEntries(supabaseAdmin, pick.lemma, pick.pos);
-    return { entryId: null, lemma: pick.lemma, pos: pick.pos, saldo: saldo || null };
+    // The same headword as words of other parts of speech ("man": the pronoun and the noun):
+    // the pick is only SALDO's listing order, so a caller without a part of speech must not
+    // take it as the word meant (2026-11-08).
+    const alsoPos = [...new Set(candidates.filter((c) => normalizeText(c.lemma) === normalizeText(pick.lemma) && c.pos !== pick.pos).map((c) => c.pos))];
+    return { entryId: null, lemma: pick.lemma, pos: pick.pos, saldo: saldo || null, alsoPos };
   }
   return { entryId: null, lemma: String(text).trim(), pos, saldo: null };
 }
 
-/** SALDO reference text for the generation prompt. */
-export function saldoPromptLine(saldo, pos) {
+/**
+ * SALDO reference text for the generation prompt. `homographs` are all SALDO rows of the lemma
+ * as this part of speech: when they inflect differently by sense (fot: fötter / fot), each is
+ * shown and the model gives the forms of the sense it writes, by which the card's row is picked
+ * (pickSaldoRow) — otherwise forms come from SALDO alone and the model returns none.
+ */
+export function saldoPromptLine(saldo, pos, homographs = []) {
   if (!saldo) return "";
-  const { forms } = cardFieldsFromSaldo(saldo, pos);
-  const shown = Object.entries(forms).map(([k, v]) => `${k}: ${v}`).join("; ");
-  return `Reference (SALDO): lemma "${saldo.baseform}", forms ${shown || "none"}. Use this lemma; forms are filled in from SALDO, so return forms: [].`;
+  const shown = (row) => Object.entries(cardFieldsFromSaldo(row, pos).forms).map(([k, v]) => `${k}: ${v}`).join("; ") || "none";
+  if (homographs.length > 1 && saldoFormsDiffer(homographs, pos)) {
+    return `Reference (SALDO): lemma "${saldo.baseform}". SALDO has ${homographs.length} words with this spelling as this part of speech, inflected differently by sense: ${homographs.map((r, i) => `(${i + 1}) ${shown(r)}`).join(" | ")}. Use this lemma, and return in forms the forms of the sense you write (one of these sets).`;
+  }
+  return `Reference (SALDO): lemma "${saldo.baseform}", forms ${shown(saldo)}. Use this lemma; forms are filled in from SALDO, so return forms: [].`;
 }
 
 /**
