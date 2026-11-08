@@ -18,7 +18,7 @@
 // what the check would change (a sense, an example, a collocation) is recorded with the result
 // (detail.proposed_changes, open) and goes to the report for review. With --write the result is
 // recorded (resource_field_status "sense", with check_version; previous rows in a rollback SQL),
-// the entry's "reuse_check" mark is closed, and passing drafts are promoted.
+// the entry's "reuse_check" mark is closed, and drafts whose sense is verified are promoted.
 //   node --env-file=.env scripts/check-entries.mjs --reading|--drafts-only|--reused|--ids f [--recheck] [--limit N] [--write]
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -101,10 +101,13 @@ const out = [];
 const usage = { calls: 0, input: 0, output: 0, cost: 0 };
 const started = Date.now();
 const promotable = (e) => e.status === "draft" && e.content_origin === "reading_expression";
+// Only a sense the references confirm is shown: "present" (the AI check alone, or open items) is
+// not verified, and a draft stays a draft (the owner, 2026-11-09).
+const passes = (r) => r.ok && !r.failed && !r.changes.length && r.sense?.status === "verified";
 // An earlier run's results, recorded as they are (its entries changed since are left out).
 if (earlier) for (const e of todo) {
   const r = earlier.find((x) => x.id === e.id);
-  if (r) out.push({ ...r, before: senseOf(e.id) || null, status: e.status, promote: r.promote && promotable(e) });
+  if (r) out.push({ ...r, before: senseOf(e.id) || null, status: e.status, promote: promotable(e) && passes(r) });
 }
 const queue = earlier ? [] : [...todo];
 await Promise.all(Array.from({ length: 4 }, async () => {
@@ -129,7 +132,7 @@ await Promise.all(Array.from({ length: 4 }, async () => {
     ];
     const failed = !checked.ok && /^check_failed|ai_check_failed/.test(checked.reason || "") || checked.sense?.source === "ai_check_failed";
     out.push({ id: e.id, swedish: e.swedish, status: e.status, before: senseOf(e.id) || null, ok: checked.ok, failed, reason: checked.reason || null, sense: checked.sense || null, changes,
-      seconds: (Date.now() - t0) / 1000, promote: promotable(e) && checked.ok && !failed && !changes.length && checked.sense?.status !== "mismatch" });
+      seconds: (Date.now() - t0) / 1000, promote: promotable(e) && passes({ ok: checked.ok, failed, changes, sense: checked.sense }) });
     console.log(`${e.swedish}: ${failed ? "check failed" : checked.ok ? checked.sense?.status : `not ok ${checked.reason}`}${changes.length ? ` (would change ${changes.map((c) => c.field).join(", ")})` : ""}`);
   }
 }));
