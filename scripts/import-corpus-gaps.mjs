@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { ordered } from "./page-order.mjs";
 
 // Imports fill-corpus-gaps.mjs's output (Reviews/词库补全结果.json) into the
 // DB, writing only the fields each word's `needs` list actually asked for
@@ -25,7 +26,7 @@ async function fetchAllPaginated(table, select, filters = (q) => q) {
   while (true) {
     let q = supabase.from(table).select(select);
     q = filters(q);
-    q = q.range(from, from + 999);
+    q = ordered(q, table).range(from, from + 999);
     const { data, error } = await q;
     if (error) throw error;
     all = all.concat(data);

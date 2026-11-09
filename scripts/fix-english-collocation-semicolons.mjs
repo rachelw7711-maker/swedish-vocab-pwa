@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { ordered } from "./page-order.mjs";
 
 // Bug fix, zero AI cost (2026-09-01): generate-english-translations.mjs's
 // output naturally used "; " to join multiple synonym glosses within one
@@ -38,7 +39,7 @@ async function fetchAll(table, select, filter) {
   for (let offset = 0; ; offset += 1000) {
     let q = supabase.from(table).select(select);
     if (filter) q = filter(q);
-    const { data, error } = await q.range(offset, offset + 999);
+    const { data, error } = await ordered(q, table).range(offset, offset + 999);
     if (error) throw error;
     all = all.concat(data);
     if (data.length < 1000) break;

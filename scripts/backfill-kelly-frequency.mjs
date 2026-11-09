@@ -76,7 +76,7 @@ async function main() {
     const { data, error } = await supabase
       .from("learning_objects")
       .select("id, swedish, part_of_speech, frequency_rank")
-      .range(offset, offset + PAGE - 1);
+      .order("id").range(offset, offset + PAGE - 1);
     if (error) throw error;
     if (!data.length) break;
     for (const row of data) {

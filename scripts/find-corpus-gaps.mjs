@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { ordered } from "./page-order.mjs";
 
 // Computes, per word, exactly which SPK-DIC-001 fields it's still missing
 // (run AFTER the particip reclassification so part_of_speech is stable).
@@ -16,7 +17,7 @@ async function fetchAllPaginated(table, select, filters = (q) => q) {
   while (true) {
     let q = supabase.from(table).select(select);
     q = filters(q);
-    q = q.range(from, from + 999);
+    q = ordered(q, table).range(from, from + 999);
     const { data, error } = await q;
     if (error) throw error;
     all = all.concat(data);

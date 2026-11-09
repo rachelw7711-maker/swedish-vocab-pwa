@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { ordered } from "./page-order.mjs";
 
 // Imports classify-particip-candidates.mjs's confirmed output: reclassifies
 // part_of_speech to presens_particip/perfekt_particip, replaces the word's
@@ -21,7 +22,7 @@ async function fetchAllPaginated(table, select, filters = (q) => q) {
   while (true) {
     let q = supabase.from(table).select(select);
     q = filters(q);
-    q = q.range(from, from + 999);
+    q = ordered(q, table).range(from, from + 999);
     const { data, error } = await q;
     if (error) throw error;
     all = all.concat(data);

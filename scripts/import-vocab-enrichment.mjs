@@ -45,7 +45,7 @@ async function main() {
     const { data: page, error: wordsError } = await supabase
       .from("learning_objects")
       .select("id, swedish")
-      .range(from, from + PAGE - 1);
+      .order("id").range(from, from + PAGE - 1);
     if (wordsError) throw wordsError;
     for (const w of page) {
       const key = w.swedish.toLowerCase();

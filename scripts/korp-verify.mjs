@@ -40,7 +40,7 @@ async function ai(args) {
 async function pageAll(build) {
   const rows = [];
   for (let from = 0; ; from += 1000) {
-    const part = must(await build().range(from, from + 999));
+    const part = must(await build().order("learning_object_id").order("field").range(from, from + 999));
     rows.push(...part);
     if (part.length < 1000) return rows;
   }

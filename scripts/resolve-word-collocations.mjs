@@ -35,7 +35,7 @@ async function fetchAll(select, filter) {
   let offset = 0;
   const rows = [];
   for (;;) {
-    let query = supabase.from("learning_objects").select(select).range(offset, offset + PAGE - 1);
+    let query = supabase.from("learning_objects").select(select).order("id").range(offset, offset + PAGE - 1);
     if (filter) query = filter(query);
     const { data, error } = await query;
     if (error) throw error;

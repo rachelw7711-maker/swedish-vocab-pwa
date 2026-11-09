@@ -61,7 +61,7 @@ async function fetchExistingKeys() {
     const { data, error } = await supabase
       .from("learning_objects")
       .select("swedish, part_of_speech")
-      .range(from, from + pageSize - 1);
+      .order("id").range(from, from + pageSize - 1);
     if (error) throw new Error(`Supabase fetch failed: ${JSON.stringify(error)}`);
     if (!data || data.length === 0) break;
     for (const row of data) {

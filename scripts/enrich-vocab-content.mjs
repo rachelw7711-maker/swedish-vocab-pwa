@@ -120,7 +120,7 @@ async function main() {
       .select("id, swedish, chinese, part_of_speech, cefr_level, example_sv, collocations")
       .not("collocations", "is", null)
       .neq("collocations", "")
-      .range(offset, offset + PAGE - 1);
+      .order("id").range(offset, offset + PAGE - 1);
     if (error) throw error;
     if (!data.length) break;
     words.push(...data);

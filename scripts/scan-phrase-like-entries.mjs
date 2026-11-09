@@ -54,7 +54,7 @@ async function fetchAll() {
       .from("learning_objects")
       .select("id, swedish, part_of_speech, object_type, notebook")
       .eq("object_type", "word")
-      .range(from, from + pageSize - 1);
+      .order("id").range(from, from + pageSize - 1);
     if (error) throw new Error(`Supabase fetch failed: ${JSON.stringify(error)}`);
     if (!data || data.length === 0) break;
     rows.push(...data);

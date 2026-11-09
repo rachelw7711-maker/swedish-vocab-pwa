@@ -86,7 +86,7 @@ async function fetchAllVerbs() {
       .from("learning_objects")
       .select("id, swedish, forms, note")
       .eq("part_of_speech", "verb")
-      .range(from, from + pageSize - 1);
+      .order("id").range(from, from + pageSize - 1);
     if (error) throw new Error(`Supabase fetch failed: ${JSON.stringify(error)}`);
     if (!data || data.length === 0) break;
     rows.push(...data);

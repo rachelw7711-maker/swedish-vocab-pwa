@@ -8,6 +8,7 @@ import { writeFileSync } from "node:fs";
 import { useSaldoFiles } from "../server-lexicon.mjs";
 import { useReferenceFiles, referenceEntries } from "../server-references.mjs";
 import { grammarNoteConflicts, plainGrammarNote } from "../server-grammar-consistency.mjs";
+import { ordered } from "./page-order.mjs";
 
 await useSaldoFiles();
 await useReferenceFiles("data/reference", { extra: true });
@@ -15,7 +16,7 @@ const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERV
 async function all(table, columns, filter) {
   const out = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await filter(db.from(table).select(columns)).range(from, from + 999);
+    const { data, error } = await ordered(filter(db.from(table).select(columns)), table).range(from, from + 999);
     if (error) throw error;
     out.push(...data);
     if (data.length < 1000) return out;
