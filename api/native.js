@@ -1,5 +1,5 @@
 import {
-  adminClient, assessPronunciation, deleteAccount, generateWordEntry, normalizeLanguage, requireUser, sendJson,
+  adminClient, assessPronunciation, deleteAccount, generateWordEntry, identityCandidates, normalizeLanguage, requireUser, sendJson,
 } from "../server-native.mjs";
 import { ANALYSIS_VERSION } from "../server-reading.mjs";
 
@@ -7,6 +7,8 @@ import { ANALYSIS_VERSION } from "../server-reading.mjs";
 // functions; separate files pushed the project over the limit). POST /api/native
 // with { action, ... }:
 //   "generate-entry"  { word, nativeLanguage }        → { entryId, created }
+//   "identify"        { word }                         → { candidates: [{ lemma, pos, gloss, entryId }] }
+//                     (which word a search without a part of speech means; free, no AI)
 //   "delete-account"  {}                               → { deleted }
 //   "assess"          { referenceText, audioBase64 }   → pronunciation scores
 //   "reading-version" {}                               → { analysisVersion } (the reading selection
@@ -20,6 +22,8 @@ export default async function handler(req, res) {
     switch (body.action) {
       case "generate-entry":
         return sendJson(res, 200, await generateWordEntry({ supabaseAdmin, userId, word: body.word, pos: typeof body.pos === "string" ? body.pos : null, nativeLanguage: normalizeLanguage(body.nativeLanguage) }));
+      case "identify":
+        return sendJson(res, 200, { candidates: await identityCandidates(supabaseAdmin, body.word) });
       case "delete-account":
         return sendJson(res, 200, await deleteAccount({ supabaseAdmin, userId }));
       case "assess":

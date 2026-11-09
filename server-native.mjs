@@ -13,7 +13,7 @@ import { openaiCost, ttsCost, assessmentCost, usageSource, PRICE_VERSION } from 
 
 import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters, CHECK_VERSION } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
-import { saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms, cardFieldsFromSaldo } from "./server-lexicon.mjs";
+import { lemmatize, saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms, cardFieldsFromSaldo } from "./server-lexicon.mjs";
 import { referenceEntries, referencePos, lexinPromptLine, expressionReferenceLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
@@ -634,6 +634,38 @@ async function listAllObjects(supabaseAdmin, bucket, prefix) {
     }
   }
   return paths;
+}
+
+/**
+ * Which word a search without a part of speech can mean (knowledge v2, R6, decision 5): the
+ * plausible (lemma, part of speech) readings, each with the dictionary's first definitions and the
+ * existing entry when there is one. Plausible: Lexin has the word as that part of speech, or an
+ * entry exists — SALDO's rarer readings of a common spelling are left out ("fast" has no adverb
+ * in Lexin). The text's own reading as a headword comes first; an inflected form only reaches
+ * its lemmas ("laget": lag). One candidate means no choice to make: the app goes straight on.
+ * [{ lemma, pos, gloss, entryId }]; empty for a multi-word text (expressions are found by match key).
+ */
+export async function identityCandidates(supabaseAdmin, word) {
+  const text = latinLookalikes(String(word || "").trim());
+  if (!text || /\s/.test(text)) return [];
+  const all = await lemmatize(supabaseAdmin, text);
+  const own = all.filter((c) => normalizeKey(c.lemma) === normalizeKey(text));
+  const readings = own.length ? own : all;
+  const out = [];
+  for (const { lemma, pos } of readings) {
+    if (out.some((c) => c.lemma === lemma && c.pos === pos)) continue;
+    const refs = await referenceEntries(supabaseAdmin, lemma);
+    const lexin = (refs.lexin_sv || []).filter((e) => e.pos === pos);
+    // An inflected form names its own word among homographs ("laget" is ett lag, not en lag).
+    const byForm = normalizeKey(text) !== normalizeKey(lemma) ? lexin.filter((e) => Object.values(e.forms || {}).some((f) => normalizeKey(f) === normalizeKey(text))) : [];
+    const words = byForm.length ? byForm : lexin;
+    const { data } = await supabaseAdmin.from("learning_objects").select("id").eq("object_type", "word").neq("status", "retired").ilike("swedish", lemma).eq("part_of_speech", pos).limit(1);
+    const entryId = data?.[0]?.id || null;
+    const lexinHasWord = (refs.lexin_sv || []).length > 0;
+    if (lexinHasWord && !words.length && !entryId) continue;
+    out.push({ lemma, pos, gloss: words.map((e) => e.lexemes?.[0]?.definition).filter(Boolean).join("; "), entryId });
+  }
+  return out;
 }
 
 export async function deleteAccount({ supabaseAdmin, userId }) {
