@@ -14,6 +14,7 @@ import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
 import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, collocationInLexin, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { korpAttestation, judgeAttestation } from "./server-korp.mjs";
 import { callOpenAIJson, logUsage } from "./server-native.mjs";
+import { openaiCost } from "./server-prices.mjs";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const ARTICLE = /^(en|ett)\s+/i;
@@ -519,7 +520,7 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
       },
     } };
   });
-  const ask = async (group) => {
+  const ask = async (group, retry = false) => {
     const { result, usage: u } = await callOpenAIJson({
       schemaName: "sense_check",
       schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", items: audit ? auditItemCheck : card ? cardItemCheck : itemCheck } }, required: ["items"] },
@@ -527,12 +528,12 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
       user: JSON.stringify(group.map((g) => g.prompt)),
       maxOutputTokens: (audit || card ? 2000 : 1200) + (audit ? 1400 : card ? 1200 : 800) * group.length,
     });
-    const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
+    const { cost } = openaiCost(u);
     usage.input_tokens += u.input_tokens || 0;
     usage.output_tokens += u.output_tokens || 0;
     usage.calls += 1;
     usage.cost += cost;
-    if (supabaseAdmin) await logUsage(supabaseAdmin, { userId, textResourceId, feature, model: MODEL, inputTokens: u.input_tokens, outputTokens: u.output_tokens, cost });
+    if (supabaseAdmin) await logUsage(supabaseAdmin, { userId, textResourceId, feature, model: MODEL, usage: u, details: { items: group.length, ...(retry ? { retry: true } : {}) } });
     return result.items || [];
   };
   const settle = (group, answers, final) => {
@@ -574,7 +575,7 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
     for (const g of retry) {
       usage.retries += 1;
       try {
-        settle([g], await ask([g]), true);
+        settle([g], await ask([g], true), true);
       } catch (error) {
         usage.failed_calls += 1;
         failures.set(g.item.id, [...(failures.get(g.item.id) || []), `call_failed:${error.message}`]);
@@ -832,9 +833,9 @@ export async function cardDetailCheck(supabaseAdmin, prompt, { userId = null, te
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const { result, usage: u } = await callOpenAIJson({ schemaName: "card_detail_check", schema: detailSchema, system: DETAIL_SYSTEM, user: JSON.stringify(prompt), maxOutputTokens: 4000 });
-      const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
+      const { cost } = openaiCost(u);
       usage.input_tokens += u.input_tokens || 0; usage.output_tokens += u.output_tokens || 0; usage.calls += 1; usage.cost += cost;
-      if (supabaseAdmin) await logUsage(supabaseAdmin, { userId, textResourceId, feature: "word_card_detail_check", model: MODEL, inputTokens: u.input_tokens, outputTokens: u.output_tokens, cost });
+      if (supabaseAdmin) await logUsage(supabaseAdmin, { userId, textResourceId, feature: "word_card_detail_check", model: MODEL, usage: u, details: attempt ? { retry: true } : {} });
       problems = detailProblems(prompt, result);
       if (!problems.length) return { check: result, usage, failed: null };
     } catch (error) {
@@ -1336,9 +1337,9 @@ export async function checkedTranslations(supabaseAdmin, items, { feature = "exa
       schemaName, system, user: JSON.stringify(payload), maxOutputTokens: 800 + perItem * payload.length,
       schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", items: schema } }, required: ["items"] },
     });
-    const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
+    const { cost } = openaiCost(u);
     usage.input_tokens += u.input_tokens || 0; usage.output_tokens += u.output_tokens || 0; usage.calls += 1; usage.cost += cost;
-    if (supabaseAdmin) await logUsage(supabaseAdmin, { feature, model: MODEL, inputTokens: u.input_tokens, outputTokens: u.output_tokens, cost });
+    if (supabaseAdmin) await logUsage(supabaseAdmin, { feature, model: MODEL, usage: u, details: { items: payload.length } });
     return result.items || [];
   };
   const accepted = new Map();
@@ -1422,9 +1423,9 @@ export async function fillExpressionLanguage(supabaseAdmin, items, { write = tru
       user: JSON.stringify(keyed.map((k) => ({ key: k.key, expression: k.expression, meaning_given: k.meaning, sentence: k.sentence }))),
       maxOutputTokens: 400 + 80 * keyed.length,
     });
-    const cost = ((u.input_tokens || 0) * 0.75 + (u.output_tokens || 0) * 4.5) / 1e6;
+    const { cost } = openaiCost(u);
     usage.input_tokens += u.input_tokens || 0; usage.output_tokens += u.output_tokens || 0; usage.calls += 1; usage.cost += cost;
-    if (supabaseAdmin && write) await logUsage(supabaseAdmin, { feature: "expression_language", model: MODEL, inputTokens: u.input_tokens, outputTokens: u.output_tokens, cost });
+    if (supabaseAdmin && write) await logUsage(supabaseAdmin, { feature: "expression_language", model: MODEL, usage: u, details: { items: keyed.length } });
     const examples = await checkedTranslations(write ? supabaseAdmin : null, keyed.filter((k) => k.sentence).map((k) => ({ id: k.id, headword: k.expression, pos: "phrase", sv: k.sentence })), { feature: "expression_language" });
     usage.input_tokens += examples.usage.input_tokens; usage.output_tokens += examples.usage.output_tokens; usage.calls += examples.usage.calls; usage.cost += examples.usage.cost;
     for (const k of keyed) {

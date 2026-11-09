@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { extractTextFromImage, classifyPageLines, sanitizeOcrLines, calculateCredits } from "../../server-reading.mjs";
-import { enforceQuota } from "../../server-native.mjs";
+import { enforceQuota, logUsage } from "../../server-native.mjs";
 
 // Real Vercel serverless function — see api/reading/analyze.js for why
 // production needs actual files under api/. This is the photo/camera
@@ -66,18 +66,7 @@ export default async function handler(req, res) {
       const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       await enforceQuota(admin, userId, calculateCredits("ocr"));
       const { title, body, glossary, usage } = await classifyPageLines({ imageDataUrl: image, lines: ocrLines });
-      const inputTokens = usage.input_tokens || 0;
-      const outputTokens = usage.output_tokens || 0;
-      await admin.from("ai_usage_logs").insert({
-        user_id: userId,
-        feature: "ocr_layout",
-        model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        credits_used: calculateCredits("ocr"),
-        actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
-        cache_hit: false,
-      });
+      await logUsage(admin, { userId, feature: "ocr_layout", model: process.env.OPENAI_MODEL || "gpt-5.4-mini", usage, credits: calculateCredits("ocr"), details: { lines: ocrLines.length } });
       sendJson(res, 200, { title, body, glossary });
       return;
     }
@@ -101,18 +90,7 @@ export default async function handler(req, res) {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const inputTokens = usage.input_tokens || 0;
-    const outputTokens = usage.output_tokens || 0;
-    await supabaseAdmin.from("ai_usage_logs").insert({
-      user_id: userId,
-      feature: "ocr",
-      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      credits_used: calculateCredits("ocr"),
-      actual_cost: (inputTokens / 1_000_000) * 0.75 + (outputTokens / 1_000_000) * 4.5,
-      cache_hit: false,
-    });
+    await logUsage(supabaseAdmin, { userId, feature: "ocr", model: process.env.OPENAI_MODEL || "gpt-5.4-mini", usage, credits: calculateCredits("ocr") });
 
     sendJson(res, 200, { text, glossary });
   } catch (error) {

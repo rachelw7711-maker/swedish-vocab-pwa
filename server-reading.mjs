@@ -5,6 +5,7 @@
 // only for words genuinely missing from the dictionary.
 import { createHash, randomUUID } from "node:crypto";
 import { generateWordEntry, noteReuse } from "./server-native.mjs";
+import { openaiCost, usageSource, PRICE_VERSION } from "./server-prices.mjs";
 import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
 import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence, fillExpressionLanguage, latinLookalikes } from "./server-language-checks.mjs";
 import { lookupWiktionary } from "./server-wiktionary.mjs";
@@ -1592,16 +1593,18 @@ async function findPublicAnalysisByHash(supabaseAdmin, hash, nativeLanguage = "z
 }
 
 function logUsage(entries, { userId, textResourceId, feature, model, usage, cacheHit, credits = 0 }) {
+  const tokens = openaiCost(usage || {}, model);
   entries.push({
     user_id: userId || null,
     text_resource_id: textResourceId || null,
     feature,
     model,
-    input_tokens: usage?.input_tokens || 0,
-    output_tokens: usage?.output_tokens || 0,
+    input_tokens: tokens.input,
+    output_tokens: tokens.output,
     credits_used: credits,
-    actual_cost: ((usage?.input_tokens || 0) / 1_000_000) * 0.75 + ((usage?.output_tokens || 0) / 1_000_000) * 4.5,
+    actual_cost: tokens.cost,
     cache_hit: Boolean(cacheHit),
+    details: { price_version: PRICE_VERSION, source: usageSource(userId), ...(tokens.cached ? { cached_input_tokens: tokens.cached } : {}) },
   });
 }
 
@@ -1952,6 +1955,7 @@ For each entry in "patterns": meaning = a concise ${langName} explanation of the
     credits_used: calculateCredits("analysis", textResource.word_count),
     actual_cost: 0,
     cache_hit: true,
+    details: { price_version: PRICE_VERSION, source: usageSource(userId), step: "credit_charge" },
   });
   if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
 
@@ -2225,6 +2229,7 @@ async function completeDeepAnalysis({ supabaseAdmin, userId, textResource, exist
     credits_used: calculateCredits("analysis", wordCount),
     actual_cost: 0,
     cache_hit: false,
+    details: { price_version: PRICE_VERSION, source: usageSource(userId), step: "credit_charge" },
   });
   if (usageLogEntries.length) await supabaseAdmin.from("ai_usage_logs").insert(usageLogEntries);
   return analysisRow;

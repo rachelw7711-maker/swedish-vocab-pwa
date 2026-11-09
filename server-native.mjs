@@ -9,6 +9,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { synthesizeSwedishSpeech } from "./server-shadowing.mjs";
+import { openaiCost, ttsCost, assessmentCost, usageSource, PRICE_VERSION } from "./server-prices.mjs";
 
 import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters, CHECK_VERSION } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
@@ -96,17 +97,22 @@ export async function enforceQuota(supabaseAdmin, userId, credits) {
   if (used + credits > limit) throw httpError(429, "Du har använt dagens AI-kvot. Försök igen i morgon.");
 }
 
+// entry.usage (an OpenAI usage object) gives the tokens and the cost, cached input at its own price;
+// otherwise inputTokens/outputTokens/cost as given. details (jsonb) always gets the price version and
+// who caused the call; callers add the billed unit, a retry, a cache hit — never user text.
 export async function logUsage(supabaseAdmin, entry) {
+  const tokens = entry.usage ? openaiCost(entry.usage, entry.model) : null;
   const { error } = await supabaseAdmin.from("ai_usage_logs").insert({
     user_id: entry.userId || null,
     text_resource_id: entry.textResourceId || null,
     feature: entry.feature,
     model: entry.model || "",
-    input_tokens: entry.inputTokens || 0,
-    output_tokens: entry.outputTokens || 0,
+    input_tokens: tokens ? tokens.input : entry.inputTokens || 0,
+    output_tokens: tokens ? tokens.output : entry.outputTokens || 0,
     credits_used: entry.credits || 0,
-    actual_cost: entry.cost || 0,
+    actual_cost: tokens ? tokens.cost : entry.cost || 0,
     cache_hit: Boolean(entry.cacheHit),
+    details: { price_version: PRICE_VERSION, source: usageSource(entry.userId), ...(tokens?.cached ? { cached_input_tokens: tokens.cached } : {}), ...(entry.details || {}) },
   });
   if (error) console.warn("[native] usage log failed", error);
 }
@@ -230,7 +236,7 @@ export async function retryExamples(supabaseAdmin, { lemma, pos, result, rejecte
         collocations: (result.collocations || []).map((c) => ({ phrase: c.phrase, example: c.example })), refused: rejected.slice(0, 6) }),
     });
     await logUsage(supabaseAdmin, { userId, textResourceId, feature: chargeQuota ? "word_generate" : "reading_word_card", model: MODEL,
-      inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, credits: 0, cost: ((usage.input_tokens || 0) * 0.75 + (usage.output_tokens || 0) * 4.5) / 1e6 });
+      usage, credits: 0, details: { step: "example_retry" } });
     return (out.examples || []).filter((e) => String(e.swedish || "").trim());
   } catch (error) {
     console.warn("[native] example retry failed", lemma, error.message);
@@ -426,10 +432,9 @@ If the input names a part of speech and the sense a text uses, write the entry f
         expressionLine,
       ].filter(Boolean).join("\n"),
     });
-    const cost = ((usage.input_tokens || 0) / 1e6) * 0.75 + ((usage.output_tokens || 0) / 1e6) * 4.5;
     await logUsage(supabaseAdmin, {
       userId, textResourceId, feature: chargeQuota ? "word_generate" : "reading_word_card", model: MODEL,
-      inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, credits: chargeQuota ? CREDITS.word_generate : 0, cost,
+      usage, credits: chargeQuota ? CREDITS.word_generate : 0,
     });
 
     if (!result.is_real_word || !String(result.lemma || "").trim() || !String(result[`meaning_${lang}`] || "").trim()) {
@@ -687,7 +692,8 @@ export async function assessPronunciation({ supabaseAdmin, userId, referenceText
   }
   const best = data.NBest[0];
   const seconds = audio.length / 32_000;
-  await logUsage(supabaseAdmin, { userId, feature: "pronunciation_assessment", model: "azure-pronunciation-sv-SE", credits: CREDITS.pronunciation_assessment, cost: (seconds / 3600) * 1.32 });
+  await logUsage(supabaseAdmin, { userId, feature: "pronunciation_assessment", model: "azure-pronunciation-sv-SE", credits: CREDITS.pronunciation_assessment, cost: assessmentCost(seconds),
+    details: { unit: "audio_seconds", units: Math.round(seconds * 10) / 10 } });
 
   return {
     overall: best.PronScore ?? best.AccuracyScore ?? 0,
@@ -726,7 +732,9 @@ export function rhythmScore(words, referenceText) {
 // Shared pronunciation cache (generate once, reuse) — public bucket "tts-cache"
 // ---------------------------------------------------------------------------
 
-export async function cachedSpeech({ supabaseAdmin, text, voiceId }) {
+// Every request is logged (feature tts_word): a cache hit costs nothing, a miss the characters
+// synthesized. No text is logged.
+export async function cachedSpeech({ supabaseAdmin, text, voiceId, userId = null }) {
   const clean = String(text || "").trim();
   if (!clean) throw httpError(400, "Svensk text saknas.");
   const voice = String(voiceId || "sv-SE-SofieNeural");
@@ -736,9 +744,14 @@ export async function cachedSpeech({ supabaseAdmin, text, voiceId }) {
   const publicUrl = bucket.getPublicUrl(path).data.publicUrl;
 
   const head = await fetch(publicUrl, { method: "HEAD" }).catch(() => null);
-  if (head?.ok) return { url: publicUrl, cached: true };
+  if (head?.ok) {
+    await logUsage(supabaseAdmin, { userId, feature: "tts_word", model: voice, cacheHit: true, details: { unit: "characters", units: 0 } });
+    return { url: publicUrl, cached: true };
+  }
 
   const speech = await synthesizeSwedishSpeech(clean, voice);
+  await logUsage(supabaseAdmin, { userId, feature: "tts_word", model: `${speech.provider}:${speech.voiceId}`, cost: ttsCost(speech.provider, speech.characters),
+    details: { unit: "characters", units: speech.characters, provider: speech.provider } });
   const { error } = await bucket.upload(path, speech.audioBuffer, { contentType: "audio/mpeg", upsert: true });
   if (error) {
     // Cache write failed — still serve this request.

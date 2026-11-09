@@ -127,6 +127,8 @@ async function synthesizeWithAzure(text, requestedVoice = "") {
     voiceId: dialogue ? `${AZURE_SPEECH_DIALOGUE_VOICE_A}+${AZURE_SPEECH_DIALOGUE_VOICE_B}` : selectedVoice,
     modelId: "azure-speech-tts",
     languageCode: "sv-SE",
+    // the billed characters: the text spoken (a dialogue's speaker names are not)
+    characters: dialogue ? turns.reduce((sum, turn) => sum + turn.text.length, 0) : text.length,
   };
 }
 
@@ -157,6 +159,7 @@ async function synthesizeWithElevenLabs(text, voice) {
     voiceId: voice,
     modelId: ELEVENLABS_MODEL_ID,
     languageCode: ELEVENLABS_LANGUAGE_CODE,
+    characters: text.length,
   };
 }
 
@@ -250,6 +253,7 @@ export async function generateShadowingAudio({ user, userSupabaseClient, text, v
         voiceId: speech.voiceId,
         modelId: speech.modelId,
         languageCode: speech.languageCode,
+        characters: speech.characters,
         status: "ready",
       };
     }
@@ -293,6 +297,7 @@ export async function generateShadowingAudio({ user, userSupabaseClient, text, v
       voiceId: speech.voiceId,
       modelId: speech.modelId,
       languageCode: speech.languageCode,
+      characters: speech.characters,
       status: "ready",
     };
   } catch (error) {

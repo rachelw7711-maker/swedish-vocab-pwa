@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { generateShadowingAudio } from "../../server-shadowing.mjs";
-import { adminClient, cachedSpeech } from "../../server-native.mjs";
+import { adminClient, cachedSpeech, logUsage } from "../../server-native.mjs";
+import { ttsCost } from "../../server-prices.mjs";
 
 // Real Vercel serverless function. Synthesis + shadowing_items bookkeeping
 // now live in server-shadowing.mjs, shared with server.mjs's local-dev
@@ -71,12 +72,15 @@ export default async function handler(req, res) {
         sendJson(res, 400, { error: "Texten är för lång för uttal." });
         return;
       }
-      const cached = await cachedSpeech({ supabaseAdmin: adminClient(), text, voiceId });
+      const cached = await cachedSpeech({ supabaseAdmin: adminClient(), text, voiceId, userId: user?.id });
       sendJson(res, 200, { ...cached, status: "ready" });
       return;
     }
 
     const result = await generateShadowingAudio({ user, userSupabaseClient, text, voiceId, itemId });
+    // The Shadowing reference voice: characters synthesized and their cost (no text logged).
+    await logUsage(adminClient(), { userId: user?.id, feature: "tts_shadowing", model: `${result.provider}:${result.voiceId}`, cost: ttsCost(result.provider, result.characters || 0),
+      details: { unit: "characters", units: result.characters || 0, provider: result.provider } });
     sendJson(res, 200, result);
   } catch (error) {
     sendJson(res, error.status || 500, { error: error.message || "Server error" });
