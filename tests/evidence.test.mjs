@@ -5,7 +5,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { useSaldoFiles } from "../server-lexicon.mjs";
 import { useReferenceFiles, referenceEntries } from "../server-references.mjs";
-import { evidence, gradeItem, mayRemove, phraseInListing, phraseSlots, lexinListings, dictionaryEvidenceForPhrase, classifyMultiword, associationOf, posDecision, reusePolicy, regradeLegacySense, isExplanatoryPart, senseCoverage } from "../server-evidence.mjs";
+import { evidence, gradeItem, mayRemove, phraseInListing, phraseSlots, lexinListings, dictionaryEvidenceForPhrase, classifyMultiword, associationOf, posDecision, reusePolicy, regradeLegacySense, isExplanatoryPart, senseCoverage, removalDecision } from "../server-evidence.mjs";
 
 before(async () => { await useSaldoFiles(); await useReferenceFiles(); });
 
@@ -195,4 +195,22 @@ test("sense coverage (R7): Lexin senses the card's English misses; a particle ve
   const dismiss = säga.find((s) => s.english.includes("dismiss"));
   assert.equal(dismiss.covered, false);
   assert.equal(dismiss.particleVerb, true, "\"100 man har sagts upp\": säga upp's sense");
+});
+
+test("protection (R8): confirmed content is disputed, not removed, by a later AI check; a stated stronger reason may remove it", () => {
+  // sticka "stab" tied to its Lexin sense, then an AI check calls it wrong.
+  const held = [evidence("dictionary_sense_link", "supports"), evidence("legacy_ai", "supports")];
+  const ai = [evidence("ai_two_agree", "refutes", { note: "wrong_sense" })];
+  assert.deepEqual(removalDecision(held, ai).action, "dispute");
+  // Even a dictionary refutation needs a reason against protected content.
+  const lexin = [evidence("dictionary_listing", "refutes")];
+  assert.equal(removalDecision(held, lexin).action, "dispute");
+  assert.equal(removalDecision(held, lexin, { reason: "lexin_new_edition" }).action, "remove");
+  // Unprotected: AI answers alone never remove (review); a dictionary refutation does.
+  const legacy = [evidence("legacy_ai", "supports")];
+  assert.equal(removalDecision(legacy, ai).action, "dispute");
+  assert.equal(removalDecision(legacy, [evidence("ai_one", "refutes")]).action, "dispute");
+  assert.equal(removalDecision(legacy, lexin).action, "remove");
+  // Nothing found against it: kept.
+  assert.equal(removalDecision(legacy, [evidence("korp_attestation", "not_found")]).action, "keep");
 });

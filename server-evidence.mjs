@@ -522,3 +522,30 @@ export function senseCoverage(refs, pos, meaningEn, forms = []) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Protected content (R8, §7): what a later check may do to an item already confirmed
+// ---------------------------------------------------------------------------
+/**
+ * held: the item's recorded evidence; found: what the new check says (evidence() rows); reason: why
+ * (required to remove protected content: "lexin_new_edition", "human_review" …).
+ * → { action: "keep" | "dispute" | "remove", grade, why }. Content confirmed by a dictionary link, SALDO,
+ * Korp or a person (protected: strength-5 verifying support) is never removed by a check that is
+ * weaker or equal without a stated reason — it becomes disputed and goes to review. Unprotected
+ * content is removed only when the combined evidence grades "refuted" and not on AI answers alone;
+ * never for lack of evidence.
+ */
+export function removalDecision(held = [], found = [], { reason = "" } = {}) {
+  const before = gradeItem(held);
+  const all = gradeItem([...held, ...found]);
+  const refutes = found.filter((e) => e.result === "refutes");
+  if (!refutes.length) return { action: "keep", grade: all.grade, why: "no_refutation" };
+  if (before.protected) {
+    const r = Math.max(...refutes.map(strengthOf));
+    if (r >= before.support && reason) return { action: "remove", grade: "refuted", why: `protected_overridden:${reason}` };
+    return { action: "dispute", grade: "disputed", why: reason ? "refutation_weaker_than_protection" : "protected_needs_reason" };
+  }
+  // AI answers alone never remove anything (decision 4: AI-only cases go to review).
+  if (refutes.every((e) => /^(ai_|legacy_ai)/.test(e.kind))) return { action: "dispute", grade: "disputed", why: "ai_only_refutation" };
+  return all.grade === "refuted" ? { action: "remove", grade: "refuted", why: all.reasons.join(",") } : { action: "dispute", grade: all.grade === "unverified" ? "unverified" : "disputed", why: "refutation_not_decisive" };
+}
