@@ -133,6 +133,10 @@ test("reading expressions: variants reuse one row, other module gets a membershi
   const created = d.tables.learning_objects.find((o) => o.id === out[1].expression_id);
   assert.equal(created.match_key, "lägga märke till");
   assert.ok(d.tables.resource_field_status.some((s) => s.learning_object_id === created.id && s.field === "swedish_explanation" && s.status === "missing"));
+  // The reader's sentence stays in their reading, never in the shared entry (2026-11-09).
+  assert.equal(created.example_sv, "");
+  assert.ok(!d.tables.learning_object_translations.some((t) => t.learning_object_id === created.id && t.example_translation));
+  assert.ok(d.tables.resource_field_status.some((s) => s.learning_object_id === created.id && s.field === "example" && s.status === "missing"));
 });
 
 test("before saving: a card of another part of speech than asked for is not saved", async () => {

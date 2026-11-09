@@ -480,10 +480,37 @@ export function properNouns(text) {
 }
 
 // Every word of the text where it stands: sentence number s, place i in the sentence, the
-// form in lower case. Occurrences and overlaps with expressions are counted on these.
+// form in lower case, and k, its place among all the words of the text. Occurrences and
+// overlaps with expressions are counted on these. cleanText changes only spaces, so k is the
+// same word in the text the app shows (the app counts the same letter runs: its marks).
 export function textTokens(text) {
   return splitSentences(text).flatMap((sentence, s) =>
-    (sentence.match(/\p{L}+(?:-\p{L}+)?/gu) || []).map((raw, i) => ({ s, i, form: raw.toLowerCase(), raw })));
+    (sentence.match(/\p{L}+(?:-\p{L}+)?/gu) || []).map((raw, i) => ({ s, i, form: raw.toLowerCase(), raw })))
+    .map((t, k) => ({ ...t, k }));
+}
+
+/**
+ * Where an item stands in the text, for the app's marks (2026-11-09): for each place, the
+ * words (k) that are the item's own — a particle verb's particle and an expression's words
+ * however far apart, never the words between them. Each of `words` (lower case, placeholders
+ * left out) is the form or a SALDO reading of one token of the sentence; the tokens are taken
+ * in the expression's order when the sentence has them so ("ta … upp"), else wherever they are.
+ */
+export function itemSpots(words, sentenceTokens, readings, first = null) {
+  const lemmas = (t) => [t.form, ...(readings.get(t.form) || []).map((r) => r.lemma.toLowerCase())];
+  const pick = (ordered) => {
+    const used = [];
+    let from = 0;
+    for (const w of words) {
+      const pool = ordered ? sentenceTokens.slice(from) : sentenceTokens;
+      const t = (first && w === words[0] ? [first] : []).concat(pool).find((x) => !used.includes(x) && lemmas(x).includes(w));
+      if (!t) return null;
+      used.push(t);
+      from = sentenceTokens.indexOf(t) + 1;
+    }
+    return used.map((t) => t.k).sort((a, b) => a - b);
+  };
+  return pick(true) || pick(false);
 }
 
 // SALDO gives participles as adjectives, and an adjective's -t form is also the adverb.
@@ -1246,7 +1273,7 @@ export async function checkLinkedKeywordSenses(supabaseAdmin, keywords, { userId
 // A keyword must occur in the text by SALDO's reading of its forms (2026-11-07: "skrev"
 // is skriva, the stem test lost every strong verb), as the part of speech the AI gives
 // it when SALDO reads the forms at all. `dropped` collects what was left out and why.
-export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, { tokens, readings, textCefr = null }, dropped = []) {
+export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, { tokens, readings, textCefr = null, sentences = null }, dropped = []) {
   const key = (swedish, pos) => `${String(swedish || "").toLowerCase()}|${pos || ""}`;
   scored = await toBaseForms(supabaseAdmin, scored, readings);
   const known = new Map();
@@ -1276,17 +1303,23 @@ export async function resolveVocabularyCandidates(supabaseAdmin, scored, pool, {
       : match?.cefr_level === "A1" && !keepsA1Word(v, match, textCefr) ? "a1_everyday" : null;
     if (why) { dropped.push({ swedish: v.swedish, pos: v.pos, reason: v.reason, why }); continue; }
     seen.add(dedupeKey);
+    // The sentence is the text's own where the word first stands (the model's quote is not
+    // always the text's), and each place's words for the app's marks.
+    const own = sentences?.[found.at[0].s];
+    const parts = String(v.swedish).toLowerCase().split(/\s+/);
+    const spots = found.at.map((t) => (parts.length > 1 ? itemSpots(parts, tokens.filter((x) => x.s === t.s), readings, t) : [t.k])).filter(Boolean);
     candidates.push({
       word_id: match?.id || null,
       swedish: match?.swedish || v.swedish,
       pos: match?.pos || v.pos,
       chinese: v.meaning || match?.chinese || "",
       cefr_level: match?.cefr_level || null,
-      ...(v.sentence ? { sentence: v.sentence } : {}),
+      ...(own || v.sentence ? { sentence: own || v.sentence } : {}),
       ...(v.pos_check ? { pos_check: v.pos_check } : {}),
       ...(v.reason ? { reason: v.reason } : {}),
       occurrences: found.at.length,
       at: found.at.map((t) => [t.s, t.i]),
+      ...(spots.length ? { spots } : {}),
     });
   }
   return candidates;
@@ -1356,6 +1389,14 @@ export function expressionPlaces(expressions, tokens, readings, text) {
  * of its places is in one of them — "beslut" in "fatta beslut" goes, "beslut" used on its
  * own elsewhere in the text stays (spelling alone decided before).
  */
+export function expressionSpots(e, tokens, readings, text) {
+  const s = splitSentences(text).indexOf(textSentence(e.source_sentence, text));
+  if (s < 0) return [];
+  const words = String(e.expression_text || "").toLowerCase().split(/[\s/]+/).filter((w) => w && !EXPRESSION_PLACEHOLDERS.has(w));
+  const spot = words.length ? itemSpots(words, tokens.filter((t) => t.s === s), readings) : null;
+  return spot ? [spot] : [];
+}
+
 export function inExpressions(at, places) {
   return (at || []).map(([s, i]) => places.get(`${s}:${i}`) || []);
 }
@@ -1440,7 +1481,10 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
       // per-language content gap in this app.
       chinese: nativeLanguage === "zh" ? item.meaning_zh : "",
       swedish_explanation: "",
-      example_sv: item.source_sentence,
+      // The reader's own sentence stays with their reading (text_analysis, shown in the app as
+      // "I din text"), never in the shared entry every reader sees (2026-11-09): the entry's
+      // examples are written by the completion like any other missing field.
+      example_sv: "",
       forms: "",
       collocations: "",
       related_words: "",
@@ -1460,10 +1504,10 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
         await setMatchKey(supabaseAdmin, row.id, created.matchKey);
         // The example's translation too (it was left out, so the app showed the sentence untranslated).
         await supabaseAdmin.from("learning_object_translations").insert({ learning_object_id: row.id, native_language: nativeLanguage, meaning: created.item.meaning_zh || "",
-          example_translation: created.item.source_sentence_zh || null, updated_at: now });
-        newRows.push({ id: row.id, expression: row.swedish, meaning: created.item.meaning_zh || "", meaningLanguage: nativeLanguage, sentence: created.item.source_sentence || "" });
-        // Collected from a text: meaning and example only — the rest is recorded as missing.
-        await recordEntryStatus(supabaseAdmin, row.id, { type: module, pos: "other", [`meaning_${nativeLanguage}`]: Boolean(created.item.meaning_zh), example: Boolean(created.item.source_sentence) });
+          example_translation: null, updated_at: now });
+        newRows.push({ id: row.id, expression: row.swedish, meaning: created.item.meaning_zh || "", meaningLanguage: nativeLanguage, sentence: "" });
+        // Collected from a text: the meaning only — the rest, the example too, is recorded as missing.
+        await recordEntryStatus(supabaseAdmin, row.id, { type: module, pos: "other", [`meaning_${nativeLanguage}`]: Boolean(created.item.meaning_zh), example: false });
       }
     }
     // The other explanation language right away, so every reader sees a meaning and a
@@ -1961,10 +2005,13 @@ export async function runDeepSelection(supabaseAdmin, { cleaned, wordCount, tier
   const dropped = [];
   const checkedVocabulary = await checkKeywordPartsOfSpeech(supabaseAdmin, tidyReasons(selection.vocabulary), glossary);
   for (const v of selection.vocabulary) if (!checkedVocabulary.some((c) => c.swedish === v.swedish && c.sentence === v.sentence)) dropped.push({ swedish: v.swedish, pos: v.pos, reason: v.reason, why: "pos_rejected" });
-  const scoredVocabulary = await resolveVocabularyCandidates(supabaseAdmin, checkedVocabulary, pool, { tokens, readings, textCefr }, dropped);
+  const scoredVocabulary = await resolveVocabularyCandidates(supabaseAdmin, checkedVocabulary, pool, { tokens, readings, textCefr, sentences: splitSentences(cleaned) }, dropped);
   const resolvedCollocations = await resolveExpressionEntries(supabaseAdmin, expressions.collocations, { objectType: "phrase", category: "common_collocation", nativeLanguage });
   const resolvedIdioms = await resolveExpressionEntries(supabaseAdmin, expressions.idioms, { objectType: "expression", category: "everyday_expression", nativeLanguage });
-  const asExpression = (category) => (e) => ({ ...e, category });
+  const asExpression = (category) => (e) => {
+    const spots = expressionSpots(e, tokens, readings, cleaned);
+    return { ...e, category, ...(spots.length ? { spots } : {}) };
+  };
   const collocationCandidates = resolvedCollocations.map(asExpression("collocation"));
   const idiomCandidates = resolvedIdioms.map(asExpression("idiom"));
   // Shown by default: the best ones, as many as the length tier shows; the rest are

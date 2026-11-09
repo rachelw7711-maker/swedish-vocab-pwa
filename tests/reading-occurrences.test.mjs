@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { useSaldoFiles, formReadings } from "../server-lexicon.mjs";
 import {
-  textTokens, occurrences, properNouns, keepsA1Word, expressionPlaces, inExpressions, taughtByExpressions,
+  textTokens, occurrences, itemSpots, expressionSpots, properNouns, keepsA1Word, expressionPlaces, inExpressions, taughtByExpressions,
   rankFoundWords, matchAgainstCorpus, sortExpressions, resolveVocabularyCandidates, reserveFor, toBaseForms, upgradeAnalysisRow, ANALYSIS_VERSION,
   analyzeReadingResourceFast, analyzeReadingResourceDeep, cleanText, textHash,
   expressionBaseForm, distinctExpressions, tidyReasons, poolValue, claimDeepAnalysis, deepOnce, DEEP_UNCLAIMED, DEEP_CLAIM_STALE_MS,
@@ -353,4 +353,23 @@ test("a shared library text's older analysis is upgraded to a public row (reader
   const row = await upgradeAnalysisRow(db, old, { shared: true });
   assert.equal(row.visibility, "public");
   assert.equal((await upgradeAnalysisRow(fakeSupabase({ text_analysis: [{ ...old }] }), old)).visibility, "private");
+});
+
+test("marks: a keyword's places and its text's own sentence; an expression's words, never the ones between", async () => {
+  const text = "Hon skrev en lång rapport. Rapporten  blev klar. De tog till slut upp frågan igen.";
+  const { tokens, readings } = await read(text);
+  assert.deepEqual(tokens.map((t) => t.k), tokens.map((_, i) => i));
+  const kept = await resolveVocabularyCandidates(fakeSupabase({}), [
+    { swedish: "rapport", pos: "noun", reason: "topic", sentence: "en rapport" },
+    { swedish: "ta upp", pos: "verb", reason: "specific_use" },
+  ], [{ word: { id: "r", swedish: "rapport", pos: "noun", cefr_level: "B1" } }], { tokens, readings, sentences: ["Hon skrev en lång rapport.", "Rapporten blev klar.", "De tog till slut upp frågan igen."] });
+  const rapport = kept.find((k) => k.swedish === "rapport");
+  assert.equal(rapport.sentence, "Hon skrev en lång rapport.", "the text's sentence, not the model's quote");
+  assert.deepEqual(rapport.spots, [[4], [5]]);
+  const taUpp = kept.find((k) => k.swedish === "ta upp");
+  assert.deepEqual(taUpp.spots.map((s) => s.map((k) => tokens[k].raw)), [["tog", "upp"]], "the particle too, not 'till slut' between");
+  const spots = expressionSpots({ expression_text: "ta upp något", source_sentence: "De tog till slut upp frågan igen." }, tokens, readings, text);
+  assert.deepEqual(spots.map((s) => s.map((k) => tokens[k].raw)), [["tog", "upp"]]);
+  // Not in the text: no marks rather than a wrong place.
+  assert.deepEqual(expressionSpots({ expression_text: "ta hand om", source_sentence: "De tog hand om det." }, tokens, readings, text), []);
 });
