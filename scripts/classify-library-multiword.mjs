@@ -23,16 +23,24 @@ for (let from = 0; ; from += 1000) {
 const out = [];
 const tally = {};
 const add = (k) => (tally[k] = (tally[k] || 0) + 1);
-for (const [n, r] of rows.entries()) {
+// Four at a time: Korp is a shared public service, and most answers come from the cache on a rerun.
+let next = 0, doneCount = 0;
+async function one(r) {
   const verdict = r.object_type === "expression" ? "idiom" : "fast_fras";
   const ev = await multiwordEvidence(null, r.swedish, { timeout: 60000 }).catch((e) => ({ error: e.message }));
   const c = ev.error ? { cls: null, placement: "reading_only", review: true, reasons: [`evidence_failed:${ev.error}`] } : classifyMultiword({ ...ev, ai: { verdict } });
-  const row = { id: r.id, swedish: r.swedish, object_type: r.object_type, status: r.status, source: r.source, cls: c.cls, placement: c.placement, review: c.review, authenticity: c.authenticity, reasons: c.reasons,
+  return { id: r.id, swedish: r.swedish, object_type: r.object_type, status: r.status, source: r.source, cls: c.cls, placement: c.placement, review: c.review, authenticity: c.authenticity, reasons: c.reasons,
     listing: ev.dictionary?.listing?.kind || null, attested: ev.attestation?.status === "ok" ? ev.attestation.ok : ev.attestation?.status, hits: ev.attestation?.total, assoc: ev.association?.status === "ok" ? [ev.association.rank, ev.association.lmi] : ev.association?.status };
-  out.push(row);
-  add(`${r.status}:${c.placement}`);
-  if ((n + 1) % 50 === 0) console.log(n + 1, "/", rows.length, JSON.stringify(tally));
 }
+await Promise.all(Array.from({ length: 4 }, async () => {
+  while (next < rows.length) {
+    const r = rows[next++];
+    const row = await one(r);
+    out.push(row);
+    add(`${r.status}:${row.placement}`);
+    if (++doneCount % 50 === 0) console.log(doneCount, "/", rows.length, JSON.stringify(tally));
+  }
+}));
 const file = `data/reports/round-f/classify-library-multiword-${new Date().toISOString().slice(0, 10)}.json`;
 writeFileSync(file, JSON.stringify({ note: "read-only — nothing written", tally, rows: out }, null, 1));
 console.log("DONE", JSON.stringify(tally), file);
