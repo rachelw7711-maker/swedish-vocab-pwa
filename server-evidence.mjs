@@ -471,7 +471,8 @@ export function regradeLegacySense({ exists = true, posVerified = false, parts =
     if (p.korp === "refuted") ev.push(evidence("korp_sense", "disputed", { note: "not attested in corpus sentences" }));
     return { text: p.text, explanatory, evidence: ev.map((e) => e.kind + ":" + e.result), grade: gradeItem(ev).grade };
   });
-  const core = out.filter((p) => !p.explanatory);
+  // A meaning written only as an explanation ("a working day between holidays …") is its own core.
+  const core = out.some((p) => !p.explanatory) ? out.filter((p) => !p.explanatory) : out;
   const grades = core.map((p) => p.grade);
   const entry = !core.length ? "unverified"
     : grades.every((g) => g === "verified") ? "verified"

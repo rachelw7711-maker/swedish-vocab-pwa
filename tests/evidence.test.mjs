@@ -230,3 +230,9 @@ test("evidence rows are written only with KNOWLEDGE_EVIDENCE_WRITE=on, one per k
     assert.equal(row.source_ref.ref, "går i taket");
   } finally { delete process.env.KNOWLEDGE_EVIDENCE_WRITE; }
 });
+
+test("historical regrading: a meaning written only as an explanation is graded, not left without a core", () => {
+  const g = regradeLegacySense({ parts: [{ text: "a working day between holidays that people often take off to create a longer break", overlap: false }] });
+  assert.equal(g.entry, "ai_consistent");
+  assert.deepEqual(g.recheck, ["a working day between holidays that people often take off to create a longer break"]);
+});

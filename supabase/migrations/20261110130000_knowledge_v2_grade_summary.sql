@@ -3,9 +3,10 @@
 -- (20261110120000: resource_field_status.grade).
 --   A sense row counts as verified when its grade is "verified"; a row without a grade counts as
 --   before, except the content audit of 2026-11-02 (source audit-2026-11-02), whose "verified" was an
---   AI check alone: ai_consistent (data/reports/round-f/regrade-legacy-dry-2026-11-09.json: of 7,811
---   such senses 33 have a Korp sense check and stay verified once graded; 7,463 entries go from
---   verified to partial, shown in the app as "Ej verifierad ännu").
+--   AI check alone: ai_consistent. Read-only count 2026-11-09: of 9,485 verified entries 7,542 go to
+--   partial (shown in the app as "Ej verifierad ännu"), 1,943 stay verified; once R2 records grades,
+--   the 33 senses with a Korp sense check are verified again
+--   (data/reports/round-f/regrade-legacy-dry-2026-11-09.json).
 -- Only verification_status / completeness / missing_fields change (as in 20261103130000); access_tier,
 -- status, the content and every user table are untouched. Nothing is removed.
 -- Backup: verification_status_backup_20261110 keeps every entry's previous values.
