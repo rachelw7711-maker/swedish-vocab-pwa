@@ -47,7 +47,11 @@ const inChunks = async (table, cols, column, ids, extra = (q) => q) => {
 };
 const ENTRY = "id, swedish, status, content_origin, part_of_speech, swedish_explanation, example_sv, example_zh, cefr_level, collocations, related_words";
 let entries;
-const earlier = MODE === "--from-report" ? JSON.parse(readFileSync(opt("--from-report"), "utf8")).rows : null;
+const earlierReport = MODE === "--from-report" ? JSON.parse(readFileSync(opt("--from-report"), "utf8")) : null;
+const earlier = earlierReport?.rows || null;
+// Recorded with the version that made the check, not this one: a result of an older version is
+// checked again by the next run of the current one.
+const VERSION = earlierReport?.check_version || CHECK_VERSION;
 if (MODE === "--ids") entries = await inChunks("learning_objects", ENTRY, "id", JSON.parse(readFileSync(opt("--ids"), "utf8")));
 else if (earlier) entries = await inChunks("learning_objects", ENTRY, "id", earlier.map((r) => r.id));
 else if (MODE === "--reused") {
@@ -166,12 +170,12 @@ writeFileSync(report.replace(/\.json$/, "-rollback.sql"), rollback.join("\n") + 
 const now = new Date().toISOString();
 for (const r of done) {
   const sense = r.ok
-    ? { ...r.sense, detail: { ...r.sense.detail, check_version: CHECK_VERSION, checked_by: "check-entries", ...(r.changes.length ? { proposed_changes: r.changes, open: "content_unverified" } : {}) } }
-    : { status: "mismatch", source: "check-entries", detail: { check_version: CHECK_VERSION, reason: r.reason } };
+    ? { ...r.sense, detail: { ...r.sense.detail, check_version: VERSION, checked_by: "check-entries", ...(r.changes.length ? { proposed_changes: r.changes, open: "content_unverified" } : {}) } }
+    : { status: "mismatch", source: "check-entries", detail: { check_version: VERSION, reason: r.reason } };
   if (r.changes.length && sense.status === "verified") sense.status = "present";
   const { error: e1 } = await db.from("resource_field_status").upsert({ learning_object_id: r.id, field: "sense", status: sense.status, source: sense.source, detail: sense.detail, updated_at: now }, { onConflict: "learning_object_id,field" });
   if (e1) throw e1;
-  await db.from("resource_field_status").update({ status: "not_applicable", detail: { check_version: CHECK_VERSION, checked_at: now }, updated_at: now }).eq("learning_object_id", r.id).eq("field", "reuse_check");
+  await db.from("resource_field_status").update({ status: "not_applicable", detail: { check_version: VERSION, checked_at: now }, updated_at: now }).eq("learning_object_id", r.id).eq("field", "reuse_check");
   if (r.promote) {
     const { error: e2 } = await db.from("learning_objects").update({ status: "ai_generated", updated_at: now }).eq("id", r.id).eq("status", "draft");
     if (e2) throw e2;
