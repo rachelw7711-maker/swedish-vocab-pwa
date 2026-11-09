@@ -146,10 +146,13 @@ function wordCardSchema() {
     transitivity: { type: "string", enum: ["transitive", "intransitive", "both", ""] },
     countability: { type: "string", enum: ["countable", "uncountable", "both", ""] },
     passive: { type: "string" },
-    // minItems 1: without it the model returned no examples at all (seen 2026-10-31). No more is
-    // asked for (2026-11-09: two were always written, the second often a padded copy of the first).
-    examples: { type: "array", minItems: 1, maxItems: 3, items: pair({ swedish: { type: "string" }, zh: { type: "string" }, en: { type: "string" } }) },
+    // Collocations first (2026-11-09): with them written, the examples show only the uses they
+    // don't — written before, a fifth of the examples repeated a collocation's sentence.
     collocations: { type: "array", items: pair({ phrase: { type: "string" }, zh: { type: "string" }, en: { type: "string" }, example: { type: "string" } }) },
+    // minItems 1: every card has an example (without it the model returned none, 2026-10-31).
+    // How many is the word's own (2026-11-09: two were always written, the second often a padded
+    // copy); maxItems only stops a runaway list, it is not a number to reach.
+    examples: { type: "array", minItems: 1, maxItems: 5, items: pair({ swedish: { type: "string" }, zh: { type: "string" }, en: { type: "string" } }) },
     related: { type: "array", items: pair({ word: { type: "string" }, zh: { type: "string" }, en: { type: "string" }, pos: { type: "string", enum: RELATED_POS } }) },
     memory_tip_zh: { type: "string" },
     memory_tip_en: { type: "string" },
@@ -209,6 +212,30 @@ export function relatedLines(related, { lemma, forms = [], words = [] }, lang) {
     .map((w) => String(w || "").trim().toLowerCase()).filter((w) => w && !keep.has(w)));
   return (related || []).filter((r) => r.word && !own.has(String(r.word).trim().toLowerCase()))
     .map((r) => `${r.word} | ${relatedMeaning(r, lang)}`).join("\n");
+}
+
+/**
+ * Examples asked for once more when the checks left a card none (2026-11-09): the senses and the
+ * collocations it shows are given, and the sentences that were refused, so that the new ones show
+ * a use no collocation shows and repeat none of them. Checked like the first ones by the caller.
+ */
+export async function retryExamples(supabaseAdmin, { lemma, pos, result, rejected = [], userId = null, textResourceId = null, chargeQuota = false }) {
+  const pair = (props) => ({ type: "object", additionalProperties: false, properties: props, required: Object.keys(props) });
+  const schema = pair({ examples: { type: "array", minItems: 1, maxItems: 2, items: pair({ swedish: { type: "string" }, zh: { type: "string" }, en: { type: "string" } }) } });
+  try {
+    const { result: out, usage } = await callOpenAIJson({
+      schemaName: "word_card_examples", schema, maxOutputTokens: 800,
+      system: "You write example sentences for a Swedish learner's dictionary entry: natural, everyday Swedish that a native speaker would write, each showing the headword in one of its given senses, with a Chinese (zh) and an English (en) translation of the whole sentence. The most common sense first; one sentence is often right. Never a sentence like a refused one, and none that repeats a collocation's example.",
+      user: JSON.stringify({ headword: lemma, part_of_speech: pos, meaning_zh: result.meaning_zh, meaning_en: result.meaning_en, swedish_explanation: result.swedish_explanation,
+        collocations: (result.collocations || []).map((c) => ({ phrase: c.phrase, example: c.example })), refused: rejected.slice(0, 6) }),
+    });
+    await logUsage(supabaseAdmin, { userId, textResourceId, feature: chargeQuota ? "word_generate" : "reading_word_card", model: MODEL,
+      inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, credits: 0, cost: ((usage.input_tokens || 0) * 0.75 + (usage.output_tokens || 0) * 4.5) / 1e6 });
+    return (out.examples || []).filter((e) => String(e.swedish || "").trim());
+  } catch (error) {
+    console.warn("[native] example retry failed", lemma, error.message);
+    return [];
+  }
 }
 
 export async function callOpenAIJson({ schemaName, schema, system, user, maxOutputTokens = 2500 }) {
@@ -383,8 +410,8 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 - passive: the s-passive for verbs when natural (e.g. "påverkas"), else "".
 - pos_detail: for nouns exactly "en-ord" or "ett-ord" (or "plural" for a plural-only noun); "" otherwise.
 - countability (nouns only, else ""): "countable" (räknebart), "uncountable" (oräknebart: a mass or abstract noun normally without plural, e.g. koldioxid, nederbörd) or "both" (one sense countable and another a mass sense, e.g. kaffe: the drink / "två kaffe"). Don't call a noun uncountable just because its plural is rare, and don't give an uncountable noun plural forms.
-- examples: natural Swedish sentences, each with a Chinese (zh) and an English (en) translation of the whole sentence — one for each common sense or use a learner needs to see (most common first), up to 3. One is right when the word has one plain use; never two that show the same thing, and never one that repeats a collocation's example. Where the reference gives a phrase for a sense, build that sense's sentence around it.
 - collocations: up to 5 combinations a learner must learn as units — a fixed verb, preposition or particle choice, or a typical strong partner word — with Chinese (zh) and English (en) meanings and a Swedish example that contains it. Not free combinations any noun or adjective would allow ("en stor bil"), never two that differ only in inflection or in någon/något, and fewer (even none) rather than weak ones.
+- examples: natural Swedish sentences, each with a Chinese (zh) and an English (en) translation of the whole sentence. Together with the collocations they show the word's important senses and typical uses, each once: a use a collocation already shows with its example needs no example here. Always at least one — the most common use, in a sentence of its own — and one more for each important sense or use no collocation shows, most common first; as many as the word really needs (often one or two), never to reach a number. Never two that show the same thing, never a sentence that repeats or rephrases a collocation's example, and never a rare or bookish sense just to have another sentence. Where the reference gives a phrase for a sense no collocation shows, build that sense's sentence around it.
 - related: up to 6 word-family members or related words — those a learner really needs (the verb's noun, the adjective's adverb when it is a word of its own), as many as there are; fewer (even none) rather than rare, made-up or loosely related ones — with Chinese (zh) and English (en) meanings and each word's part of speech (pos; "other" for multi-word expressions). pos is that word's own part of speech, never the headword's. Never the headword itself or one of its own inflected forms (plural, definite, neuter, tense forms, comparative): those are its grammar. A participle only when it is used as a word of its own, with pos present_participle or perfect_participle. A meaning gives the sense only — no part of speech or grammar remark in it.
 - memory_tip_zh / memory_tip_en: the same short mnemonic in Chinese and in English, or "" for both.
 Every zh field is Chinese only and every en field English only. If uncertain about a sense, prefer the most common one.
@@ -409,6 +436,9 @@ If the input names a part of speech and the sense a text uses, write the entry f
       throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
     }
     let pos = POS_VALUES.includes(result.pos) ? result.pos : "other";
+    // "other" for one word SALDO has with one part of speech is that part of speech (2026-11-09:
+    // liten and säker came back "other" once each, and the references then refused the card).
+    if (pos === "other" && headwordPos && !posChoice && !/\s/.test(String(result.lemma || "").trim())) pos = headwordPos;
     // SALDO's lemma wins over the model's spelling when the part of speech agrees.
     let lemma = reference && pos === headwordPos ? reference.baseform : latinLookalikes(String(result.lemma).trim());
     // A multi-word request keeps its own words (2026-11-09): of six cards of "gå ut på" the model
@@ -481,6 +511,17 @@ If the input names a part of speech and the sense a text uses, write the entry f
       throw httpError(422, "Ordkortet kunde inte bekräftas. Försök igen senare.");
     }
     Object.assign(result, checked.result);
+    // Every card has an example (2026-11-09). When the checks left none, examples are asked for
+    // once more and the card checked again; still none and it is saved as a draft — the one who
+    // asked sees it, never as a finished entry.
+    if (!(result.examples || []).length) {
+      const retry = await retryExamples(supabaseAdmin, { lemma, pos, result, rejected: checked.sense?.detail?.dropped || [], userId, textResourceId, chargeQuota });
+      if (retry.length) {
+        const again = await checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos, sense, result: { ...result, examples: retry }, forms, isPhrase, userId, textResourceId });
+        if (again.ok && (again.result.examples || []).length) { Object.assign(result, again.result); checked.sense = again.sense; }
+      }
+    }
+    const noExample = !(result.examples || []).length;
 
     // Re-check before saving: the lemma may exist even if the input didn't match —
     // as the same part of speech (a same-spelling word of another class gets its own
@@ -505,7 +546,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         passiv_s: passive,
         countability: grammar?.countability || null,
         source,
-        status: "ai_generated",
+        status: noExample ? "draft" : "ai_generated",
       });
       if (insertError) {
         // Lost a race with another insert of the same (swedish, pos): reuse it.

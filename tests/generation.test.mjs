@@ -10,7 +10,7 @@ const { resolveExpressionEntries } = await import("../server-reading.mjs");
 const { fakeSupabase } = await import("./fake-supabase.mjs");
 const { okDetail } = await import("./fake-detail.mjs");
 
-let aiCalls = 0, checkCalls = 0, card = null, check = null;
+let aiCalls = 0, checkCalls = 0, retryCalls = 0, card = null, check = null, retry = null;
 // The check's answer echoes each item (key, lemma, pos), each example (key, first words) and,
 // for a new card, each collocation and related word (key, first word).
 const okCheck = (over = {}) => (item) => ({ key: item.key, lemma: item.lemma, pos: item.pos, pos_supported: true, other_pos_senses: [], unsupported_senses: [],
@@ -27,13 +27,14 @@ before(async () => {
     if (String(url).includes("wiktionary.org")) return { ok: true, json: async () => ({ error: { code: "missingtitle" } }) };
     const body = JSON.parse(init.body);
     const answer = body.text.format.name === "card_detail_check" ? okDetail(JSON.parse(body.input.at(-1).content))
+      : body.text.format.name === "word_card_examples" ? (retryCalls++, retry)
       : body.text.format.name === "sense_check"
       ? (checkCalls++, { items: JSON.parse(body.input.at(-1).content).map((item) => (check || okCheck())(item)) })
       : (aiCalls++, card);
     return { ok: true, json: async () => ({ output_text: JSON.stringify(answer), usage: { input_tokens: 500, output_tokens: 400 } }) };
   };
 });
-beforeEach(() => { aiCalls = 0; checkCalls = 0; check = null; });
+beforeEach(() => { aiCalls = 0; checkCalls = 0; retryCalls = 0; check = null; retry = null; });
 
 const baseCard = (over) => ({
   is_real_word: true, lemma: "", pos: "noun", pos_detail: "", cefr_level: "B1", meaning_zh: "发酵", meaning_en: "fermentation", swedish_explanation: "när något jäser",
@@ -205,4 +206,43 @@ test("related words: never the headword's own forms; the part of speech is alway
   assert.equal(relatedMeaning({ zh: "规定（复数）", pos: "noun" }, "zh"), "规定（复数）（名词）");
   assert.equal(relatedMeaning({ en: "creamy (adjective)", pos: "adjective" }, "en"), "creamy (adjective)");
   assert.equal(relatedMeaning({ en: "written", pos: "perfect_participle" }, "en"), "written (past participle)");
+});
+
+test("a plain example repeating a collocation's sentence goes, never the last one", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning",
+    collocations: [{ phrase: "naturlig jäsning", zh: "自然发酵", en: "natural fermentation", example: "Brödet får naturlig jäsning." }],
+    examples: [{ swedish: "Jäsningen tar tid.", zh: "发酵需要时间。", en: "Fermentation takes time." }, { swedish: "Brödet får en naturlig jäsning.", zh: "面包自然发酵。", en: "The bread rises naturally." }] });
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", chargeQuota: false });
+  assert.deepEqual(d.tables.learning_object_examples.filter((e) => e.learning_object_id === entryId).map((e) => e.example_swedish), ["Jäsningen tar tid."]);
+  const d2 = db();
+  card = baseCard({ lemma: "jäsning", collocations: card.collocations, examples: [card.examples[1]] });
+  const second = await generateWordEntry({ supabaseAdmin: d2, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", chargeQuota: false });
+  assert.equal(d2.tables.learning_object_examples.filter((e) => e.learning_object_id === second.entryId).length, 1, "the card's only example stays");
+});
+
+test("a card the checks leave without an example: asked once more; still none and it is a draft", async () => {
+  const noWord = [{ swedish: "Degen får jäsa över natten.", zh: "面团发酵一夜。", en: "The dough rises overnight." }];
+  // The retry gives a good one: a normal card with it.
+  let d = db();
+  card = baseCard({ lemma: "jäsning", examples: noWord });
+  retry = { examples: [{ swedish: "Jäsningen tar några timmar.", zh: "发酵需要几个小时。", en: "Fermentation takes a few hours." }] };
+  let { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", chargeQuota: false });
+  assert.equal(retryCalls, 1);
+  assert.equal(d.tables.learning_objects.find((o) => o.id === entryId).status, "ai_generated");
+  assert.deepEqual(d.tables.learning_object_examples.filter((e) => e.learning_object_id === entryId).map((e) => e.example_swedish), ["Jäsningen tar några timmar."]);
+  // The retry fails too: saved as a draft, never verified.
+  d = db();
+  retry = { examples: noWord };
+  ({ entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", pos: "noun", chargeQuota: false }));
+  assert.equal(d.tables.learning_objects.find((o) => o.id === entryId).status, "draft");
+  assert.equal((d.tables.learning_object_examples || []).filter((e) => e.learning_object_id === entryId).length, 0);
+  assert.notEqual(d.tables.resource_field_status.find((s) => s.learning_object_id === entryId && s.field === "sense").status, "verified");
+});
+
+test("a single word the model calls \"other\" takes SALDO's part of speech instead of being refused", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning", pos: "other" });
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", chargeQuota: false });
+  assert.equal(d.tables.learning_objects.find((o) => o.id === entryId).part_of_speech, "noun");
 });

@@ -426,7 +426,9 @@ export function checkProblems(item, c) {
       if (!own) { problems.push(`unknown_collocation:${x.key}`); continue; }
       if (seen.has(x.key)) problems.push(`duplicate_collocation:${x.key}`);
       seen.add(x.key);
-      if (norm(x.phrase_start)[0] !== norm(own.phrase)[0]) problems.push(`collocation_echo:${x.key}`);
+      // The echo names a word of this phrase: its first, or the headword in it (2026-11-09: for
+      // "köpa dricka" the check echoed "dricka", twice, and dricka the noun stayed unchecked).
+      if (!norm(own.phrase).includes(norm(x.phrase_start)[0])) problems.push(`collocation_echo:${x.key}`);
       if (x.verdict === "wrong_meaning" && !x.zh_fixed && !x.en_fixed) problems.push(`no_collocation_fix:${x.key}`);
       if (x.zh_fixed && TRADITIONAL.test(x.zh_fixed)) problems.push(`bad_collocation_fix:${x.key}`);
     }
@@ -1258,6 +1260,21 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   }
   card.related = keptRelated;
 
+  // A plain example that repeats a kept collocation's sentence (2026-11-09: one in five did,
+  // "Hon väntar barn." under both): the collocation shows that use already, so the example goes —
+  // never the card's last one. No example left at all keeps the card from being verified.
+  const repeated = [];
+  const wordSet = (t) => new Set(norm(t));
+  const repeats = (e) => {
+    const a = wordSet(e.swedish);
+    // Four words in common at least: a short sentence shares three with almost anything of the
+    // same verb ("Han slet upp brevet." / "Han slet i dörren, men den gick inte upp.").
+    return card.collocations.some((c) => { const b = wordSet(c.example); const shared = [...a].filter((w) => b.has(w)).length; return a.size && b.size && shared >= 4 && shared / Math.min(a.size, b.size) >= 0.7; });
+  };
+  for (const e of [...card.examples].reverse()) if (card.examples.length - repeated.length > 1 && repeats(e)) repeated.push(e.swedish);
+  card.examples = card.examples.filter((e) => !repeated.includes(e.swedish));
+  if (!card.examples.length) open.push({ kind: "no_example" });
+
   const { foreign, badMeaning } = dropForeignScript(card);
   if (badMeaning.length) return { ok: false, reason: `foreign_script:${badMeaning.join(",")}`, usage };
   const unsure = check.verdict === "unsure";
@@ -1268,7 +1285,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   const english = !isPhrase && refs ? englishEquivalents(refs, pos) : [];
   const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
   const detail = { check_version: CHECK_VERSION, verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits, ...ungrammatical], note: check.note, wiktionary: page.status, en_reference: enReference,
-    ...(removedSenses.length ? { removed_senses: removedSenses } : {}), ...(ungrammatical.length ? { ungrammatical } : {}), ...(droppedCollocationExamples.length ? { dropped_collocation_examples: droppedCollocationExamples } : {}), ...(relatedMeaningNotes.length ? { related_meaning_notes: relatedMeaningNotes } : {}), ...(commonKept.length ? { common_combinations: commonKept } : {}),
+    ...(removedSenses.length ? { removed_senses: removedSenses } : {}), ...(ungrammatical.length ? { ungrammatical } : {}), ...(repeated.length ? { repeated_collocation_examples: repeated } : {}), ...(droppedCollocationExamples.length ? { dropped_collocation_examples: droppedCollocationExamples } : {}), ...(relatedMeaningNotes.length ? { related_meaning_notes: relatedMeaningNotes } : {}), ...(commonKept.length ? { common_combinations: commonKept } : {}),
     ...(droppedCollocations.length ? { dropped_collocations: droppedCollocations } : {}), ...(droppedRelated.length ? { dropped_related: droppedRelated } : {}), ...(foreign.length ? { foreign_script: foreign } : {}),
     ...(open.length ? { open_items: open } : {}) };
   const sources = ["ai_check", page.status === "found" && "sv-wiktionary", item.references.lexin && LEXIN_SV_SOURCE_ID].filter(Boolean).join("+");

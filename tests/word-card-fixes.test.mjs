@@ -247,6 +247,11 @@ test("3: an answer leaving out a collocation or related word is not used: asked 
   assert.deepEqual(checkProblems(item, { ...answer, related: [] }), ["related_missing:i1.r0"]);
   assert.deepEqual(checkProblems(item, { ...answer, collocations: [] }), ["collocation_missing:i1.c0"]);
   assert.deepEqual(checkProblems(item, { ...answer, related: [{ ...answer.related[0], verdict: "wrong_meaning" }] }), ["no_related_fix:i1.r0"]);
+  // The echo may name the headword in the phrase ("köpa dricka" → "dricka"); a word not in it is no echo.
+  const drink = { key: "i1", lemma: "dricka", pos: "noun", entry: { examples: [], collocations: [{ key: "i1.c0", phrase: "köpa dricka" }] } };
+  const drinkAnswer = okCheck()(drink);
+  assert.deepEqual(checkProblems(drink, { ...drinkAnswer, collocations: [{ ...drinkAnswer.collocations[0], phrase_start: "dricka" }] }), []);
+  assert.deepEqual(checkProblems(drink, { ...drinkAnswer, collocations: [{ ...drinkAnswer.collocations[0], phrase_start: "sälja" }] }), ["collocation_echo:i1.c0"]);
 
   const d = fakeSupabase();
   card = doCard();
