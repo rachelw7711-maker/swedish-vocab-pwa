@@ -272,10 +272,10 @@ test("before saving (R5): a function word's class the references give alone is t
 });
 
 test("reading expressions (R3): only a fixed phrase or an idiom gets a shared entry; the rest stays in the reading, never called wrong", async () => {
-  const d = fakeSupabase({ learning_objects: [] });
+  const d = fakeSupabase({ learning_objects: [{ id: "w-eld", swedish: "eld", part_of_speech: "noun", object_type: "word", status: "published" }] });
   const verdicts = {
     "liknande system": { cls: "F0", placement: "reading_only", fixedness: "free", authenticity: "verified", review: false, reasons: ["weak_association"] },
-    "tända eld": { cls: "F1", placement: "headword_usage", fixedness: "typical", authenticity: "verified", review: false, reasons: ["strong_association"] },
+    "tända eld": { cls: "F1", placement: "headword_usage", fixedness: "typical", authenticity: "verified", review: false, reasons: ["strong_association"], content: ["tända..vb.1", "eld..nn.1"] },
     "gå i taket": { cls: "F3", placement: "own_entry", fixedness: "fixed", authenticity: "verified", review: false, reasons: ["dictionary_idiom"] },
     "ta sig an": { cls: null, placement: "reading_only", fixedness: "undetermined", authenticity: "unverified", review: true, reasons: ["ai_fixed+association_unknown", "association_lookup_failed"] },
   };
@@ -287,12 +287,15 @@ test("reading expressions (R3): only a fixed phrase or an idiom gets a shared en
   assert.equal(byText["liknande system"].classification.authenticity, "verified");
   assert.equal(byText["tända eld"].expression_id, null);
   assert.equal(byText["tända eld"].classification.placement, "headword_usage");
+  // A typical combination is linked to its head word's entry (the noun), so a tap opens "eld".
+  assert.equal(byText["tända eld"].headword_id, "w-eld");
+  assert.equal(byText["liknande system"].headword_id, undefined);
   assert.equal(byText["ta sig an"].expression_id, null);
   assert.ok(byText["ta sig an"].classification.reasons.includes("association_lookup_failed"));
   assert.ok(byText["gå i taket"].expression_id);
   // An idiom the scan listed as a collocation is created as an expression.
   assert.equal(d.tables.learning_objects.find((o) => o.id === byText["gå i taket"].expression_id).object_type, "expression");
-  assert.equal(d.tables.learning_objects.length, 1);
+  assert.equal(d.tables.learning_objects.length, 2);
 });
 
 test("reading expressions (R4): a retired entry is never linked again; an existing draft is still linked (pending)", async () => {

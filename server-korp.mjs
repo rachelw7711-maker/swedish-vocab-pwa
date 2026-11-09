@@ -46,13 +46,15 @@ export function ownForms(text, forms = []) {
 const bare = (text) => String(text).replace(/\+\s*[\p{L}.]+/gu, " x ").replace(/[!?.,;:…"”“+*()[\]{}|\\^$]+/g, " ").replace(/\s+/g, " ").trim();
 
 // One token per word; "något" / "någon" stand for 1–3 words, "sig" for any reflexive.
+// "någon/något" is one slot too (2026-11-09: "lita på någon/något" was counted as that very spelling, 0 hits).
+const isSlot = (w) => String(w).split("/").every((p) => PLACEHOLDER.test(p));
 export function korpCqp(text, pos = null, { spelling = false, forms = [] } = {}) {
   text = bare(text);
   const words = text.split(/\s+/);
-  while (words.length > 1 && PLACEHOLDER.test(words[words.length - 1])) words.pop();
-  while (words.length > 1 && PLACEHOLDER.test(words[0])) words.shift();
+  while (words.length > 1 && isSlot(words[words.length - 1])) words.pop();
+  while (words.length > 1 && isSlot(words[0])) words.shift();
   if (words.length > 1) {
-    return words.map((w) => (PLACEHOLDER.test(w) ? "[]{1,3}" : /^sig$/i.test(w) ? `[word="${REFLEXIVE}"%c]` : `[lemma contains "${q(w)}" | word="${q(w)}"%c]`)).join(" ");
+    return words.map((w) => (isSlot(w) ? "[]{1,3}" : /^sig$/i.test(w) ? `[word="${REFLEXIVE}"%c]` : `[lemma contains "${q(w)}" | word="${q(w)}"%c]`)).join(" ");
   }
   const tags = pos ? KORP_POS[pos] : null;
   const tag = tags ? ` & (${tags.map((t) => `pos="${t}"`).join(" | ")})` : "";
@@ -303,7 +305,25 @@ export function groupFromForms(sing, pl, genus) {
 // lmi. Used to tell a typical combination (tända eld) from a free one (liknande system); never as
 // proof of a fixed expression on its own (server-evidence.mjs classifyMultiword). Cached like
 // every Korp answer. [{ head, rel, dep, freq, mi }] (mi is Korp's lmi).
-export async function korpRelations(lemgram, { corpora = KORP_CORPORA } = {}) {
-  const d = await korpJson("relations", { corpus: corpora.join(","), word: lemgram, type: "lemgram" });
-  return (d.relations || []).map((r) => ({ head: r.head, rel: r.rel, dep: r.dep, freq: r.freq, mi: r.mi }));
+// The service fails on some lemgrams when SUC3 comes first in the corpus list ("Illegal mix of
+// collations for operation 'UNION'", 2026-11-09): the news corpora go first, and a list that still
+// fails is asked corpus by corpus, the rows summed (frequency and lmi alike — lmi is a sum over
+// occurrences, so per-corpus values add up to an approximation of the whole).
+export const KORP_RELATION_CORPORA = ["GP2012", "GP2013", "WEBBNYHETER2012", "WEBBNYHETER2013", "SUC3", "ROMI", "ROMII", "BLOGGMIX2012", "BLOGGMIX2013", "ATTASIDOR"];
+const relationRows = (d) => (d.relations || []).map((r) => ({ head: r.head, rel: r.rel, dep: r.dep, freq: r.freq, mi: r.mi }));
+export async function korpRelations(lemgram, { corpora = KORP_RELATION_CORPORA } = {}) {
+  try {
+    return relationRows(await korpJson("relations", { corpus: corpora.join(","), word: lemgram, type: "lemgram" }, { tries: 1 }));
+  } catch (error) {
+    if (!/collation/i.test(error.message)) throw error;
+    const sum = new Map();
+    for (const c of corpora) {
+      for (const r of relationRows(await korpJson("relations", { corpus: c, word: lemgram, type: "lemgram" }))) {
+        const k = `${r.head}|${r.rel}|${r.dep}`;
+        const x = sum.get(k) || sum.set(k, { ...r, freq: 0, mi: 0 }).get(k);
+        x.freq += r.freq; x.mi += r.mi;
+      }
+    }
+    return [...sum.values()];
+  }
 }

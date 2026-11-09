@@ -229,6 +229,7 @@ export const ASSOCIATION = { rank: 10, lmi: 150 };
  *   ai: { verdict: "idiom" | "fast_fras" | "neither" | null, made_up: boolean }
  * output: { authenticity, fixedness, cls, placement, review, retireable, reasons, evidence }
  */
+export const IDIOM_MIN_HITS = 100;   // provisional, calibration 2026-11-09
 export function classifyMultiword({ dictionary = null, attestation = null, association = null, ai = {} } = {}) {
   const ev = [], reasons = [];
   const listing = dictionary?.listing || null;
@@ -255,10 +256,17 @@ export function classifyMultiword({ dictionary = null, attestation = null, assoc
   } else if (ai.verdict === "idiom") {
     // Not literal by the AI: the corpus must have the expression itself; its sense is verified later
     // from corpus sentences (korp_sense) before it is shown as checked (§13.1-4).
-    if (attestation?.ok) { fixedness = "fixed"; cls = "F3"; reasons.push("ai_idiom+corpus_attested"); }
+    // At least IDIOM_MIN_HITS in the corpus: in the calibration every free combination the AI could
+    // mistake for an idiom had under 100 hits (5–89), every unlisted real idiom over 100 (125–540).
+    if (attestation?.ok && attestation.total >= IDIOM_MIN_HITS) { fixedness = "fixed"; cls = "F3"; reasons.push("ai_idiom+corpus_attested"); }
+    else if (attestation?.ok) { reasons.push("ai_idiom+corpus_rare"); review = true; }
     else { reasons.push(attestation?.status === "failed" ? "ai_idiom+corpus_unavailable" : "ai_idiom+corpus_not_found"); review = true; }
   } else if (ai.verdict === "fast_fras") {
-    if (strong && attestation?.ok !== false) { fixedness = "fixed"; cls = "F2"; reasons.push("ai_fixed+strong_association"); }
+    // Calibration 2026-11-09 (data/reports/round-f/calibrate-multiword.txt): every typical combination
+    // (tända eld, fatta beslut, dricka kaffe …) is as strongly associated as a fixed phrase, so the
+    // corpus shows that the words go together, not that the combination is fixed. Fixed rests on the
+    // AI alone here: the item goes with its head word (F1) and to review, never to a shared entry.
+    if (strong && attestation?.ok !== false) { fixedness = "typical"; cls = "F1"; review = true; reasons.push("ai_fixed+strong_association:fixedness_unconfirmed"); }
     else if (weak) { reasons.push("ai_fixed+weak_association"); review = true; }
     else { reasons.push("ai_fixed+association_unknown"); review = true; }
   } else if (ai.verdict === "neither" || ai.verdict === "typical") {
@@ -303,16 +311,24 @@ export function associationOf(relations, head, partner) {
 // verb followed by a particle as Korp's particle verb (sätta_upp..vbm.1), tried before the verb.
 const CONTENT_POS = { noun: "nn", verb: "vb", adjective: "av", adverb: "ab" };
 const PARTICLE = new Set(["upp", "ut", "in", "av", "på", "till", "med", "om", "fram", "över", "igenom", "bort", "ner", "ned", "hem", "iväg", "tillbaka", "undan", "efter", "vid", "för", "åt", "emot", "mot", "ihop", "isär", "förbi", "runt", "kvar", "fast", "an", "loss", "ifrån", "från"]);
+const FUNCTION_WORDS = new Set(["en", "ett", "den", "det", "de", "denna", "detta", "dessa", "min", "din", "sin", "vår", "er", "hans", "hennes", "deras", "dess", "jag", "du", "han", "hon", "vi", "ni", "man", "mig", "mej", "dig", "dej", "honom", "henne", "oss", "dem", "dom", "som", "och", "eller", "men", "att", "inte", "så",
+  "i", "på", "till", "av", "om", "med", "för", "från", "under", "över", "efter", "vid", "mot", "emot", "hos", "utan", "genom", "mellan", "bland", "kring", "omkring", "utmed", "längs", "inom", "trots", "åt", "ur", "bakom", "framför", "bredvid"]);
 export async function phraseContentWords(supabaseAdmin, phrase) {
   const words = String(phrase || "").toLowerCase().split(/[\s,;:!?.]+/).filter(Boolean);
   const out = [];
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     if (PLACEHOLDER_WORDS.has(w) || REFLEXIVE_WORDS.has(w)) continue;
+    // Articles, pronouns and prepositions are never content words, whatever rare reading SALDO also
+    // has for them ("en" the juniper, "på" an adjective; 2026-11-09 calibration).
+    if (FUNCTION_WORDS.has(w)) continue;
     const readings = (await lemmatize(supabaseAdmin, w)).filter((c) => CONTENT_POS[c.pos]);
-    // A word that is also a preposition or particle (till, om) counts as content only when it has no other reading.
     if (!readings.length) continue;
-    const r = readings.find((c) => c.lemma === w) || readings[0];
+    // After a verb or an adjective a noun is meant (ställa en fråga, starkt kaffe); the first word is
+    // rather a verb; otherwise the reading spelled like the word.
+    const prev = out.at(-1)?.pos;
+    const prefer = out.length === 0 ? ["verb"] : ["verb", "adjective"].includes(prev) ? ["noun"] : [];
+    const r = prefer.map((p) => readings.find((c) => c.pos === p)).find(Boolean) || readings.find((c) => c.lemma === w) || readings[0];
     const lemgram = (await saldoEntries(supabaseAdmin, r.lemma, r.pos))[0]?.lemgram || `${r.lemma}..${CONTENT_POS[r.pos]}.1`;
     const unit = { word: w, lemma: r.lemma, pos: r.pos, lemgram, all: readings };
     if (r.pos === "verb" && PARTICLE.has(words[i + 1])) unit.particleLemgram = `${r.lemma}_${words[i + 1]}..vbm.1`;
@@ -344,7 +360,9 @@ export async function multiwordEvidence(supabaseAdmin, phrase, { korp = {}, time
   }
   const lean = need !== "all";
   if (lean && dictionary.listing) return { dictionary, attestation: null, association: null, content: content.map((u) => u.lemgram) };
-  const attestation = lean && verdict !== "idiom" ? null : await withTimeout(attest(phrase), timeout)
+  // One word left without its slots ("beställa något") is a word: its count says nothing about a combination.
+  const words = String(phrase).toLowerCase().split(/[\s,;:!?.]+/).filter((w) => w && !w.split("/").every((p) => PLACEHOLDER_WORDS.has(p)) && !REFLEXIVE_WORDS.has(w));
+  const attestation = words.length < 2 ? { status: "not_applicable" } : lean && verdict !== "idiom" ? null : await withTimeout(attest(phrase), timeout)
     .then((a) => ({ status: "ok", ok: judgeAttestation(a, null).exists.ok, total: a.total }))
     .catch(() => ({ status: "failed" }));
   let association = { status: "not_applicable" };

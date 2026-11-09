@@ -1460,7 +1460,19 @@ async function ensureKeywordEntries(supabaseAdmin, keywords, { userId, textResou
 export async function classifyExpression(supabaseAdmin, item, objectType) {
   const verdict = objectType === "expression" ? "idiom" : "fast_fras";
   const ev = await multiwordEvidence(supabaseAdmin, item.expression_text, { timeout: Number(process.env.MULTIWORD_KORP_TIMEOUT_MS) || 15000, need: "for", verdict });
-  return classifyMultiword({ ...ev, ai: { verdict } });
+  return { ...classifyMultiword({ ...ev, ai: { verdict } }), content: ev.content || [] };
+}
+
+// The head word a typical combination (F1) belongs to: its noun, otherwise its first content word —
+// an existing public word entry of that lemma and part of speech, or none. The reading links the
+// item there, so a tap opens the head word, where the combination is one of its uses (decision 1).
+const LEMGRAM_POS = { nn: "noun", vb: "verb", av: "adjective", ab: "adverb" };
+async function headwordOf(supabaseAdmin, content) {
+  const units = content.map((lg) => { const [lemma, rest = ""] = String(lg).split(".."); return { lemma: lemma.replace(/_/g, " "), pos: LEMGRAM_POS[rest.split(".")[0]] }; }).filter((u) => u.pos && !u.lemma.includes(" "));
+  const head = units.find((u) => u.pos === "noun") || units[0];
+  if (!head) return null;
+  const { data } = await supabaseAdmin.from("learning_objects").select("id, swedish").eq("object_type", "word").eq("status", "published").eq("swedish", head.lemma).eq("part_of_speech", head.pos).limit(1);
+  return data?.[0] ? { id: data[0].id, swedish: data[0].swedish } : null;
 }
 const ENTRY_KIND = { F2: { objectType: "phrase", category: "common_collocation" }, F3: { objectType: "expression", category: "everyday_expression" } };
 
@@ -1553,7 +1565,11 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
   // What the evidence said, kept with the reading (an F1 / F0 / undecided item has no shared entry;
   // scripts collect F1 items for their head words and retry the undecided ones).
   const note = (c) => (c ? { classification: { cls: c.cls, placement: c.placement, fixedness: c.fixedness, authenticity: c.authenticity, review: c.review, reasons: c.reasons } } : {});
-  return resolved.map(({ item, matchKey, classification }) => ({ ...item, expression_id: byKey.get(matchKey) || null, ...note(classification) }));
+  return Promise.all(resolved.map(async ({ item, matchKey, classification }) => {
+    const id = byKey.get(matchKey) || null;
+    const head = !id && classification?.cls === "F1" && classification.content?.length ? await headwordOf(supabaseAdmin, classification.content).catch(() => null) : null;
+    return { ...item, expression_id: id, ...(head ? { headword_id: head.id, headword: head.swedish } : {}), ...note(classification) };
+  }));
 }
 
 // 2026-08-03, Rachel's decision: reading-analysis phrases already get

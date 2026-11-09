@@ -102,10 +102,15 @@ test("multi-word: missing evidence and failed lookups decide nothing", () => {
 });
 
 test("multi-word: an idiom no dictionary lists is fixed on corpus attestation (sense verified later)", () => {
-  const r = classifyMultiword({ dictionary: { listing: null }, attestation: { status: "ok", ok: true, total: 12 }, association: { status: "not_applicable" }, ai: { verdict: "idiom" } });
+  const r = classifyMultiword({ dictionary: { listing: null }, attestation: { status: "ok", ok: true, total: 331 }, association: { status: "not_applicable" }, ai: { verdict: "idiom" } });
   assert.equal(r.cls, "F3");
   assert.equal(r.review, false);
   assert.equal(r.placement, "own_entry");
+  // Attested but rare (under 100 hits): the AI's "idiom" alone decides nothing — review, no entry.
+  const rare = classifyMultiword({ dictionary: { listing: null }, attestation: { status: "ok", ok: true, total: 69 }, association: { status: "not_applicable" }, ai: { verdict: "idiom" } });
+  assert.equal(rare.cls, null);
+  assert.equal(rare.review, true);
+  assert.equal(rare.retireable, false);
   const listed = classifyMultiword({ dictionary: { listing: { kind: "idiom", text: "går i taket", source: "lexin_sv" } }, ai: { verdict: "idiom" } });
   assert.equal(listed.cls, "F3");
   const disputed = classifyMultiword({ dictionary: { listing: { kind: "construction", text: "ngn är beroende av ngt", source: "lexin_sv" } }, ai: { verdict: "neither" } });
@@ -156,4 +161,16 @@ test("historical regrading: overlap is a candidate; a missing part touches only 
   assert.equal(korp.entry, "needs_review");
   assert.equal(isExplanatoryPart("relating to Poland, its people, or its language"), true);
   assert.equal(isExplanatoryPart("shop window"), false);
+});
+
+test("classification: the AI's 'fixed phrase' plus a strong corpus association is a typical combination under review, never a shared entry (calibration 2026-11-09)", () => {
+  const c = classifyMultiword({ dictionary: { listing: null, example: null }, attestation: { status: "ok", ok: true, total: 2483 }, association: { status: "ok", rank: 1, lmi: 9538 }, ai: { verdict: "fast_fras" } });
+  assert.equal(c.cls, "F1");
+  assert.equal(c.placement, "headword_usage");
+  assert.equal(c.review, true);
+  assert.equal(c.retireable, false);
+  // Listed by a dictionary it is fixed.
+  const listed = classifyMultiword({ dictionary: { listing: { kind: "construction", text: "ha tillgång till ngt" }, example: null }, attestation: null, association: null, ai: { verdict: "fast_fras" } });
+  assert.equal(listed.cls, "F2");
+  assert.equal(listed.placement, "own_entry");
 });
