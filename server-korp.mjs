@@ -64,19 +64,33 @@ export function korpCqp(text, pos = null, { spelling = false, forms = [] } = {})
 
 // One answer per query, shared by every script (KORP_CACHE_DIR, default data/reports/korp-cache):
 // the same count or sample is never asked of Språkbanken twice. The corpora don't change.
-const CACHE_DIR = process.env.KORP_CACHE_DIR || "data/reports/korp-cache";
+const cacheDir = () => process.env.KORP_CACHE_DIR || "data/reports/korp-cache";
+// The server (Vercel) can't keep files: with a database client set here and KORP_DB_CACHE=on the
+// answers are kept in public.korp_cache (migration 20261110120000), shared by every instance, so a
+// reading's combinations are asked of Korp once. Off, or before the migration: the file cache only.
+let cacheDb = null;
+export function useKorpCacheTable(supabaseAdmin) { cacheDb = supabaseAdmin; }
+const dbCache = () => (process.env.KORP_DB_CACHE === "on" ? cacheDb : null);
 async function cached(url) {
   try {
     const { readFile } = await import("node:fs/promises");
-    return JSON.parse(await readFile(`${CACHE_DIR}/${await digest(url)}.json`, "utf8"));
+    return JSON.parse(await readFile(`${cacheDir()}/${await digest(url)}.json`, "utf8"));
+  } catch { /* not on disk */ }
+  const db = dbCache();
+  if (!db) return null;
+  try {
+    const { data } = await db.from("korp_cache").select("response").eq("key", await digest(url)).maybeSingle();
+    return data?.response || null;
   } catch { return null; }
 }
 async function store(url, d) {
   try {
     const { mkdir, writeFile } = await import("node:fs/promises");
-    await mkdir(CACHE_DIR, { recursive: true });
-    await writeFile(`${CACHE_DIR}/${await digest(url)}.json`, JSON.stringify(d));
+    await mkdir(cacheDir(), { recursive: true });
+    await writeFile(`${cacheDir()}/${await digest(url)}.json`, JSON.stringify(d));
   } catch { /* a cache that can't be written only costs a query */ }
+  const db = dbCache();
+  if (db) { try { await db.from("korp_cache").upsert({ key: await digest(url), response: d }, { onConflict: "key" }); } catch { /* same */ } }
 }
 const digest = async (s) => (await import("node:crypto")).createHash("sha1").update(s).digest("hex");
 

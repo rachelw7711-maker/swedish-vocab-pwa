@@ -106,3 +106,26 @@ test("a pattern's slot (+ verb) is a placeholder, regex signs never reach the qu
   assert.equal(korpCqp("vara utformat för att + verb"), korpCqp("vara utformat för att"));
   assert.doesNotMatch(korpCqp("ha lust (att)"), /[()]/);
 });
+
+test("Korp answers kept in the database cache with KORP_DB_CACHE=on (the server can't keep files)", async () => {
+  const { useKorpCacheTable, korpRelations } = await import("../server-korp.mjs");
+  const { fakeSupabase } = await import("./fake-supabase.mjs");
+  const d = fakeSupabase({ korp_cache: [] });
+  const saved = { dir: process.env.KORP_CACHE_DIR, offline: process.env.KORP_OFFLINE, fetch: globalThis.fetch };
+  process.env.KORP_CACHE_DIR = "/nonexistent/korp-cache-test";
+  delete process.env.KORP_OFFLINE;
+  process.env.KORP_DB_CACHE = "on";
+  let asked = 0;
+  globalThis.fetch = async () => { asked++; return { json: async () => ({ relations: [{ head: "tända..vb.1", rel: "OBJ", dep: "eld..nn.1", freq: 5, mi: 99 }] }) }; };
+  try {
+    useKorpCacheTable(d);
+    assert.equal((await korpRelations("tända..vb.1"))[0].dep, "eld..nn.1");
+    assert.equal(d.tables.korp_cache.length, 1);
+    assert.equal((await korpRelations("tända..vb.1"))[0].mi, 99);
+    assert.equal(asked, 1, "the second answer came from the table");
+  } finally {
+    useKorpCacheTable(null); delete process.env.KORP_DB_CACHE; globalThis.fetch = saved.fetch;
+    if (saved.dir === undefined) delete process.env.KORP_CACHE_DIR; else process.env.KORP_CACHE_DIR = saved.dir;
+    if (saved.offline !== undefined) process.env.KORP_OFFLINE = saved.offline;
+  }
+});

@@ -11,7 +11,7 @@
 // dictionary's English is a candidate only — it never verifies a sense by itself (§13.5).
 import { lemmatize, saldoEntries } from "./server-lexicon.mjs";
 import { referenceEntries, expressionInReferences, meaningSupport } from "./server-references.mjs";
-import { korpAttestation, korpRelations, judgeAttestation } from "./server-korp.mjs";
+import { korpAttestation, korpRelations, judgeAttestation, useKorpCacheTable } from "./server-korp.mjs";
 
 export const RESULTS = ["supports", "refutes", "not_found", "lookup_failed", "disputed"];
 
@@ -350,6 +350,7 @@ const withTimeout = (p, ms) => { let t; return Promise.race([p, new Promise((_, 
 // phrase (about half a second), the corpus count (several seconds) for an idiom.
 export async function multiwordEvidence(supabaseAdmin, phrase, { korp = {}, timeout = 15000, need = "all", verdict = null } = {}) {
   const attest = korp.attest || korpAttestation, relations = korp.relations || korpRelations;
+  if (supabaseAdmin) useKorpCacheTable(supabaseAdmin);   // shared cache, with KORP_DB_CACHE=on
   const content = await phraseContentWords(supabaseAdmin, phrase);
   const heads = content.flatMap((u) => u.all.map((c) => ({ lemma: c.lemma, pos: c.pos })));
   const dictionary = await dictionaryEvidenceForPhrase(supabaseAdmin, phrase, heads);
