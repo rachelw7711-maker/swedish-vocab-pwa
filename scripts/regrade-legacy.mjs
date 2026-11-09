@@ -90,8 +90,13 @@ if (APPLY) {
     const { data: before, error: e0 } = await db.from("learning_objects").select("id, status, verification_status").in("id", ids);
     if (e0) throw e0;
     for (const b of batch) for (const p of b.parts) {
-      const r = await recordEvidence(db, b.id, "sense", p.text, p.list.map((e) => ({ ...e, note: e.note || "R2 legacy regrade" })), { ruleVersion: R2_VERSION });
-      if (r.error) throw new Error(`evidence for ${b.swedish}: ${r.error}`);
+      // A dropped connection is retried (the write is an upsert); any other error stops the run.
+      for (let attempt = 1; ; attempt++) {
+        const r = await recordEvidence(db, b.id, "sense", p.text, p.list.map((e) => ({ ...e, note: e.note || "R2 legacy regrade" })), { ruleVersion: R2_VERSION });
+        if (!r.error) break;
+        if (attempt === 4 || !/fetch failed|ECONNRESET|ETIMEDOUT|network/i.test(r.error)) throw new Error(`evidence for ${b.swedish}: ${r.error}`);
+        await new Promise((ok) => setTimeout(ok, 3000 * attempt));
+      }
     }
     for (const g of new Set(batch.map((b) => b.grade))) {
       const { error } = await db.from("resource_field_status").update({ grade: g, rule_version: R2_VERSION })

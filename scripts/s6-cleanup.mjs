@@ -43,7 +43,16 @@ async function userRefs(id) {
   return out;
 }
 
-const RETIRE = ["växande intresse", "ta flera beslut", "sätta upp regler för något", "gå ner till stranden", "liknande system", "tända eldar"];
+// Checked 2026-11-10 against the library classification (classify-library-multiword-2026-11-09):
+// these three are F1 (a typical combination of their head word: no entry of its own, decision 1).
+// sätta upp regler för något, gå ner till stranden and liknande system were on the first list but
+// are unclassified (AI "fixed phrase", weak association: too little evidence) — kept as drafts, to review.
+const RETIRE = ["växande intresse", "ta flera beslut", "tända eldar"];
+// Reviewed course pairs checked one by one 2026-11-10 (meanings, examples, sources, user references
+// in every user table: none): the same learning point → the richer or more natural one kept.
+// Hur många…? / Hur många? (a frame vs a question) and Va?! / Va? (disbelief vs not hearing) are
+// different learning points: both kept.
+const REVIEWED_SAME = { "Det låter bra.": "Det låter bra!", "Mums.": "Mums!", "Det hade jag ingen aning om!": "Det hade jag ingen aning om." };
 const plan = { retire: [], match_key: [], duplicates: [], blocked: [] };
 for (const s of RETIRE) {
   const r = rows.find((x) => x.swedish === s);
@@ -72,7 +81,13 @@ for (const [k, list] of keys) {
     const item = { key: k, keep: { id: keep.id, swedish: keep.swedish, status: keep.status }, retire: { id: d.id, swedish: d.swedish, status: d.status, updated_at: d.updated_at }, refs };
     // Two reviewed entries (course lists: "Det låter bra!" and "Det låter bra.") may be meant apart:
     // listed for a decision, not retired.
-    if (["human_reviewed", "published"].includes(d.status)) plan.blocked.push({ ...item, why: "both reviewed: a decision, not a cleanup" });
+    const pair = [keep, d].find((r) => REVIEWED_SAME[r.swedish]);
+    if (pair) {
+      const keepR = live.find((r) => r.swedish === REVIEWED_SAME[pair.swedish]);
+      const refsR = await userRefs(pair.id);
+      const it = { key: k, keep: { id: keepR.id, swedish: keepR.swedish, status: keepR.status }, retire: { id: pair.id, swedish: pair.swedish, status: pair.status, updated_at: pair.updated_at }, refs: refsR };
+      (refsR.total || refsR.unknown.length ? plan.blocked : plan.duplicates).push(it);
+    } else if (["human_reviewed", "published"].includes(d.status)) plan.blocked.push({ ...item, why: "both reviewed, different learning points: both kept" });
     else (refs.total || refs.unknown.length ? plan.blocked : plan.duplicates).push(item);
   }
 }
