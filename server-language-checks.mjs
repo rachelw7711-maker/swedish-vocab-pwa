@@ -119,7 +119,8 @@ const SLOT = new Set(["någon", "något", "några", "någons", "ngn", "ngt", "ng
  */
 export function exampleUsesWord(sentence, forms) {
   const tokens = new Set((String(sentence || "").toLowerCase().match(/\p{L}+/gu) || []));
-  const list = [...forms].flatMap((f) => String(f || "").toLowerCase().split(/\s*\/\s*/)).map((f) => f.trim()).filter(Boolean);
+  // A part in brackets is optional ("hålla med (någon)"): it never has to be in the sentence.
+  const list = [...forms].flatMap((f) => String(f || "").toLowerCase().replace(/\([^)]*\)/g, " ").split(/\s*\/\s*/)).map((f) => f.trim().replace(/\s+/g, " ")).filter(Boolean);
   if (list.some((f) => tokens.has(f))) return true;
   const hasWord = (w) => tokens.has(w)
     || (REFLEXIVE.has(w) && w !== "er" && [...REFLEXIVE].some((r) => tokens.has(r)))
@@ -882,7 +883,7 @@ async function corpusEvidence(korp, phrase, ms = 20000) {
  * never checked — or paid for — again, and one checked by an older version can be told apart.
  * Raise it when the check's rules change in a way that should re-check reused entries.
  */
-export const CHECK_VERSION = "2026-11-09b";
+export const CHECK_VERSION = "2026-11-09c";
 
 export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = null, sense = "", result, forms = [], isPhrase = false, userId = null, textResourceId = null, korp = korpAttestation }) {
   if (!isPhrase && wantedPos && pos !== wantedPos) return { ok: false, reason: `asked_${wantedPos}_got_${pos}` };
@@ -954,10 +955,15 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   card.examples = card.examples.filter((e) => !wrongForm.includes(e.swedish));
   dropped.push(...wrongForm);
   const keptCollocations = [];
+  // A wrong form in the phrase drops the collocation; one only in its example drops the example
+  // ("svika någons förtroende" went for "Han svikade …", "hälla upp kaffe" for "hälde", 2026-11-09).
+  const wrongFormExamples = [];
   for (const c of card.collocations || []) {
-    const bad = await misinflections(supabaseAdmin, `${c.phrase} ${c.example || ""}`, allForms);
-    if (bad.length) droppedCollocations.push({ phrase: c.phrase, reason: `wrong_form:${bad.join(",")}` });
-    else keptCollocations.push(c);
+    const bad = await misinflections(supabaseAdmin, c.phrase, allForms);
+    if (bad.length) { droppedCollocations.push({ phrase: c.phrase, reason: `wrong_form:${bad.join(",")}` }); continue; }
+    const badExample = c.example ? await misinflections(supabaseAdmin, c.example, allForms) : [];
+    if (badExample.length) { wrongFormExamples.push({ phrase: c.phrase, example: c.example, reason: `wrong_form:${badExample.join(",")}` }); c.example = ""; }
+    keptCollocations.push(c);
   }
   card.collocations = keptCollocations;
   // A predicative headword adjective that doesn't agree with its subject (agreementSlip): the
@@ -978,6 +984,9 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   const collocationEv = await Promise.all(card.collocations.map((c) => collocationEvidence(supabaseAdmin, refs, c.phrase, wordForms)));
   // The corpus for each collocation no dictionary lists, counted while the AI checks run.
   const corpusAsked = Promise.all(card.collocations.map((c, i) => (collocationEv[i].kind === "dictionary" ? null : corpusEvidence(korp, c.phrase))));
+  // A related word only parsed as a compound (no dictionary has it): the corpus too, asked now so
+  // that it costs no time — it settles the AI checks' "not a word" (ingripen, sårbarhetsskydd).
+  const relatedCorpusAsked = Promise.all(card.related.map((r, i) => (relatedEv[i].kind === "compound" && !/\s/.test(String(r.word).trim()) ? corpusEvidence(korp, String(r.word).trim()) : null)));
   const relatedNote = (ev) => (ev.kind === "dictionary" ? (ev.gloss ? { dictionary_meaning: ev.gloss } : {}) : { flags: [ev.kind === "none" ? "no_dictionary" : `only_${ev.kind}`] });
   const headwordForms = [...new Set(allForms.flatMap((f) => String(f || "").split(/\s*\/\s*/)).map((f) => f.trim()).filter(Boolean))].slice(0, 40);
   const lexin = !isPhrase && refs ? lexinSenses(refs, pos) : [];
@@ -1039,6 +1048,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   }
   if (!isPhrase && !check.pos_supported && posCheck.status !== "verified") return { ok: false, reason: `pos_not_supported: ${check.note}`, usage };
   const corpus = await corpusAsked;
+  const relatedCorpus = await relatedCorpusAsked;
   const detailCheck = second.check;
   const by = (list, k) => (list || []).find((x) => x.key === k);
   // What is kept although a check doubts it: shown, but the card is not verified (detail.open_items).
@@ -1135,7 +1145,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   // A free combination by the whole-card check stays when the focused one finds it a common,
   // learnable combination (dricka kaffe), at most two of those a card (P6).
   const commonKept = [];
-  const droppedCollocationExamples = [];
+  const droppedCollocationExamples = [...wrongFormExamples];
   const relatedMeaningNotes = [];
   card.collocations = card.collocations.filter((c, i) => {
     const x = (check.collocations || []).find((z) => Number(String(z.key).split(".c")[1]) === i);
@@ -1234,6 +1244,10 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     if (ev.kind === "dictionary" && ev.english?.length && r.en && !meaningSupport(r.en, ev.english).length) relatedMeaningNotes.push({ text: r.word, en: r.en, dictionary: ev.english.slice(0, 4).map((e) => e.text) });
     const noWord = x?.verdict === "not_a_word" || y?.verdict === "not_a_word";
     if (noWord && ev.kind === "none") { droppedRelated.push({ word: r.word, reason: "not_a_word" }); continue; }
+    // Only a compound by its parts, a check says no word, and the corpus never has it: three
+    // signs, no dictionary against them (2026-11-09: 11 of 14 such words were wrong; fartgräns,
+    // the real one, is in the corpus). No answer from Korp decides nothing.
+    if (noWord && ev.kind === "compound" && relatedCorpus[i]?.ok === false && relatedCorpus[i].total === 0) { droppedRelated.push({ word: r.word, reason: "not_a_word_unattested" }); continue; }
     // No dictionary has it: shown, but open until other evidence (the corpus) settles it.
     if ((noWord && ev.kind !== "dictionary") || ev.kind === "none") open.push({ kind: "related_unverified", text: r.word, evidence: ev.kind, check: y?.verdict || null });
     if (x?.verdict === "not_related") {

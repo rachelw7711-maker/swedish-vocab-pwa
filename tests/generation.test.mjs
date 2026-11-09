@@ -188,6 +188,10 @@ test("related words: never the headword's own forms; the part of speech is alway
     { word: "lysande", zh: "闪亮的", pos: "present_participle" },
   ], { lemma: "lampa", forms: [{ type: "plural_indefinite", value: "lampor" }, { type: "present_participle", value: "lysande" }] }, "zh");
   assert.equal(lines, "lampskärm | 灯罩（名词）\nlysande | 闪亮的（现在分词）");
+  // A form that is a word of its own too (säkert: SALDO's adverb) is kept when named so.
+  const forms = [{ type: "neuter_form", value: "säkert" }];
+  assert.equal(relatedLines([{ word: "säkert", zh: "大概", pos: "adverb" }], { lemma: "säker", forms }, "zh"), "");
+  assert.equal(relatedLines([{ word: "säkert", zh: "大概", pos: "adverb" }], { lemma: "säker", forms, words: ["säkert"] }, "zh"), "säkert | 大概（副词）");
   assert.equal(relatedMeaning({ zh: "规定（复数）", pos: "noun" }, "zh"), "规定（复数）（名词）");
   assert.equal(relatedMeaning({ en: "creamy (adjective)", pos: "adjective" }, "en"), "creamy (adjective)");
   assert.equal(relatedMeaning({ en: "written", pos: "perfect_participle" }, "en"), "written (past participle)");

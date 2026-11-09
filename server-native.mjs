@@ -181,9 +181,12 @@ export function relatedMeaning(r, lang) {
  * grammar, not its family. Its participles stay when the model lists them: they are
  * words of their own (uppmuntrande, bokförd) and say so in their part of speech.
  */
-export function relatedLines(related, { lemma, forms = [] }, lang) {
+export function relatedLines(related, { lemma, forms = [], words = [] }, lang) {
+  // `words`: forms that are words of their own too, kept (säkert, eventuellt: SALDO's adverbs,
+  // not only the adjective's neuter — dropped as its inflection before, 2026-11-09).
+  const keep = new Set(words.map((w) => String(w).trim().toLowerCase()));
   const own = new Set([lemma, ...forms.filter((f) => !/participle/.test(f.type)).flatMap((f) => String(f.value || "").split("/"))]
-    .map((w) => String(w || "").trim().toLowerCase()).filter(Boolean));
+    .map((w) => String(w || "").trim().toLowerCase()).filter((w) => w && !keep.has(w)));
   return (related || []).filter((r) => r.word && !own.has(String(r.word).trim().toLowerCase()))
     .map((r) => `${r.word} | ${relatedMeaning(r, lang)}`).join("\n");
 }
@@ -395,7 +398,11 @@ If the input names a part of speech and the sense a text uses, write the entry f
     if (isMultiWord) {
       const asked = normalizeKey(text), got = normalizeKey(lemma);
       const extra = got.startsWith(`${asked} `) ? got.slice(asked.length + 1).split(/\s+/) : [];
-      if (extra.length && extra.every((w) => PLACEHOLDER_WORD.test(w))) lemma = String(text).trim();
+      // Also its valency written out ("hålla med (någon) om något", g3 2026-11-09): placeholders,
+      // optional parts in brackets and the prepositions before them are the frame, not the
+      // headword — and kept, they made every right example fail the headword test.
+      const frame = extra.map((w) => w.replace(/[()]/g, "")).filter(Boolean);
+      if (frame.length && frame.every((w) => PLACEHOLDER_WORD.test(w) || PARTICLES.has(w)) && PLACEHOLDER_WORD.test(frame.at(-1))) lemma = String(text).trim();
       if (pos === "other" && await particleVerb(supabaseAdmin, lemma)) pos = "verb";
     }
     if (foreignLetters(lemma, "sv").length) throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
@@ -519,13 +526,22 @@ If the input names a part of speech and the sense a text uses, write the entry f
       }
     }
 
+    // Related words a dictionary has as adverbs of their own though they are forms of this word
+    // (an adjective's neuter: säkert, eventuellt — Lexin's headwords; SALDO keeps them as forms).
+    const ownWordForms = [];
+    for (const r of result.related || []) {
+      const w = String(r.word || "").trim();
+      if (r.pos !== "adverb" || !w) continue;
+      if ((await saldoEntries(supabaseAdmin, w, "adverb")).length
+        || ((await referenceEntries(supabaseAdmin, w)).lexin_sv || []).some((e) => e.pos === "adverb")) ownWordForms.push(w);
+    }
     // Both explanation-language rows; for an existing entry only its empty fields are filled.
     for (const l of LANGUAGES) {
       await fillTranslation(supabaseAdmin, entryId, l, {
         meaning: String(result[`meaning_${l}`] || "").trim(),
         learning_tip: String(result[`memory_tip_${l}`] || "").trim(),
         collocations: (result.collocations || []).filter((c) => c.phrase).map((c) => [c.phrase, c[l], c.example].filter(Boolean).join(" | ")).join("\n"),
-        related_words: relatedLines(result.related, { lemma, forms }, l),
+        related_words: relatedLines(result.related, { lemma, forms, words: ownWordForms }, l),
       });
     }
 

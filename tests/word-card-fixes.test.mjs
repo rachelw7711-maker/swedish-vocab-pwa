@@ -434,7 +434,7 @@ test("wrong inflections of the headword are found; right forms, other words and 
   assert.deepEqual(await misinflections(null, "Han hällde upp mjölken.", await phraseForms(null, "hälla upp")), []);
 });
 
-test("a wrong inflection drops its example or collocation before the check", async () => {
+test("a wrong inflection drops its example, or a collocation's example (the phrase stays), before the check", async () => {
   const d = fakeSupabase();
   card = baseCard({ lemma: "svika", pos: "verb", meaning_zh: "背叛；辜负", meaning_en: "betray, let down", countability: "",
     examples: [{ swedish: "Han svek sina vänner.", zh: "他背叛了朋友。", en: "He betrayed his friends." }, { swedish: "Hon har aldrig svikit och svikade aldrig.", zh: "…", en: "…" }],
@@ -442,10 +442,13 @@ test("a wrong inflection drops its example or collocation before the check", asy
       { phrase: "svika någons förtroende", zh: "辜负某人的信任", en: "betray someone's trust", example: "Hon svek hans förtroende." }] });
   const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "svika", nativeLanguage: "zh", pos: "verb", chargeQuota: false });
   const sent = JSON.parse(checkPrompts[0].input.at(-1).content)[0].entry;
-  assert.deepEqual(sent.collocations.map((c) => c.phrase), ["svika någons förtroende"]);
+  assert.deepEqual(sent.collocations.map((c) => c.phrase), ["svika ett löfte", "svika någons förtroende"]);
+  assert.equal(sent.collocations[0].example || "", "", "the wrong sentence is not sent");
   assert.deepEqual(sent.examples.map((e) => e.sv), ["Han svek sina vänner."]);
   assert.deepEqual(examplesOf(d, entryId), ["Han svek sina vänner."]);
-  assert.deepEqual(sense(d, entryId).detail.dropped_collocations, [{ phrase: "svika ett löfte", reason: "wrong_form:svikade" }]);
+  assert.equal(sense(d, entryId).detail.dropped_collocations, undefined);
+  assert.deepEqual(sense(d, entryId).detail.dropped_collocation_examples.find((x) => x.phrase === "svika ett löfte"),
+    { phrase: "svika ett löfte", example: "Han svikade inte sitt löfte.", reason: "wrong_form:svikade" });
 });
 
 test("'not with the headword' is not taken for a phrase that has one of its forms; a compound still goes", async () => {
@@ -526,6 +529,25 @@ test("3: the corpus settles what the AI checks get wrong about a combination no 
   assert.equal(out.sense.status, "present");
 });
 
+test("3: a related word only parsed as a compound, called no word by a check, goes only when the corpus never has it", async () => {
+  const { checkNewWordCard } = await import("../server-language-checks.mjs");
+  const corpus = { "fartgräns": { total: 3, perCorpus: { GP2012: 3 }, match: "lemma" }, "sårbarhetsskydd": { total: 0, perCorpus: {}, match: "lemma" } };
+  const korp = async (p) => { if (!(p in corpus)) throw new Error("no answer"); return corpus[p]; };
+  const result = { ...doCard(), related: [
+    { word: "fartgräns", zh: "限速", en: "speed limit", pos: "noun" },
+    { word: "sårbarhetsskydd", zh: "x", en: "x", pos: "noun" },
+    { word: "dödsskydd", zh: "x", en: "x", pos: "noun" },
+  ] };
+  check = okCheck({ related: { "fartgräns": { verdict: "not_a_word" }, "sårbarhetsskydd": { verdict: "not_a_word" }, "dödsskydd": { verdict: "not_a_word" } } });
+  detail2 = null;
+  const out = await checkNewWordCard(fakeSupabase(), { lemma: "dö", pos: "verb", result, forms: result.forms, korp });
+  const kept = out.result.related.map((r) => r.word);
+  assert.ok(kept.includes("fartgräns"), "the corpus has it: kept (open)");
+  assert.ok(!kept.includes("sårbarhetsskydd"), "no dictionary, a check and the corpus: dropped");
+  assert.ok(kept.includes("dödsskydd"), "Korp didn't answer: nothing decided");
+  assert.deepEqual(out.sense.detail.dropped_related, [{ word: "sårbarhetsskydd", reason: "not_a_word_unattested" }]);
+});
+
 test("3: a predicative adjective that doesn't agree with its subject (agreementSlip)", async () => {
   const { agreementSlip } = await import("../server-language-checks.mjs");
   const forms = [{ type: "neuter_form", value: "säkert" }, { type: "plural_form", value: "säkra" }];
@@ -559,6 +581,17 @@ test("4: a multi-word request keeps its own words as the headword, a particle ve
     assert.equal(row.swedish, "gå ut på", got);
     // Saved as an expression (part_of_speech "other", as every multi-word entry), with forms as a verb's (gå: group 4).
     assert.equal(formsOf(d, entryId).verb_group, "4", `${got}: forms as a verb's`);
+  }
+  // Its valency written out with brackets and prepositions is the frame, not the headword, and
+  // the right examples stay (g3 2026-11-09: "hålla med (någon) om något" lost both).
+  for (const got of ["hålla med (någon) om något", "hålla med någon om något"]) {
+    const d = fakeSupabase();
+    card = baseCard({ lemma: got, pos: "verb", meaning_zh: "同意", meaning_en: "agree", swedish_explanation: "tycka samma sak",
+      examples: [{ swedish: "Jag håller med dig om att det är en bra idé.", zh: "我同意你的看法，这是个好主意。", en: "I agree with you that it is a good idea." },
+        { swedish: "Han höll med föregående talare.", zh: "他同意前一位发言人的看法。", en: "He agreed with the previous speaker." }] });
+    const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "hålla med", nativeLanguage: "zh", chargeQuota: false });
+    assert.equal(d.tables.learning_objects.find((r) => r.id === entryId).swedish, "hålla med", got);
+    assert.equal(examplesOf(d, entryId).length, 2, `${got}: both examples kept`);
   }
   // A placeholder the request has stays; an idiom is not made a verb.
   const d = fakeSupabase();

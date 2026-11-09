@@ -155,3 +155,9 @@ test("G2: a sense Lexin shows only with a particle or only through idioms is mar
   assert.match(saga, /avskeda \(en: dismiss\) phrases: 100 man har sagts upp/);
   assert.match(saga, /belongs to that particle verb/);
 });
+
+test("an optional part in brackets need not be in the example", async () => {
+  const { exampleUsesWord } = await import("../server-language-checks.mjs");
+  assert.ok(exampleUsesWord("Han höll med föregående talare.", ["hålla med (någon)", "höll med (någon)"]));
+  assert.ok(!exampleUsesWord("Han höll fast vid sin åsikt.", ["hålla med (någon)", "höll med (någon)"]));
+});
