@@ -10,7 +10,7 @@
 // the strongest; one AI answer the weakest. Word overlap between an English meaning and a
 // dictionary's English is a candidate only — it never verifies a sense by itself (§13.5).
 import { lemmatize, saldoEntries } from "./server-lexicon.mjs";
-import { referenceEntries, expressionInReferences } from "./server-references.mjs";
+import { referenceEntries, expressionInReferences, meaningSupport } from "./server-references.mjs";
 import { korpAttestation, korpRelations, judgeAttestation } from "./server-korp.mjs";
 
 export const RESULTS = ["supports", "refutes", "not_found", "lookup_failed", "disputed"];
@@ -478,4 +478,47 @@ export function regradeLegacySense({ exists = true, posVerified = false, parts =
     : grades.some((g) => g === "verified") ? "partial"
     : grades.every((g) => g === "ai_consistent") ? "ai_consistent" : "unverified";
   return { exists, pos: posVerified ? "verified" : "unverified", parts: out, entry, recheck: core.filter((p) => p.grade !== "verified").map((p) => p.text) };
+}
+
+// ---------------------------------------------------------------------------
+// Sense coverage (R7, §6.3): which of Lexin's senses a card's English meaning covers
+// ---------------------------------------------------------------------------
+// A Lexin sense whose every example has the word followed by a particle ("100 man har sagts upp")
+// belongs to the particle verb (säga upp), not to this word: never "missing" from its card.
+export function particleVerbSense(sense, forms = []) {
+  const own = new Set(forms.map((f) => String(f).toLowerCase()));
+  const examples = [...(sense.examples || []), ...(sense.idioms || []).map((i) => (Array.isArray(i) ? i[0] : i))].map((x) => String(x).toLowerCase());
+  if (!examples.length || !own.size) return false;
+  return examples.every((x) => { const w = x.split(/[\s,.;:!?]+/); return w.some((t, i) => own.has(t) && PARTICLE.has(w[i + 1])); });
+}
+
+/**
+ * refs: the headword's references; meaningEn: the card's English meaning ("a; b; c"); forms: the
+ * headword's forms. → [{ variant, definition, english, covered, particleVerb }] for each Lexin sense
+ * of this part of speech that has English. A sense is covered when one part of the card's meaning
+ * shares a content word with its English (meaningSupport) — a candidate match, not a sense link.
+ */
+export function senseCoverage(refs, pos, meaningEn, forms = []) {
+  const english = (refs?.lexin_en || []).filter((e) => e.pos === pos);
+  const parts = String(meaningEn || "").split(";").map((p) => p.trim()).filter(Boolean);
+  const out = [];
+  for (const e of (refs?.lexin_sv || []).filter((x) => x.pos === pos)) {
+    for (const x of e.lexemes || []) {
+      // The two Lexin dictionaries share sense ids (VariantID), else the same definition.
+      const def = (t) => String(t || "").trim().toLowerCase();
+      const en = english.find((y) => (x.variant && y.variant === x.variant) || def(y.definition) === def(x.definition))?.english || [];
+      if (!en.length) continue;
+      const eqs = en.map((text) => ({ source: "lexin_en", text }));
+      out.push({ variant: x.variant || null, definition: x.definition, english: en.slice(0, 4), covered: parts.some((p) => meaningSupport(p, eqs).length > 0), particleVerb: particleVerbSense(x, forms) });
+    }
+  }
+  // Only Lexin's English dictionary has the word: its senses, with their own examples and idioms.
+  if (!(refs?.lexin_sv || []).some((x) => x.pos === pos)) {
+    for (const y of english.filter((e) => (e.english || []).length)) {
+      const eqs = y.english.map((text) => ({ source: "lexin_en", text }));
+      const examples = (y.examples || []).map((x) => (Array.isArray(x) ? x[0] : x));
+      out.push({ variant: y.variant || null, definition: y.definition, english: y.english.slice(0, 4), covered: parts.some((p) => meaningSupport(p, eqs).length > 0), particleVerb: particleVerbSense({ examples, idioms: y.idioms }, forms) });
+    }
+  }
+  return out;
 }

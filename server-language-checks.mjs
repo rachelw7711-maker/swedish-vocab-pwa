@@ -13,7 +13,7 @@ import { formReadings, saldoPartsOfSpeech, saldoEntries, compoundRows, multiWord
 import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
 import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { korpAttestation, judgeAttestation } from "./server-korp.mjs";
-import { posDecision, phraseSlots, lexinListings } from "./server-evidence.mjs";
+import { posDecision, phraseSlots, lexinListings, senseCoverage } from "./server-evidence.mjs";
 import { callOpenAIJson, logUsage } from "./server-native.mjs";
 import { openaiCost } from "./server-prices.mjs";
 
@@ -1308,10 +1308,14 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   // for scripts/korp-verify.mjs, where corpus use can still verify it (2026-11-04).
   const english = !isPhrase && refs ? englishEquivalents(refs, pos) : [];
   const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
+  // Lexin senses the card's meaning doesn't cover (R7), a particle verb's sense apart: recorded
+  // always (free); an open item — the card then not verified — only with KNOWLEDGE_SENSE_COVERAGE=on.
+  const missingSenses = !isPhrase && refs ? senseCoverage(refs, pos, card.meaning_en, allForms).filter((s) => !s.covered && !s.particleVerb).map(({ variant, definition, english: en }) => ({ variant, definition, english: en })) : [];
+  if (missingSenses.length && process.env.KNOWLEDGE_SENSE_COVERAGE === "on") open.push({ kind: "missing_senses", senses: missingSenses });
   const detail = { check_version: CHECK_VERSION, verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits, ...ungrammatical], note: check.note, wiktionary: page.status, en_reference: enReference,
     ...(removedSenses.length ? { removed_senses: removedSenses } : {}), ...(ungrammatical.length ? { ungrammatical } : {}), ...(repeated.length ? { repeated_collocation_examples: repeated } : {}), ...(droppedCollocationExamples.length ? { dropped_collocation_examples: droppedCollocationExamples } : {}), ...(relatedMeaningNotes.length ? { related_meaning_notes: relatedMeaningNotes } : {}), ...(commonKept.length ? { common_combinations: commonKept } : {}),
     ...(droppedCollocations.length ? { dropped_collocations: droppedCollocations } : {}), ...(droppedRelated.length ? { dropped_related: droppedRelated } : {}), ...(foreign.length ? { foreign_script: foreign } : {}),
-    ...(open.length ? { open_items: open } : {}) };
+    ...(missingSenses.length ? { missing_senses: missingSenses } : {}), ...(open.length ? { open_items: open } : {}) };
   const sources = ["ai_check", page.status === "found" && "sv-wiktionary", item.references.lexin && LEXIN_SV_SOURCE_ID].filter(Boolean).join("+");
   return {
     ok: true, result: card, pos: corrected ? { ...posCheck, corrected } : posCheck, usage,

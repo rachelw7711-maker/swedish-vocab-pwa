@@ -5,7 +5,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { useSaldoFiles } from "../server-lexicon.mjs";
 import { useReferenceFiles, referenceEntries } from "../server-references.mjs";
-import { evidence, gradeItem, mayRemove, phraseInListing, phraseSlots, lexinListings, dictionaryEvidenceForPhrase, classifyMultiword, associationOf, posDecision, reusePolicy, regradeLegacySense, isExplanatoryPart } from "../server-evidence.mjs";
+import { evidence, gradeItem, mayRemove, phraseInListing, phraseSlots, lexinListings, dictionaryEvidenceForPhrase, classifyMultiword, associationOf, posDecision, reusePolicy, regradeLegacySense, isExplanatoryPart, senseCoverage } from "../server-evidence.mjs";
 
 before(async () => { await useSaldoFiles(); await useReferenceFiles(); });
 
@@ -184,4 +184,15 @@ test("word card collocations: strict listing — the phrase itself, not any cons
   assert.equal((await collocationEvidence(null, drömma, "drömma snabbt", ["drömma"], { pos: "verb" })).kind, "none");
   // The words of a construction in another order are not it.
   assert.equal((await collocationEvidence(null, drömma, "om något drömma", ["drömma"], { pos: "verb" })).kind, "none");
+});
+
+test("sense coverage (R7): Lexin senses the card's English misses; a particle verb's sense is not missing", async () => {
+  const { saldoEntries } = await import("../server-lexicon.mjs");
+  const forms = async (w, p) => (await saldoEntries(null, w, p)).flatMap((r) => Object.values(r.forms || {}).flat());
+  const regel = senseCoverage(await referenceEntries(null, "regel"), "noun", "rule; regulation", await forms("regel", "noun"));
+  assert.deepEqual(regel.filter((s) => !s.covered).map((s) => s.english[0]), ["bolt"]);
+  const säga = senseCoverage(await referenceEntries(null, "säga"), "verb", "say; tell", await forms("säga", "verb"));
+  const dismiss = säga.find((s) => s.english.includes("dismiss"));
+  assert.equal(dismiss.covered, false);
+  assert.equal(dismiss.particleVerb, true, "\"100 man har sagts upp\": säga upp's sense");
 });
