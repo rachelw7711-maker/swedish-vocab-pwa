@@ -622,3 +622,34 @@ test("knowledge v2: with MULTIWORD_SEARCH_CLASSIFY=on a searched combination is 
     assert.equal(row.object_type, "expression");
   } finally { delete process.env.MULTIWORD_SEARCH_CLASSIFY; }
 });
+
+test("MULTIWORD_SEARCH_CLASSIFY=on before deploy: no duplicate, no skipped check, existing entries reused", async () => {
+  const { resolveExpressionEntries } = await import("../server-reading.mjs");
+  process.env.MULTIWORD_SEARCH_CLASSIFY = "on";
+  try {
+    const ex = [{ swedish: "Det finns ett växande intresse för svensk mat.", zh: "x", en: "x" }];
+    const d = fakeSupabase();
+    card = baseCard({ lemma: "växande intresse", pos: "other", meaning_zh: "日益增长的兴趣", meaning_en: "growing interest", swedish_explanation: "ett intresse som blir större", examples: ex });
+    const first = await generateWordEntry({ supabaseAdmin: d, userId: "u1", word: "växande intresse", nativeLanguage: "zh", chargeQuota: false });
+    assert.equal(checkPrompts.length > 0, true, "the word-card checks ran as for any card");
+    const calls = prompts.length;
+    // Another reader searching it (any spelling of it) gets the same draft, no second card, no AI.
+    const again = await generateWordEntry({ supabaseAdmin: d, userId: "u2", word: "växande intresse", nativeLanguage: "zh", chargeQuota: false });
+    assert.equal(again.entryId, first.entryId);
+    assert.equal(again.created, false);
+    assert.equal(prompts.length, calls);
+    // A reading meeting it later links that draft (pending) rather than making another.
+    const [r] = await resolveExpressionEntries(d, [{ expression_text: "växande intresse", meaning_zh: "x", source_sentence: "Ett växande intresse." }],
+      { objectType: "phrase", category: "common_collocation", nativeLanguage: "zh", classify: async () => ({ cls: "F1", placement: "headword_usage", reasons: [] }) });
+    assert.equal(r.expression_id, first.entryId);
+    assert.equal(d.tables.learning_objects.filter((o) => o.object_type !== "word").length, 1);
+    // An existing public phrase is reused as before, never reclassified or demoted.
+    const p = fakeSupabase({ learning_objects: [{ id: "p1", swedish: "ta det lugnt", part_of_speech: "other", object_type: "expression", status: "human_reviewed", match_key: "ta det lugnt" }],
+      learning_object_translations: [{ learning_object_id: "p1", native_language: "zh", meaning: "放松" }] });
+    const before = prompts.length;
+    const reused = await generateWordEntry({ supabaseAdmin: p, userId: "u3", word: "tar det lugnt", nativeLanguage: "zh", chargeQuota: false });
+    assert.equal(reused.entryId, "p1");
+    assert.equal(prompts.length, before);
+    assert.equal(p.tables.learning_objects[0].status, "human_reviewed");
+  } finally { delete process.env.MULTIWORD_SEARCH_CLASSIFY; }
+});
