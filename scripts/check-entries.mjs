@@ -21,7 +21,7 @@
 // the entry's "reuse_check" mark is closed, and drafts whose sense is verified are promoted.
 //   node --env-file=.env scripts/check-entries.mjs --reading|--drafts-only|--reused|--ids f [--recheck] [--limit N] [--write]
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { useSaldoFiles } from "../server-lexicon.mjs";
 import { useReferenceFiles } from "../server-references.mjs";
 import { checkNewWordCard, CHECK_VERSION } from "../server-language-checks.mjs";
@@ -73,7 +73,11 @@ const current = (s) => s && (s.status === "verified" || s.detail?.check_version 
 // From a report: what an earlier batch already recorded (its version, by this script) is not
 // recorded again, so --limit writes the report in batches.
 const recorded = (s) => s?.detail?.check_version === VERSION && (s.detail.checked_by === "check-entries" || s.source === "check-entries");
-const todo = earlier ? entries.filter((e) => !current(senseOf(e.id)) && !recorded(senseOf(e.id))).slice(0, LIMIT)
+// With --recheck a report made after the stored result replaces it (an entry corrected and checked
+// again — the same check version recorded before must not hide the new result).
+const reportAt = earlier ? statSync(opt("--from-report")).mtime : null;
+const older = (s) => !s || new Date(s.updated_at) < reportAt;
+const todo = earlier ? entries.filter((e) => (RECHECK ? older(senseOf(e.id)) : !current(senseOf(e.id)) && !recorded(senseOf(e.id)))).slice(0, LIMIT)
   : entries.filter((e) => e.status === "draft" || !senseOf(e.id) || (!current(senseOf(e.id)) && (RECHECK || MODE === "--reused" || MODE === "--ids"))).slice(0, LIMIT);
 const skipped = entries.filter((e) => !todo.includes(e));
 console.log(`entries ${entries.length}; check on record and current (reused as it is) ${skipped.filter((e) => current(senseOf(e.id))).length}; to check ${todo.length}`);

@@ -1,5 +1,5 @@
 // Korp evidence for parts of speech and senses no dictionary confirms (2026-11-04; server-korp.mjs).
-//   node --env-file=.env scripts/korp-verify.mjs --max-usd 3 [--fields pos,sense] [--limit n] [--write]
+//   node --env-file=.env scripts/korp-verify.mjs --max-usd 3 [--fields pos,sense] [--limit n] [--ids <json>] [--write]
 // Picks the statuses still "present" because no reference has the word or its English
 // (pos: open=no_reference; sense: open=no_dictionary_english / dictionary_english_differs), the
 // ones new cards and corrections leave behind too. Existence and part of speech are counted;
@@ -60,7 +60,9 @@ const statuses = MISMATCH
     .filter((s) => (s.detail?.remaining || []).some((r) => SENSE_KINDS.includes(r.kind) || r.kind === "example_does_not_fit"))   // the latter for sentences to replace it from
   : (await pageAll(() => db.from("resource_field_status").select("learning_object_id, field, status, source, detail").in("field", FIELDS).eq("status", "present")))
     .filter((s) => OPEN[s.field]?.includes(s.detail?.open) || (s.field === "sense" && !s.detail?.open && unreferenced(s.detail)));
-const ids = [...new Set(statuses.map((s) => s.learning_object_id))].slice(0, LIMIT);
+// --ids <file>: only these entries (a JSON array), e.g. a few just corrected.
+const ONLY = opt("--ids") ? new Set(JSON.parse(readFileSync(opt("--ids"), "utf8"))) : null;
+const ids = [...new Set(statuses.map((s) => s.learning_object_id))].filter((id) => !ONLY || ONLY.has(id)).slice(0, LIMIT);
 console.log({ statuses: statuses.length, entries: ids.length, write: WRITE, maxUsd: MAX_USD });
 
 const CACHE = OUT + "results.json";
@@ -155,6 +157,7 @@ if (WRITE) {
   const batch = randomUUID(), at = new Date().toISOString();
   let written = 0;
   for (const s of statuses) {
+    if (ONLY && !ONLY.has(s.learning_object_id)) continue;   // --ids: nothing else is written either
     const c = cache[s.learning_object_id], r = c?.[s.field];
     if (!r || typeof r !== "object") continue;
     if (s.field === "sense" && r.ok && r.method !== "parts") continue;   // not yet judged part by part
@@ -175,7 +178,7 @@ if (WRITE) {
     must(await db.from("resource_field_status").update({ ...next, updated_at: at }).eq("learning_object_id", s.learning_object_id).eq("field", s.field));
     written++;
   }
-  const touched = [...new Set(statuses.filter((s) => cache[s.learning_object_id]?.[s.field]).map((s) => s.learning_object_id))];
+  const touched = [...new Set(statuses.filter((s) => cache[s.learning_object_id]?.[s.field] && (!ONLY || ONLY.has(s.learning_object_id))).map((s) => s.learning_object_id))];
   for (let i = 0; i < touched.length; i += 200) must(await db.rpc("refresh_resource_summary", { p_ids: touched.slice(i, i + 200) }));
   console.log({ batch, written });
 }
