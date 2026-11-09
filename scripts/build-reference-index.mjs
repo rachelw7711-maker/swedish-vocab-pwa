@@ -59,7 +59,10 @@ function lexinSwedish(file) {
     if (pos === "verb") forms.present = a.Value;
     const lexemes = all(body, /<Lexeme ([^>]*)>([\s\S]*?)<\/Lexeme>/g).map(([, h, x]) => ({
       variant: attrs(h).VariantID || "",
-      definition: text(x.match(/<Definition[^>]*>([^<]*)/)?.[1]),
+      // The lexeme's own definition, never one inside an idiom (2026-11-09: 413 senses had an idiom's
+      // meaning as theirs — man the pronoun "mycket snabbt", from "innan man vet ordet av"); without
+      // one, Lexin's defining comment ("anger obestämd person").
+      definition: text(x.replace(/<Idiom\b[\s\S]*?<\/Idiom>/g, "").match(/<Definition[^>]*>([^<]*)/)?.[1] || x.match(/<Comment[^>]*Type="def"[^>]*>([^<]*)/)?.[1]),
       constructions: all(x, /<Graminfo[^>]*>([^<]*)<\/Graminfo>/g).map((m) => text(m[1])),
       examples: all(x, /<Example[^>]*>([^<]*)<\/Example>/g).map((m) => text(m[1])),
       idioms: all(x, /<Idiom[^>]*>([^<]*)(?:<Definition[^>]*>([^<]*)<\/Definition>)?/g).map((m) => [text(m[1]), text(m[2])]),
