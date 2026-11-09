@@ -14,6 +14,7 @@ import { openaiCost, ttsCost, assessmentCost, usageSource, PRICE_VERSION } from 
 import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters, CHECK_VERSION } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
 import { lemmatize, saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms, cardFieldsFromSaldo } from "./server-lexicon.mjs";
+import { multiwordEvidence, classifyMultiword } from "./server-evidence.mjs";
 import { referenceEntries, referencePos, lexinPromptLine, expressionReferenceLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
@@ -540,6 +541,13 @@ If the input names a part of speech and the sense a text uses, write the entry f
     let entryId = isPhrase
       ? (await findExistingExpression(supabaseAdmin, lemma, matchKey))?.id || null
       : (await resolveWord(supabaseAdmin, lemma, pos)).entryId;
+    // A new multi-word card from search (knowledge v2, decision 1): with MULTIWORD_SEARCH_CLASSIFY=on
+    // it is public only when a dictionary lists the combination (a fixed phrase or idiom); any other
+    // — a typical or free combination, or one nothing decides — is written for the reader who asked
+    // but kept a draft (pending), out of the shared library. Off (default): as before.
+    const classified = isPhrase && !entryId && process.env.MULTIWORD_SEARCH_CLASSIFY === "on"
+      ? classifyMultiword({ ...(await multiwordEvidence(supabaseAdmin, lemma, { timeout: Number(process.env.MULTIWORD_KORP_TIMEOUT_MS) || 15000 }).catch(() => ({}))), ai: {} })
+      : null;
     if (!entryId) {
       entryId = randomUUID();
       const { error: insertError } = await supabaseAdmin.from("learning_objects").insert({
@@ -547,8 +555,8 @@ If the input names a part of speech and the sense a text uses, write the entry f
         swedish: lemma,
         part_of_speech: isPhrase ? "other" : pos,
         pos_detail: grammar ? grammar.posDetail : (pos === "noun" ? "" : result.pos_detail || ""),
-        object_type: isPhrase ? "phrase" : "word",
-        category: isPhrase ? "common_phrase" : null,
+        object_type: isPhrase ? (classified?.cls === "F3" ? "expression" : "phrase") : "word",
+        category: isPhrase ? (classified?.cls === "F3" ? "everyday_expression" : "common_phrase") : null,
         cefr_level: result.cefr_level || null,
         chinese: String(result.meaning_zh || "").trim(),
         swedish_explanation: result.swedish_explanation || "",
@@ -557,7 +565,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         passiv_s: passive,
         countability: grammar?.countability || null,
         source,
-        status: noExample ? "draft" : "ai_generated",
+        status: noExample || (classified && classified.placement !== "own_entry") ? "draft" : "ai_generated",
       });
       if (insertError) {
         // Lost a race with another insert of the same (swedish, pos): reuse it.

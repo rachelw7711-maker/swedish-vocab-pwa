@@ -605,3 +605,20 @@ test("4: a multi-word request keeps its own words as the headword, a particle ve
   const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "ta tjuren vid hornen", nativeLanguage: "zh", chargeQuota: false });
   assert.equal(d.tables.learning_objects.find((r) => r.id === entryId).swedish, "ta tjuren vid hornen");
 });
+
+test("knowledge v2: with MULTIWORD_SEARCH_CLASSIFY=on a searched combination is public only when a dictionary lists it", async () => {
+  process.env.MULTIWORD_SEARCH_CLASSIFY = "on";
+  try {
+    const ex = (s) => [{ swedish: s, zh: "x", en: "x" }];
+    let d = fakeSupabase();
+    card = baseCard({ lemma: "växande intresse", pos: "other", meaning_zh: "日益增长的兴趣", meaning_en: "growing interest", swedish_explanation: "ett intresse som blir större", examples: ex("Det finns ett växande intresse för svensk mat.") });
+    let { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "växande intresse", nativeLanguage: "zh", chargeQuota: false });
+    assert.equal(d.tables.learning_objects.find((r) => r.id === entryId).status, "draft", "not listed: written for the reader, kept out of the library");
+    d = fakeSupabase();
+    card = baseCard({ lemma: "ta det lugnt", pos: "other", meaning_zh: "放松", meaning_en: "take it easy", swedish_explanation: "inte stressa", examples: ex("Ta det lugnt, vi hinner.") });
+    ({ entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "ta det lugnt", nativeLanguage: "zh", chargeQuota: false }));
+    const row = d.tables.learning_objects.find((r) => r.id === entryId);
+    assert.equal(row.status, "ai_generated", "a Lexin idiom is public");
+    assert.equal(row.object_type, "expression");
+  } finally { delete process.env.MULTIWORD_SEARCH_CLASSIFY; }
+});
