@@ -550,3 +550,31 @@ export function removalDecision(held = [], found = [], { reason = "" } = {}) {
   if (refutes.every((e) => /^(ai_|legacy_ai)/.test(e.kind))) return { action: "dispute", grade: "disputed", why: "ai_only_refutation" };
   return all.grade === "refuted" ? { action: "remove", grade: "refuted", why: all.reasons.join(",") } : { action: "dispute", grade: all.grade === "unverified" ? "unverified" : "disputed", why: "refutation_not_decisive" };
 }
+
+// ---------------------------------------------------------------------------
+// Recording evidence (public.content_evidence, migration 20261110120000)
+// ---------------------------------------------------------------------------
+export const RULE_VERSION = "kv2-2026-11-09";
+const SOURCE_OF = { lexin: "lexin-sv-2020", lexin_sv: "lexin-sv-2020" };
+/**
+ * Writes an item's evidence rows (evidence() objects) for an entry: one row per kind and rule version,
+ * replaced when recorded again. Only with KNOWLEDGE_EVIDENCE_WRITE=on (after migration A is applied);
+ * otherwise, or on any error, nothing is written and { written: 0 } — evidence never blocks content.
+ */
+export async function recordEvidence(supabaseAdmin, learningObjectId, itemType, itemRef, list, { ruleVersion = RULE_VERSION } = {}) {
+  if (process.env.KNOWLEDGE_EVIDENCE_WRITE !== "on" || !supabaseAdmin || !list?.length) return { written: 0 };
+  const rows = list.map((e) => ({
+    learning_object_id: learningObjectId, item_type: itemType, item_ref: String(itemRef || ""), kind: e.kind, result: e.result,
+    strength: strengthOf(e), source_id: SOURCE_OF[e.source] || null,
+    source_ref: Object.fromEntries(Object.entries({ ref: e.ref, source: e.source, ...(e.source_ref || {}) }).filter(([, v]) => v != null)),
+    rule_version: ruleVersion, note: e.note || "",
+  }));
+  try {
+    const { error } = await supabaseAdmin.from("content_evidence").upsert(rows, { onConflict: "learning_object_id,item_type,item_ref,kind,rule_version" });
+    if (error) throw error;
+    return { written: rows.length };
+  } catch (error) {
+    console.warn("[evidence] not recorded", error.message);
+    return { written: 0, error: error.message };
+  }
+}

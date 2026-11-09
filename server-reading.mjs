@@ -7,7 +7,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { generateWordEntry, noteReuse } from "./server-native.mjs";
 import { openaiCost, usageSource, PRICE_VERSION } from "./server-prices.mjs";
 import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
-import { multiwordEvidence, classifyMultiword } from "./server-evidence.mjs";
+import { multiwordEvidence, classifyMultiword, recordEvidence } from "./server-evidence.mjs";
 import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence, fillExpressionLanguage, latinLookalikes } from "./server-language-checks.mjs";
 import { lookupWiktionary } from "./server-wiktionary.mjs";
 import { formReadings } from "./server-lexicon.mjs";
@@ -1541,6 +1541,8 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
         await supabaseAdmin.from("learning_object_translations").insert({ learning_object_id: row.id, native_language: nativeLanguage, meaning: created.item.meaning_zh || "",
           example_translation: null, updated_at: now });
         newRows.push({ id: row.id, expression: row.swedish, meaning: created.item.meaning_zh || "", meaningLanguage: nativeLanguage, sentence: "" });
+        // Why it is an entry of its own (the classification's evidence), with KNOWLEDGE_EVIDENCE_WRITE=on.
+        if (created.classification?.evidence) await recordEvidence(supabaseAdmin, row.id, "classification", created.classification.cls || "", created.classification.evidence);
         // Collected from a text: the meaning only — the rest, the example too, is recorded as missing.
         await recordEntryStatus(supabaseAdmin, row.id, { type: module, pos: "other", [`meaning_${nativeLanguage}`]: Boolean(created.item.meaning_zh), example: false });
       }

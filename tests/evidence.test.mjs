@@ -214,3 +214,19 @@ test("protection (R8): confirmed content is disputed, not removed, by a later AI
   // Nothing found against it: kept.
   assert.equal(removalDecision(legacy, [evidence("korp_attestation", "not_found")]).action, "keep");
 });
+
+test("evidence rows are written only with KNOWLEDGE_EVIDENCE_WRITE=on, one per kind and rule version", async () => {
+  const { recordEvidence } = await import("../server-evidence.mjs");
+  const { fakeSupabase } = await import("./fake-supabase.mjs");
+  const d = fakeSupabase({ content_evidence: [] });
+  const list = [evidence("dictionary_listing", "supports", { ref: "går i taket", source: "lexin_sv" }), evidence("korp_attestation", "supports", { note: "331 hits" })];
+  assert.equal((await recordEvidence(d, "x1", "classification", "F3", list)).written, 0);
+  process.env.KNOWLEDGE_EVIDENCE_WRITE = "on";
+  try {
+    assert.equal((await recordEvidence(d, "x1", "classification", "F3", list)).written, 2);
+    const row = d.tables.content_evidence.find((r) => r.kind === "dictionary_listing");
+    assert.equal(row.strength, 5);
+    assert.equal(row.source_id, "lexin-sv-2020");
+    assert.equal(row.source_ref.ref, "går i taket");
+  } finally { delete process.env.KNOWLEDGE_EVIDENCE_WRITE; }
+});
