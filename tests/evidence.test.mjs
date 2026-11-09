@@ -174,3 +174,14 @@ test("classification: the AI's 'fixed phrase' plus a strong corpus association i
   assert.equal(listed.cls, "F2");
   assert.equal(listed.placement, "own_entry");
 });
+
+test("word card collocations: strict listing — the phrase itself, not any construction containing its words", async () => {
+  const { collocationEvidence } = await import("../server-language-checks.mjs");
+  const drömma = await referenceEntries(null, "drömma");
+  const listed = await collocationEvidence(null, drömma, "drömma om något", ["drömma", "drömmer"], { pos: "verb" });
+  assert.equal(listed.kind, "dictionary");
+  assert.equal(listed.listing, true);
+  assert.equal((await collocationEvidence(null, drömma, "drömma snabbt", ["drömma"], { pos: "verb" })).kind, "none");
+  // The words of a construction in another order are not it.
+  assert.equal((await collocationEvidence(null, drömma, "om något drömma", ["drömma"], { pos: "verb" })).kind, "none");
+});

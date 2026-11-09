@@ -11,9 +11,9 @@
 
 import { formReadings, saldoPartsOfSpeech, saldoEntries, compoundRows, multiWordVerbRows, saldoHasExpression } from "./server-lexicon.mjs";
 import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
-import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, collocationInLexin, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
+import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { korpAttestation, judgeAttestation } from "./server-korp.mjs";
-import { posDecision } from "./server-evidence.mjs";
+import { posDecision, phraseSlots, lexinListings } from "./server-evidence.mjs";
 import { callOpenAIJson, logUsage } from "./server-native.mjs";
 import { openaiCost } from "./server-prices.mjs";
 
@@ -685,10 +685,18 @@ export async function relatedEvidence(supabaseAdmin, word, pos = "noun", { askWi
   return { kind: "none" };
 }
 
-/** Whether the dictionaries list a collocation: a Lexin construction, idiom or example with its fixed words, or a SALDO or Lexin expression. */
-export async function collocationEvidence(supabaseAdmin, refs, phrase, headwordForms = []) {
-  const lexin = refs ? collocationInLexin(refs, phrase, headwordForms) : [];
-  if (lexin.length) return { kind: "dictionary", text: lexin[0].text };
+/**
+ * Whether the dictionaries have a collocation: a Lexin construction or idiom of the headword that is
+ * the phrase itself (strict: in order, each word in one of its forms, a slot only for a slot — knowledge
+ * v2, 2026-11-09; the old rule took any construction that merely contained the other words), a Lexin
+ * example sentence with it (existence only: listing false), or a SALDO or Lexin expression.
+ * pos: the headword's part of speech (a construction of another part of speech is another word).
+ */
+export async function collocationEvidence(supabaseAdmin, refs, phrase, headwordForms = [], { pos = null } = {}) {
+  const hits = refs ? lexinListings(refs, await phraseSlots(supabaseAdmin, phrase), { pos }) : [];
+  const listed = hits.find((h) => h.kind !== "example");
+  if (listed) return { kind: "dictionary", listing: true, text: listed.text };
+  if (hits.length) return { kind: "dictionary", listing: false, text: hits[0].text };
   const p = String(phrase || "").trim().toLowerCase();
   if (/\s/.test(p) && ((await saldoHasExpression(supabaseAdmin, [p])) || (await expressionInReferences(supabaseAdmin, p)).length)) return { kind: "dictionary", text: p };
   return { kind: "none" };
@@ -994,7 +1002,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   const explanationAgreement = !isPhrase && pos === "adjective" ? await agreementSlip(supabaseAdmin, card.swedish_explanation, { lemma, forms }) : null;
   card.related = card.related || [];
   const relatedEv = await Promise.all(card.related.map((r) => relatedEvidence(supabaseAdmin, r.word, r.pos)));
-  const collocationEv = await Promise.all(card.collocations.map((c) => collocationEvidence(supabaseAdmin, refs, c.phrase, wordForms)));
+  const collocationEv = await Promise.all(card.collocations.map((c) => collocationEvidence(supabaseAdmin, refs, c.phrase, wordForms, { pos: isPhrase ? null : pos })));
   // The corpus for each collocation no dictionary lists, counted while the AI checks run.
   const corpusAsked = Promise.all(card.collocations.map((c, i) => (collocationEv[i].kind === "dictionary" ? null : corpusEvidence(korp, c.phrase))));
   // A related word only parsed as a compound (no dictionary has it): the corpus too, asked now so
