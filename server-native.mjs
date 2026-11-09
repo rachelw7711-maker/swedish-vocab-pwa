@@ -146,8 +146,9 @@ function wordCardSchema() {
     transitivity: { type: "string", enum: ["transitive", "intransitive", "both", ""] },
     countability: { type: "string", enum: ["countable", "uncountable", "both", ""] },
     passive: { type: "string" },
-    // minItems: without it the model returned no examples at all (seen 2026-10-31).
-    examples: { type: "array", minItems: 2, maxItems: 2, items: pair({ swedish: { type: "string" }, zh: { type: "string" }, en: { type: "string" } }) },
+    // minItems 1: without it the model returned no examples at all (seen 2026-10-31). No more is
+    // asked for (2026-11-09: two were always written, the second often a padded copy of the first).
+    examples: { type: "array", minItems: 1, maxItems: 3, items: pair({ swedish: { type: "string" }, zh: { type: "string" }, en: { type: "string" } }) },
     collocations: { type: "array", items: pair({ phrase: { type: "string" }, zh: { type: "string" }, en: { type: "string" }, example: { type: "string" } }) },
     related: { type: "array", items: pair({ word: { type: "string" }, zh: { type: "string" }, en: { type: "string" }, pos: { type: "string", enum: RELATED_POS } }) },
     memory_tip_zh: { type: "string" },
@@ -181,6 +182,25 @@ export function relatedMeaning(r, lang) {
  * grammar, not its family. Its participles stay when the model lists them: they are
  * words of their own (uppmuntrande, bokförd) and say so in their part of speech.
  */
+/**
+ * Related words a dictionary has as words of their own though they are forms of the headword:
+ * an adjective's neuter as an adverb (säkert, eventuellt — Lexin's headwords; SALDO keeps them
+ * as forms), and a homograph of another part of speech that SALDO has as a headword (svek, the
+ * noun, is svika's past; frys, tomt, rätta — 2026-11-09). A comparative of the same part of
+ * speech (äldre, bättre) stays a form.
+ */
+export async function ownWordFormsOf(supabaseAdmin, related, pos) {
+  const words = [];
+  for (const r of related || []) {
+    const w = String(r.word || "").trim();
+    if (!w) continue;
+    if (r.pos === "adverb" && ((await saldoEntries(supabaseAdmin, w, "adverb")).length
+      || ((await referenceEntries(supabaseAdmin, w)).lexin_sv || []).some((e) => e.pos === "adverb"))) words.push(w);
+    else if (["noun", "verb", "adjective"].includes(r.pos) && r.pos !== pos && (await saldoEntries(supabaseAdmin, w, r.pos)).length) words.push(w);
+  }
+  return words;
+}
+
 export function relatedLines(related, { lemma, forms = [], words = [] }, lang) {
   // `words`: forms that are words of their own too, kept (säkert, eventuellt: SALDO's adverbs,
   // not only the adjective's neuter — dropped as its inflection before, 2026-11-09).
@@ -363,9 +383,9 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 - passive: the s-passive for verbs when natural (e.g. "påverkas"), else "".
 - pos_detail: for nouns exactly "en-ord" or "ett-ord" (or "plural" for a plural-only noun); "" otherwise.
 - countability (nouns only, else ""): "countable" (räknebart), "uncountable" (oräknebart: a mass or abstract noun normally without plural, e.g. koldioxid, nederbörd) or "both" (one sense countable and another a mass sense, e.g. kaffe: the drink / "två kaffe"). Don't call a noun uncountable just because its plural is rare, and don't give an uncountable noun plural forms.
-- examples: 2 natural Swedish sentences, each with a Chinese (zh) and an English (en) translation of the whole sentence.
+- examples: natural Swedish sentences, each with a Chinese (zh) and an English (en) translation of the whole sentence — one for each common sense or use a learner needs to see (most common first), up to 3. One is right when the word has one plain use; never two that show the same thing, and never one that repeats a collocation's example. Where the reference gives a phrase for a sense, build that sense's sentence around it.
 - collocations: up to 5 combinations a learner must learn as units — a fixed verb, preposition or particle choice, or a typical strong partner word — with Chinese (zh) and English (en) meanings and a Swedish example that contains it. Not free combinations any noun or adjective would allow ("en stor bil"), never two that differ only in inflection or in någon/något, and fewer (even none) rather than weak ones.
-- related: 3–6 word-family members or related words with Chinese (zh) and English (en) meanings and each word's part of speech (pos; "other" for multi-word expressions). pos is that word's own part of speech, never the headword's. Never the headword itself or one of its own inflected forms (plural, definite, neuter, tense forms, comparative): those are its grammar. A participle only when it is used as a word of its own, with pos present_participle or perfect_participle. A meaning gives the sense only — no part of speech or grammar remark in it.
+- related: up to 6 word-family members or related words — those a learner really needs (the verb's noun, the adjective's adverb when it is a word of its own), as many as there are; fewer (even none) rather than rare, made-up or loosely related ones — with Chinese (zh) and English (en) meanings and each word's part of speech (pos; "other" for multi-word expressions). pos is that word's own part of speech, never the headword's. Never the headword itself or one of its own inflected forms (plural, definite, neuter, tense forms, comparative): those are its grammar. A participle only when it is used as a word of its own, with pos present_participle or perfect_participle. A meaning gives the sense only — no part of speech or grammar remark in it.
 - memory_tip_zh / memory_tip_en: the same short mnemonic in Chinese and in English, or "" for both.
 Every zh field is Chinese only and every en field English only. If uncertain about a sense, prefer the most common one.
 If the input names a part of speech and the sense a text uses, write the entry for exactly that part of speech and give that sense first.`,
@@ -526,15 +546,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
       }
     }
 
-    // Related words a dictionary has as adverbs of their own though they are forms of this word
-    // (an adjective's neuter: säkert, eventuellt — Lexin's headwords; SALDO keeps them as forms).
-    const ownWordForms = [];
-    for (const r of result.related || []) {
-      const w = String(r.word || "").trim();
-      if (r.pos !== "adverb" || !w) continue;
-      if ((await saldoEntries(supabaseAdmin, w, "adverb")).length
-        || ((await referenceEntries(supabaseAdmin, w)).lexin_sv || []).some((e) => e.pos === "adverb")) ownWordForms.push(w);
-    }
+    const ownWordForms = await ownWordFormsOf(supabaseAdmin, result.related, pos);
     // Both explanation-language rows; for an existing entry only its empty fields are filled.
     for (const l of LANGUAGES) {
       await fillTranslation(supabaseAdmin, entryId, l, {

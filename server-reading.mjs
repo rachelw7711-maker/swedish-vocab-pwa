@@ -898,7 +898,7 @@ export async function selectReadingContent(cleanedText, tier, glossary = [], voc
   const tierConfig = LENGTH_TIERS[tier === "oversized" ? "overlong" : tier];
   const vocabMax = keywordLimit(countWords(cleanedText), tier, vocabularyPool);
   const vocabCandidates = vocabMax + reserveFor(vocabMax);
-  const [sentMin, sentMax] = tierConfig.keySentences;
+  const [, sentMax] = tierConfig.keySentences;
   const schema = {
     type: "object",
     additionalProperties: false,
@@ -985,7 +985,7 @@ ${WORTH_LEARNING_DIMENSIONS}
 
 Fixed phrases and idioms are chosen in a separate step (selectExpressions), not here.
 
-4. key_sentences (${sentMin}-${sentMax}, max ${MAX_KEY_SENTENCES}): sentences with real comprehension/language-learning value — NOT sentences that matter to the plot. Select a sentence only when at least one of these applies, in priority order:
+4. key_sentences (at most ${Math.min(sentMax, MAX_KEY_SENTENCES)}, as many as truly qualify — often none): sentences with real comprehension/language-learning value — NOT sentences that matter to the plot. Select a sentence only when at least one of these applies, in priority order:
    a. (highest priority) The words are individually simple, but the sentence as a whole is hard to understand — e.g. a non-literal phrase, an idiom, or a combination whose meaning isn't the sum of its parts.
    b. Complex structure: multiple clauses, embedded subordinate clauses, unusual word order, or long-distance dependencies between sentence parts.
    c. Ellipsis: a meaningful chunk of the sentence is grammatically omitted and must be inferred.

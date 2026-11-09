@@ -196,6 +196,12 @@ test("related words: never the headword's own forms; the part of speech is alway
   const forms = [{ type: "neuter_form", value: "säkert" }];
   assert.equal(relatedLines([{ word: "säkert", zh: "大概", pos: "adverb" }], { lemma: "säker", forms }, "zh"), "");
   assert.equal(relatedLines([{ word: "säkert", zh: "大概", pos: "adverb" }], { lemma: "säker", forms, words: ["säkert"] }, "zh"), "säkert | 大概（副词）");
+  // A homograph of another part of speech with a SALDO headword of its own is a word (svek, the
+  // noun, besides svika's past); a comparative of the same part of speech stays a form.
+  const { ownWordFormsOf } = await import("../server-native.mjs");
+  await useSaldoFiles();
+  assert.deepEqual(await ownWordFormsOf(null, [{ word: "svek", pos: "noun" }, { word: "svek", pos: "verb" }], "verb"), ["svek"]);
+  assert.deepEqual(await ownWordFormsOf(null, [{ word: "tomt", pos: "noun" }, { word: "äldre", pos: "adjective" }], "adjective"), ["tomt"]);
   assert.equal(relatedMeaning({ zh: "规定（复数）", pos: "noun" }, "zh"), "规定（复数）（名词）");
   assert.equal(relatedMeaning({ en: "creamy (adjective)", pos: "adjective" }, "en"), "creamy (adjective)");
   assert.equal(relatedMeaning({ en: "written", pos: "perfect_participle" }, "en"), "written (past participle)");
