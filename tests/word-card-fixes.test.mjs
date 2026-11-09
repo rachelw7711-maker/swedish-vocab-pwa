@@ -410,6 +410,7 @@ test("same spelling: a card of another part of speech than asked is not saved, n
 test("same spelling: a part of speech no reference gives the word is not generated", async () => {
   const d = fakeSupabase({ learning_objects: [{ ...manNoun }], learning_object_translations: [zhRow("man-noun")] });
   card = baseCard({ lemma: "man", pos: "verb", meaning_zh: "操纵", meaning_en: "to man", countability: "", examples: [{ swedish: "De man båten.", zh: "他们操纵船。", en: "They man the boat." }] });
+  check = okCheck({ pos_supported: false });
   await assert.rejects(generateWordEntry({ supabaseAdmin: d, userId: "u", word: "man", nativeLanguage: "zh", pos: "verb", chargeQuota: false }), { status: 422 });
   assert.equal(d.tables.learning_objects.length, 1);
 });

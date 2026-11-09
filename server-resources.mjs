@@ -69,9 +69,18 @@ export async function expressionMatchKey(supabaseAdmin, text) {
   if (/\?[!.…]*$/.test(raw)) unified.push("?");
   if (unified.length > 1 && !sentence) {
     const verb = (await lemmatize(supabaseAdmin, unified[0])).find((c) => c.pos === "verb");
-    if (verb) unified[0] = normalizeText(verb.lemma);
+    if (verb && !(await onlyParticiple(supabaseAdmin, unified[0], verb.lemma))) unified[0] = normalizeText(verb.lemma);
   }
   return unified.join(" ");
+}
+
+// A first word that is the verb's participle only ("växande intresse", "liknande system",
+// "stängda dörrar") describes the noun: it is not the verb, and "växa intresse" was another
+// expression's key (2026-11-09, R9). A form that is also finite or a supine ("stängt") stays a verb.
+async function onlyParticiple(supabaseAdmin, word, lemma) {
+  const w = normalizeText(word);
+  const slots = (await saldoEntries(supabaseAdmin, lemma, "verb")).flatMap((r) => Object.entries(r.forms || {}).filter(([, v]) => [].concat(v).some((f) => normalizeText(f) === w)).map(([k]) => k));
+  return slots.length > 0 && slots.every((k) => /_part/.test(k));
 }
 
 // ---------------------------------------------------------------------------

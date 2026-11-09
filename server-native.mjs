@@ -516,6 +516,12 @@ If the input names a part of speech and the sense a text uses, write the entry f
       throw httpError(422, "Ordkortet kunde inte bekräftas. Försök igen senare.");
     }
     Object.assign(result, checked.result);
+    // A function word's class the references give alone (R5: oavsett is a preposition, not the
+    // adverb the model wrote): the card is saved as that class, without the other class's forms.
+    if (checked.pos.corrected) {
+      pos = checked.pos.corrected.to;
+      for (let i = forms.length - 1; i >= 0; i--) if (!(FORM_TYPES[pos] || []).includes(forms[i].type)) forms.splice(i, 1);
+    }
     // Every card has an example (2026-11-09). When the checks left none, examples are asked for
     // once more and the card checked again; still none and it is saved as a draft — the one who
     // asked sees it, never as a finished entry.

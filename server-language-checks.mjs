@@ -13,6 +13,7 @@ import { formReadings, saldoPartsOfSpeech, saldoEntries, compoundRows, multiWord
 import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
 import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, collocationInLexin, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { korpAttestation, judgeAttestation } from "./server-korp.mjs";
+import { posDecision } from "./server-evidence.mjs";
 import { callOpenAIJson, logUsage } from "./server-native.mjs";
 import { openaiCost } from "./server-prices.mjs";
 
@@ -891,6 +892,7 @@ export const CHECK_VERSION = "2026-11-09c";
 export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = null, sense = "", result, forms = [], isPhrase = false, userId = null, textResourceId = null, korp = korpAttestation }) {
   if (!isPhrase && wantedPos && pos !== wantedPos) return { ok: false, reason: `asked_${wantedPos}_got_${pos}` };
   let posCheck = { status: "present", source: "unconfirmed" };
+  let corrected = null;
   let page = { status: "skipped" };
   let refs = null;
   let saldoPos = [];
@@ -901,8 +903,16 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     // The spelling's other parts of speech, so the check looks for their senses in this entry
     // ("man": the noun entry must not hold the pronoun's sense).
     saldoPos = references.saldo || [];
-    if (references.all.length && !references.all.includes(pos)) return { ok: false, reason: `references_say_${references.all.join("/")}` };
-    if (references.saldo.includes(pos)) posCheck = { status: "verified", source: "saldo-morphology-2017" };
+    // One rule with reading (R5, 2026-11-09, server-evidence.mjs posDecision): a function word's
+    // class the references give alone is taken (oavsett: preposition), a regular conversion
+    // (an adjective's -t form as an adverb) stays unconfirmed, and a class the references don't
+    // give is refused only when the card check doesn't support it either — a reference not listing
+    // a class was the only reason before, and a right card went for it.
+    const decided = posDecision({ pos, references, wiktionaryStatus: page.status });
+    if (decided.status === "corrected" && !wantedPos) { corrected = { from: pos, to: decided.pos, reason: decided.reason }; pos = decided.pos; }
+    if (decided.status === "rejected" || (decided.status === "corrected" && wantedPos)) posCheck = { status: "present", source: "references_disagree", detail: { references: references.all, reason: decided.reason } };
+    else if (decided.status === "unconfirmed" && references.all.length) posCheck = { status: "present", source: "unconfirmed", detail: { references: references.all, reason: decided.reason } };
+    else if (references.saldo.includes(pos)) posCheck = { status: "verified", source: "saldo-morphology-2017" };
     else if (references.lexin.includes(pos)) posCheck = { status: "verified", source: LEXIN_SV_SOURCE_ID };
     else if (references.wiktionary.includes(pos)) posCheck = { status: "verified", source: "sv-wiktionary" };
     // Unconfirmed says why: no reference has the word, or Wiktionary couldn't be asked.
@@ -1041,15 +1051,18 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     if (!check) {
       const { foreign, badMeaning } = dropForeignScript(card);
       if (badMeaning.length) return { ok: false, reason: `foreign_script:${badMeaning.join(",")}`, usage };
-      return { ok: true, result: card, pos: posCheck, usage,
+      // A class the references don't give, and no check to support it: not saved.
+      if (posCheck.source === "references_disagree") return { ok: false, reason: `references_say_${posCheck.detail.references.join("/")}`, usage };
+      return { ok: true, result: card, pos: corrected ? { ...posCheck, corrected } : posCheck, usage,
         sense: { status: "missing", source: "ai_check_failed", detail: { problems: out.failures.get("card") || ["missing"], dropped, wiktionary: page.status, ...(foreign.length ? { foreign_script: foreign } : {}) } } };
     }
   } catch (error) {
     const { foreign, badMeaning } = dropForeignScript(card);
     if (badMeaning.length) return { ok: false, reason: `foreign_script:${badMeaning.join(",")}`, usage };
-    return { ok: true, result: card, pos: posCheck, sense: { status: "missing", source: "ai_check_failed", detail: { error: error.message, dropped, wiktionary: page.status, ...(foreign.length ? { foreign_script: foreign } : {}) } }, usage };
+    if (posCheck.source === "references_disagree") return { ok: false, reason: `references_say_${posCheck.detail.references.join("/")}`, usage };
+    return { ok: true, result: card, pos: corrected ? { ...posCheck, corrected } : posCheck, sense: { status: "missing", source: "ai_check_failed", detail: { error: error.message, dropped, wiktionary: page.status, ...(foreign.length ? { foreign_script: foreign } : {}) } }, usage };
   }
-  if (!isPhrase && !check.pos_supported && posCheck.status !== "verified") return { ok: false, reason: `pos_not_supported: ${check.note}`, usage };
+  if (!isPhrase && !check.pos_supported && posCheck.status !== "verified") return { ok: false, reason: posCheck.source === "references_disagree" ? `references_say_${posCheck.detail.references.join("/")}` : `pos_not_supported: ${check.note}`, usage };
   const corpus = await corpusAsked;
   const relatedCorpus = await relatedCorpusAsked;
   const detailCheck = second.check;
@@ -1058,6 +1071,8 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   const open = [];
   if (!detailCheck && !second.skipped) open.push({ kind: "detail_check_failed", problems: second.failed });
   if (explanationAgreement) open.push({ kind: "explanation_agreement", text: card.swedish_explanation, ...explanationAgreement });
+  // The references give the word other classes and only the card check supports this one: kept, open.
+  if (posCheck.source === "references_disagree") open.push({ kind: "pos_references_disagree", text: pos, references: posCheck.detail.references });
 
   // Meanings. The whole-card check's corrections first; then a Chinese sense the focused check
   // calls wrong, or another word's, goes only when Lexin has senses for this word to compare it
@@ -1291,7 +1306,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
     ...(open.length ? { open_items: open } : {}) };
   const sources = ["ai_check", page.status === "found" && "sv-wiktionary", item.references.lexin && LEXIN_SV_SOURCE_ID].filter(Boolean).join("+");
   return {
-    ok: true, result: card, pos: posCheck, usage,
+    ok: true, result: card, pos: corrected ? { ...posCheck, corrected } : posCheck, usage,
     sense: unsure ? { status: "mismatch", source: "ai_check", detail }
       : enReference === "unmatched" ? { status: "present", source: `${sources};en_unmatched_lexin`, detail: { ...detail, open: "dictionary_english_differs" } }
       : enReference === "none" ? { status: "present", source: `${sources};no_dictionary_english`, detail: { ...detail, open: "no_dictionary_english" } }

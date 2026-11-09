@@ -197,3 +197,12 @@ test("a plural-only noun (SALDO nn_rp) gets no gender or group", async () => {
   assert.equal(f.plural_definite, "kläderna");
   assert.equal(f.singular_indefinite, undefined);
 });
+
+test("match key: a leading participle stays (R9: växande intresse, liknande system), a verb form is lemmatised", async () => {
+  assert.equal(await expressionMatchKey(null, "växande intresse"), "växande intresse");
+  assert.equal(await expressionMatchKey(null, "liknande system"), "liknande system");
+  assert.equal(await expressionMatchKey(null, "stängda dörrar"), "stängda dörrar");
+  assert.equal(await expressionMatchKey(null, "stannar hemma"), "stanna hemma");
+  assert.equal(await expressionMatchKey(null, "tar hand om någon"), "ta hand om ngn");
+  assert.equal(await expressionMatchKey(null, "har stängt dörren"), "ha stängt dörren");
+});

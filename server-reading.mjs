@@ -7,6 +7,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { generateWordEntry, noteReuse } from "./server-native.mjs";
 import { openaiCost, usageSource, PRICE_VERSION } from "./server-prices.mjs";
 import { findExistingExpression, expressionMatchKey, addModule, setMatchKey, moduleOf, recordEntryStatus } from "./server-resources.mjs";
+import { multiwordEvidence, classifyMultiword } from "./server-evidence.mjs";
 import { glossaryPartsOfSpeech, referencePartsOfSpeech, checkKeywordPos, textReadings, aiSenseCheck, recordCheck, wiktionaryEvidence, fillExpressionLanguage, latinLookalikes } from "./server-language-checks.mjs";
 import { lookupWiktionary } from "./server-wiktionary.mjs";
 import { formReadings } from "./server-lexicon.mjs";
@@ -1449,32 +1450,53 @@ async function ensureKeywordEntries(supabaseAdmin, keywords, { userId, textResou
   }));
 }
 
-export async function resolveExpressionEntries(supabaseAdmin, items, { objectType, category, nativeLanguage = "zh" }) {
+// Whether a combination the scan found gets a shared entry (knowledge v2, R3, 2026-11-09): the
+// dictionaries and Korp are asked (free) and the three questions answered apart (server-evidence.mjs
+// classifyMultiword). Only a fixed phrase (F2) or an idiom (F3) becomes a shared entry; a typical
+// combination (F1) belongs to its head word's usage, a free one (F0) to this reading only — both
+// still shown in the reading with their meaning and sentence, nothing about them called wrong. When
+// the evidence can't be had (Korp down), nothing is created now and the item says so (retry).
+// MULTIWORD_CLASSIFY=off restores the old behaviour (every scanned expression a draft).
+export async function classifyExpression(supabaseAdmin, item, objectType) {
+  const verdict = objectType === "expression" ? "idiom" : "fast_fras";
+  const ev = await multiwordEvidence(supabaseAdmin, item.expression_text, { timeout: Number(process.env.MULTIWORD_KORP_TIMEOUT_MS) || 15000, need: "for", verdict });
+  return classifyMultiword({ ...ev, ai: { verdict } });
+}
+const ENTRY_KIND = { F2: { objectType: "phrase", category: "common_collocation" }, F3: { objectType: "expression", category: "everyday_expression" } };
+
+export async function resolveExpressionEntries(supabaseAdmin, items, { objectType, category, nativeLanguage = "zh", classify = classifyExpression }) {
   if (!items.length) return items;
   // Dedup across both modules on the normalised key (inflected first verb,
   // någon/ngn, mig/sig …): a collocation already stored as an expression (or the
   // other way round) is reused and also listed in this module.
   const module = moduleOf(objectType);
+  const classifying = process.env.MULTIWORD_CLASSIFY !== "off";
   const resolved = await Promise.all(items.map(async (item) => {
     const matchKey = await expressionMatchKey(supabaseAdmin, item.expression_text);
     const existing = await findExistingExpression(supabaseAdmin, item.expression_text, matchKey);
     if (existing && existing.object_type !== objectType) await addModule(supabaseAdmin, existing.id, module);
     if (existing) await noteReuse(supabaseAdmin, existing.id);
-    return { item, matchKey, id: existing?.id || null };
+    let classification = null;
+    if (!existing && classifying) {
+      try { classification = await classify(supabaseAdmin, item, objectType); }
+      catch (error) { classification = { cls: null, placement: "reading_only", review: false, reasons: [`classify_failed:${error.message}`] }; }
+    }
+    return { item, matchKey, id: existing?.id || null, classification };
   }));
 
   const byKey = new Map(resolved.filter((r) => r.id).map((r) => [r.matchKey, r.id]));
   const toCreate = [];
-  for (const r of resolved) if (!r.id && !toCreate.some((c) => c.matchKey === r.matchKey)) toCreate.push(r);
+  for (const r of resolved) if (!r.id && (!r.classification || ENTRY_KIND[r.classification.cls]) && !toCreate.some((c) => c.matchKey === r.matchKey)) toCreate.push(r);
   if (toCreate.length) {
     const now = new Date().toISOString();
-    const rows = toCreate.map(({ item }) => ({
+    const rows = toCreate.map(({ item, classification }) => ({
       id: randomUUID(),
       swedish: item.expression_text,
       part_of_speech: "other",
       pos_detail: "",
-      object_type: objectType,
-      category,
+      // A dictionary idiom the scan listed as a collocation is an expression (and the other way round).
+      object_type: ENTRY_KIND[classification?.cls]?.objectType || objectType,
+      category: ENTRY_KIND[classification?.cls]?.category || category,
       // learning_objects.chinese must stay actually-Chinese (it's the
       // always-present legacy fallback every zh read path still uses) — a
       // phrase first discovered while reading in a non-zh language only
@@ -1528,7 +1550,10 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
     }
   }
 
-  return resolved.map(({ item, matchKey }) => ({ ...item, expression_id: byKey.get(matchKey) || null }));
+  // What the evidence said, kept with the reading (an F1 / F0 / undecided item has no shared entry;
+  // scripts collect F1 items for their head words and retry the undecided ones).
+  const note = (c) => (c ? { classification: { cls: c.cls, placement: c.placement, fixedness: c.fixedness, authenticity: c.authenticity, review: c.review, reasons: c.reasons } } : {});
+  return resolved.map(({ item, matchKey, classification }) => ({ ...item, expression_id: byKey.get(matchKey) || null, ...note(classification) }));
 }
 
 // 2026-08-03, Rachel's decision: reading-analysis phrases already get

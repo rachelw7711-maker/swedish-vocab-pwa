@@ -297,3 +297,13 @@ export function groupFromForms(sing, pl, genus) {
   if (p === s + "er" || p === s + "r" || p === s.replace(/e([lnr])$/, "$1") + "er" || p === s.replace(/um$/, "") + "er") return "3";
   return null;
 }
+
+// Word associations of a lemgram (2026-11-09, knowledge v2): Korp's relations service — each
+// syntactic partner (object, attribute, prepositional, adverbial, subject) with its frequency and
+// lmi. Used to tell a typical combination (tända eld) from a free one (liknande system); never as
+// proof of a fixed expression on its own (server-evidence.mjs classifyMultiword). Cached like
+// every Korp answer. [{ head, rel, dep, freq, mi }] (mi is Korp's lmi).
+export async function korpRelations(lemgram, { corpora = KORP_CORPORA } = {}) {
+  const d = await korpJson("relations", { corpus: corpora.join(","), word: lemgram, type: "lemgram" });
+  return (d.relations || []).map((r) => ({ head: r.head, rel: r.rel, dep: r.dep, freq: r.freq, mi: r.mi }));
+}

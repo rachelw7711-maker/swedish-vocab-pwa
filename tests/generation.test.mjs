@@ -125,7 +125,7 @@ test("reading expressions: variants reuse one row, other module gets a membershi
     { expression_text: "tar hand om ngn", meaning_zh: "照顾某人", source_sentence: "Hon tar hand om ngn." },
     { expression_text: "lägga märke till", meaning_zh: "注意到", source_sentence: "Jag lade märke till det." },
     { expression_text: "lägger märke till", meaning_zh: "注意到", source_sentence: "Han lägger märke till allt." },
-  ], { objectType: "phrase", category: "common_collocation", nativeLanguage: "zh" });
+  ], { objectType: "phrase", category: "common_collocation", nativeLanguage: "zh", classify: async () => ({ cls: "F2", placement: "own_entry", reasons: ["test"] }) });
   assert.equal(out[0].expression_id, "x-tahand");
   assert.ok(d.tables.learning_object_modules.some((m) => m.learning_object_id === "x-tahand" && m.module === "phrase"));
   assert.ok(out[1].expression_id);
@@ -147,11 +147,24 @@ test("before saving: a card of another part of speech than asked for is not save
   assert.equal(d.tables.learning_objects.filter((o) => o.swedish === "jäsning").length, 0);
 });
 
-test("before saving: a part of speech the references don't give the word is not saved", async () => {
+test("before saving: a part of speech the references don't give the word is not saved when the card check doesn't support it either", async () => {
   const d = db();
   card = baseCard({ lemma: "jäsning", pos: "adjective" });   // SALDO: jäsning is only a noun
+  check = okCheck({ pos_supported: false, note: "a noun" });
   await assert.rejects(generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", chargeQuota: false }), { status: 422 });
   assert.equal(d.tables.learning_objects.filter((o) => o.swedish === "jäsning").length, 0);
+});
+
+test("before saving (R5): references not giving a class are no proof alone — supported by the card check, it is kept, unconfirmed and open", async () => {
+  const d = db();
+  card = baseCard({ lemma: "jäsning", pos: "adjective" });
+  check = okCheck();
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", chargeQuota: false });
+  const status = (field) => d.tables.resource_field_status.find((s) => s.learning_object_id === entryId && s.field === field);
+  assert.equal(status("pos").status, "present");
+  assert.equal(status("pos").source, "references_disagree");
+  assert.equal(status("sense").status, "present");
+  assert.ok(status("sense").detail.open_items.some((o) => o.kind === "pos_references_disagree"));
 });
 
 test("before saving: another part of speech's sense is taken out, a wrong translation fixed, an example without the word dropped", async () => {
@@ -245,4 +258,52 @@ test("a single word the model calls \"other\" takes SALDO's part of speech inste
   card = baseCard({ lemma: "jäsning", pos: "other" });
   const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "jäsning", nativeLanguage: "zh", chargeQuota: false });
   assert.equal(d.tables.learning_objects.find((o) => o.id === entryId).part_of_speech, "noun");
+});
+
+test("before saving (R5): a function word's class the references give alone is taken — oavsett is saved as a preposition", async () => {
+  const d = db();
+  card = baseCard({ lemma: "oavsett", pos: "adverb", meaning_zh: "不管", meaning_en: "regardless of", countability: "", forms: [{ type: "base_form", value: "oavsett" }],
+    examples: [{ swedish: "Vi åker oavsett vädret.", zh: "不管天气如何我们都去。", en: "We go regardless of the weather." }] });
+  check = okCheck();
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "oavsett", nativeLanguage: "zh", chargeQuota: false });
+  const row = d.tables.learning_objects.find((o) => o.id === entryId);
+  assert.equal(row.part_of_speech, "preposition");
+  assert.equal(d.tables.word_forms?.filter((f) => f.learning_object_id === entryId).length || 0, 0);
+});
+
+test("reading expressions (R3): only a fixed phrase or an idiom gets a shared entry; the rest stays in the reading, never called wrong", async () => {
+  const d = fakeSupabase({ learning_objects: [] });
+  const verdicts = {
+    "liknande system": { cls: "F0", placement: "reading_only", fixedness: "free", authenticity: "verified", review: false, reasons: ["weak_association"] },
+    "tända eld": { cls: "F1", placement: "headword_usage", fixedness: "typical", authenticity: "verified", review: false, reasons: ["strong_association"] },
+    "gå i taket": { cls: "F3", placement: "own_entry", fixedness: "fixed", authenticity: "verified", review: false, reasons: ["dictionary_idiom"] },
+    "ta sig an": { cls: null, placement: "reading_only", fixedness: "undetermined", authenticity: "unverified", review: true, reasons: ["ai_fixed+association_unknown", "association_lookup_failed"] },
+  };
+  const out = await resolveExpressionEntries(d, Object.keys(verdicts).map((t) => ({ expression_text: t, meaning_zh: "x", source_sentence: `${t}.` })),
+    { objectType: "phrase", category: "common_collocation", nativeLanguage: "zh", classify: async (_, item) => verdicts[item.expression_text] });
+  const byText = Object.fromEntries(out.map((o) => [o.expression_text, o]));
+  assert.equal(byText["liknande system"].expression_id, null);
+  assert.equal(byText["liknande system"].classification.cls, "F0");
+  assert.equal(byText["liknande system"].classification.authenticity, "verified");
+  assert.equal(byText["tända eld"].expression_id, null);
+  assert.equal(byText["tända eld"].classification.placement, "headword_usage");
+  assert.equal(byText["ta sig an"].expression_id, null);
+  assert.ok(byText["ta sig an"].classification.reasons.includes("association_lookup_failed"));
+  assert.ok(byText["gå i taket"].expression_id);
+  // An idiom the scan listed as a collocation is created as an expression.
+  assert.equal(d.tables.learning_objects.find((o) => o.id === byText["gå i taket"].expression_id).object_type, "expression");
+  assert.equal(d.tables.learning_objects.length, 1);
+});
+
+test("reading expressions (R4): a retired entry is never linked again; an existing draft is still linked (pending)", async () => {
+  const d = fakeSupabase({ learning_objects: [
+    { id: "x-retired", swedish: "växande intresse", part_of_speech: "other", object_type: "phrase", status: "retired", match_key: "växande intresse" },
+    { id: "x-draft", swedish: "ta sig an något", part_of_speech: "other", object_type: "phrase", status: "draft", match_key: "ta sig an ngt" },
+  ] });
+  const out = await resolveExpressionEntries(d, [
+    { expression_text: "växande intresse", meaning_zh: "x", source_sentence: "Ett växande intresse." },
+    { expression_text: "ta sig an något", meaning_zh: "x", source_sentence: "Hon tar sig an något." },
+  ], { objectType: "phrase", category: "common_collocation", nativeLanguage: "zh", classify: async () => ({ cls: "F0", placement: "reading_only", reasons: [] }) });
+  assert.equal(out[0].expression_id, null);
+  assert.equal(out[1].expression_id, "x-draft");
 });
