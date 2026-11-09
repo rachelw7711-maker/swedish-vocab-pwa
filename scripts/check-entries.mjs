@@ -70,7 +70,10 @@ entries = entries.filter((e) => e.status !== "retired");
 const senses = await inChunks("resource_field_status", "learning_object_id, status, source, detail, updated_at", "learning_object_id", entries.map((e) => e.id), (q) => q.eq("field", "sense"));
 const senseOf = (id) => senses.find((s) => s.learning_object_id === id);
 const current = (s) => s && (s.status === "verified" || s.detail?.check_version === CHECK_VERSION);
-const todo = earlier ? entries.filter((e) => !current(senseOf(e.id)))
+// From a report: what an earlier batch already recorded (its version, by this script) is not
+// recorded again, so --limit writes the report in batches.
+const recorded = (s) => s?.detail?.check_version === VERSION && (s.detail.checked_by === "check-entries" || s.source === "check-entries");
+const todo = earlier ? entries.filter((e) => !current(senseOf(e.id)) && !recorded(senseOf(e.id))).slice(0, LIMIT)
   : entries.filter((e) => e.status === "draft" || !senseOf(e.id) || (!current(senseOf(e.id)) && (RECHECK || MODE === "--reused" || MODE === "--ids"))).slice(0, LIMIT);
 const skipped = entries.filter((e) => !todo.includes(e));
 console.log(`entries ${entries.length}; check on record and current (reused as it is) ${skipped.filter((e) => current(senseOf(e.id))).length}; to check ${todo.length}`);
