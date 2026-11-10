@@ -9,7 +9,7 @@
 // support can remove anything (gradeItem). A dictionary's original text and a human's decision are
 // the strongest; one AI answer the weakest. Word overlap between an English meaning and a
 // dictionary's English is a candidate only — it never verifies a sense by itself (§13.5).
-import { lemmatize, saldoEntries } from "./server-lexicon.mjs";
+import { lemmatize, saldoEntries, lexemesConflict } from "./server-lexicon.mjs";
 import { referenceEntries, expressionInReferences, meaningSupport, lexinWordsOf } from "./server-references.mjs";
 import { korpAttestation, korpRelations, judgeAttestation, useKorpCacheTable } from "./server-korp.mjs";
 
@@ -590,6 +590,40 @@ export async function lexinSenseLink(supabaseAdmin, refs, pos, { meaningEn = "",
     if (defWords.length && shared.length >= Math.max(2, Math.ceil(defWords.length * 0.6))) return { linked: true, variant: s.variant, matched, shared };
   }
   return { linked: false, reason: "swedish_definition_differs", matched };
+}
+
+/**
+ * R-8b (round G, 2026-11-11): the card's sense tied to Lexin's ONLY sense of its word and part of
+ * speech — there is no other sense to confuse it with, so the Swedish definition need not share two
+ * words (R-8's guard against picking the wrong one of several: ljus, light / candle). Required:
+ * Lexin svenska has exactly one sense of the card's own word as this part of speech, and Lexin
+ * swe–eng exactly one entry of it; not a particle verb's sense; every part of the card's English
+ * matches that sense's English; and the card's Swedish explanation shares a content word with the
+ * definition (a one-word definition: the card's explanation contains it or its lemma). → as lexinSenseLink.
+ */
+export async function lexinUniqueSenseLink(supabaseAdmin, refs, pos, { meaningEn = "", swedishExplanation = "", forms = [] } = {}) {
+  const parts = String(meaningEn || "").split(/[;；]/).map((p) => p.trim()).filter(Boolean);
+  const english = (refs?.lexin_en || []).filter((e) => e.pos === pos && e.english?.length);
+  const { words, own } = lexinWordsOf(refs, pos, forms);
+  const senses = [...own].flatMap((j) => (words[j].pos === pos ? words[j].lexemes || [] : []));
+  if (!parts.length || senses.length !== 1 || english.length !== 1) return { linked: false, reason: senses.length > 1 || english.length > 1 ? "several_senses" : "nothing to compare" };
+  const [x] = senses;
+  if (english[0].variant && x.variant && english[0].variant !== x.variant) return { linked: false, reason: "english_of_another_sense" };
+  if (particleVerbSense(x, forms)) return { linked: false, reason: "particle_verb_sense" };
+  // One Lexin sense is not one word: SALDO's homographs that inflect differently (fot: fötter, the
+  // foot / fot, the unit) — a card's "foot (unit of length)" matched the body part's "foot".
+  const rows = await saldoEntries(supabaseAdmin, String(forms[0] || ""), pos);
+  if (rows.some((a, i) => rows.slice(i + 1).some((b) => lexemesConflict(a, b, pos)))) return { linked: false, reason: "saldo_homographs" };
+  const eqs = english[0].english.map((text) => ({ source: "lexin_en", text }));
+  if (!parts.every((p) => meaningSupport(p, eqs).length)) return { linked: false, reason: "english_part_unmatched" };
+  const card = await contentLemmas(supabaseAdmin, swedishExplanation);
+  const defWords = [...new Set((String(x.definition || "").toLowerCase().match(/\p{L}+/gu) || []).filter((w) => w.length >= 3 && !SV_STOP.has(w)))];
+  const shared = [];
+  // A word inside the headword proves nothing (samtid: "tid" shared by "samma tid" and "egen tid").
+  const head = String(forms[0] || "").toLowerCase();
+  for (const w of defWords) if (!head.includes(w) && ![...(await contentLemmas(supabaseAdmin, w))].some((l) => head.includes(l)) && [...(await contentLemmas(supabaseAdmin, w))].some((l) => card.has(l))) shared.push(w);
+  if (!shared.length) return { linked: false, reason: "swedish_definition_differs" };
+  return { linked: true, variant: x.variant, rule: "R-8b", shared };
 }
 
 // ---------------------------------------------------------------------------

@@ -193,3 +193,41 @@ test("S1: a generated entry is stored without soft hyphens", async () => {
   assert.equal(r.n, 2);
   assert.equal(r.ok, true);
 });
+
+// R-8b (round G): Lexin's ONLY sense of the word. Original error class: a card's sense tied by English
+// alone (ljus "light" — Lexin has light and candle); boundaries: a single sense the card's English
+// doesn't cover, an unrelated Swedish explanation, a several-sense word.
+test("R-8b: the card tied to Lexin's only sense — not with several senses or a differing definition", async () => {
+  const { useSaldoFiles } = await import("../server-lexicon.mjs");
+  const { useReferenceFiles, referenceEntries } = await import("../server-references.mjs");
+  const { lexinUniqueSenseLink } = await import("../server-evidence.mjs");
+  await useSaldoFiles(); await useReferenceFiles("data/reference");
+  const link = async (w, pos, meaningEn, sv, forms = [w]) => lexinUniqueSenseLink(null, await referenceEntries(null, w), pos, { meaningEn, swedishExplanation: sv, forms });
+  // Correct: tiger, the one sense, its English and a definition word ("kattdjur") on the card.
+  assert.equal((await link("tiger", "noun", "tiger", "Ett stort kattdjur med randig päls.", ["tiger", "tigern", "tigrar"])).linked, true);
+  // Original error: ljus has several senses — never by this rule.
+  assert.equal((await link("ljus", "noun", "light", "Det som gör att vi kan se.", ["ljus", "ljuset"])).reason, "several_senses");
+  // Boundary: the only sense, but the card's English is another meaning.
+  assert.equal((await link("tiger", "noun", "tiger; coward", "Ett stort kattdjur.", ["tiger"])).linked, false);
+  // Boundary: English matches, the Swedish explanation shares nothing with the definition.
+  assert.equal((await link("tiger", "noun", "tiger", "Ett djur i Asien.", ["tiger"])).reason, "swedish_definition_differs");
+  // Independent-sample finding: fot is two words in SALDO (fötter / fot, the unit); one Lexin sense
+  // let "foot (unit of length)" through. A spelling of several words is never tied this way.
+  // Independent-sample finding: samtid "the same time" shared only "tid", part of the headword.
+  assert.equal((await link("samtid", "noun", "the same time; one's own time or era", "när två eller flera saker händer vid samma tid", ["samtid", "samtiden"])).linked, false);
+  assert.equal((await link("fot", "noun", "foot; foot (unit of length)", "den del av kroppen man står och går på", ["fot", "foten", "fötter"])).reason, "saldo_homographs");
+});
+
+// Round G: a later AI check overwrote Korp-verified senses (11-09, check-entries → "present").
+test("E1: independent sense evidence survives an AI re-check; an objection becomes a visible conflict", async () => {
+  const { senseRowOver } = await import("../server-language-checks.mjs");
+  const korp = { status: "verified", grade: "verified", source: "audit-2026-11-02;korp", detail: { korp: { sense: { ok: true } } } };
+  assert.equal(senseRowOver(korp, { status: "present", source: "ai_check;no_dictionary_english", detail: {} }), null);
+  assert.equal(senseRowOver(korp, { status: "verified", source: "ai_check", grade: "ai_consistent", detail: {} }), null);
+  const m = senseRowOver(korp, { status: "mismatch", source: "reading_check", detail: { note: "x" } });
+  assert.equal(m.status, "mismatch"); assert.equal(m.detail.previous.source, "audit-2026-11-02;korp");
+  // Without independent evidence the check is written as before.
+  const ai = { status: "verified", grade: "ai_consistent", source: "audit-2026-11-02" };
+  assert.equal(senseRowOver(ai, { status: "present", source: "ai_check" }).status, "present");
+  assert.equal(senseRowOver(null, { status: "present", source: "ai_check" }).status, "present");
+});

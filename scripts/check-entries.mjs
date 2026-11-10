@@ -21,7 +21,7 @@
 // the entry's "reuse_check" mark is closed, and drafts whose sense is verified are promoted.
 //   node --env-file=.env scripts/check-entries.mjs --reading|--drafts-only|--reused|--ids f [--recheck] [--limit N] [--write]
 import { createClient } from "@supabase/supabase-js";
-import { senseGrade } from "../server-language-checks.mjs";
+import { senseGrade, senseRowOver } from "../server-language-checks.mjs";
 import { RULE_VERSION } from "../server-evidence.mjs";
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { useSaldoFiles } from "../server-lexicon.mjs";
@@ -183,8 +183,12 @@ for (const r of done) {
     ? { ...r.sense, detail: { ...r.sense.detail, check_version: VERSION, checked_by: "check-entries", ...(r.changes.length ? { proposed_changes: r.changes, open: "content_unverified" } : {}) } }
     : { status: "mismatch", source: "check-entries", detail: { check_version: VERSION, reason: r.reason } };
   if (r.changes.length && sense.status === "verified") sense.status = "present";
-  const { error: e1 } = await db.from("resource_field_status").upsert({ learning_object_id: r.id, field: "sense", status: sense.status, source: sense.source, detail: sense.detail, grade: senseGrade(sense.status, sense.grade), rule_version: RULE_VERSION, updated_at: now }, { onConflict: "learning_object_id,field" });
-  if (e1) throw e1;
+  const { data: prev } = await db.from("resource_field_status").select("status, grade, source, detail").eq("learning_object_id", r.id).eq("field", "sense").maybeSingle();
+  const row = senseRowOver(prev, sense);   // independent evidence is kept (round G)
+  if (row) {
+    const { error: e1 } = await db.from("resource_field_status").upsert({ learning_object_id: r.id, field: "sense", status: row.status, source: row.source, detail: row.detail, grade: senseGrade(row.status, row.grade), rule_version: RULE_VERSION, updated_at: now }, { onConflict: "learning_object_id,field" });
+    if (e1) throw e1;
+  }
   await db.from("resource_field_status").update({ status: "not_applicable", detail: { check_version: VERSION, checked_at: now }, updated_at: now }).eq("learning_object_id", r.id).eq("field", "reuse_check");
   if (r.promote) {
     const { error: e2 } = await db.from("learning_objects").update({ status: "ai_generated", updated_at: now }).eq("id", r.id).eq("status", "draft");

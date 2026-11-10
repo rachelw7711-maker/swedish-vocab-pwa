@@ -619,8 +619,23 @@ export function wiktionaryEvidence(page) {
 export function senseGrade(status, grade = null) {
   return grade || (status === "verified" ? "ai_consistent" : status === "mismatch" ? "disputed" : "unverified");
 }
+// A sense with independent evidence (grade verified: a dictionary sense link, a Korp sense check,
+// a human) is not replaced by a later AI check (round G, 2026-11-11: re-checks had overwritten
+// Korp-verified senses with "present"). Only an objection is recorded — as a mismatch, the
+// evidence kept in detail.previous so the conflict is visible. → the row to write, or null to keep.
+export function senseRowOver(prev, next) {
+  if (!(prev?.status === "verified" && prev?.grade === "verified")) return next;
+  if (next.status !== "mismatch") return null;
+  return { ...next, detail: { ...(next.detail || {}), previous: { status: prev.status, grade: prev.grade, source: prev.source, detail: prev.detail } } };
+}
 export async function recordCheck(supabaseAdmin, entryId, field, status, source, detail = null, { grade = null } = {}) {
   try {
+    if (field === "sense") {
+      const { data: prev } = await supabaseAdmin.from("resource_field_status").select("status, grade, source, detail").eq("learning_object_id", entryId).eq("field", "sense").maybeSingle();
+      const row = senseRowOver(prev, { status, source, detail, grade });
+      if (!row) return;
+      ({ status, source, detail, grade } = row);
+    }
     await supabaseAdmin.from("resource_field_status").upsert(
       { learning_object_id: entryId, field, status, source, detail, updated_at: new Date().toISOString(),
         ...(field === "sense" ? { grade: senseGrade(status, grade), rule_version: RULE_VERSION } : {}) },
