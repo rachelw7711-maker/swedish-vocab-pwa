@@ -198,8 +198,10 @@ test("3: program evidence goes to the check: a phrase or example without the hea
     related: [{ word: "svek", zh: "背叛", en: "betrayal", pos: "noun" }, { word: "lärsighet", zh: "学习能力", en: "learning ability", pos: "noun" }, { word: "förrädare", zh: "叛徒", en: "traitor", pos: "noun" }] });
   await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "svika", nativeLanguage: "zh", pos: "verb", chargeQuota: false });
   const sent = JSON.parse(checkPrompts[0].input.at(-1).content)[0].entry;
-  assert.deepEqual(sent.collocations.map((c) => c.flags || []), [["example_without_headword"], [], ["headword_not_found", "example_without_headword"]]);
-  assert.deepEqual(sent.related.map((r) => r.flags || []), [[], ["no_dictionary"], []]);
+  // One word ("svikfull") is no collocation: it is checked among the related words (round G).
+  assert.deepEqual(sent.collocations.map((c) => c.flags || []), [["example_without_headword"], []]);
+  assert.deepEqual(sent.related.map((r) => r.word), ["svek", "lärsighet", "förrädare", "svikfull"]);
+  assert.deepEqual(sent.related.slice(0, 3).map((r) => r.flags || []), [[], ["no_dictionary"], []]);
   assert.ok(sent.headword_forms.includes("svek") && sent.headword_forms.includes("svikit"));   // the check knows the forms
   assert.match(checkPrompts[0].input[0].content, /A flag is a reason to look hard, not a verdict/);
 });
@@ -672,4 +674,18 @@ test("round G R1: a collocation a dictionary lists survives two 'free_combinatio
   const colls = translation(d, entryId, "en").collocations;
   assert.match(colls, /lova guld och gröna skogar/);
   assert.doesNotMatch(colls, /lova i en park/);
+});
+
+// Round G regression R2: 972 compounds stood among collocations ("biljettautomat" for automat);
+// one word goes to the related words in its base form, with its meanings, and the detail says so.
+test("round G R2: a one-word 'collocation' becomes a related word in its base form, not dropped", async () => {
+  const d = fakeSupabase();
+  card = baseCard({ lemma: "stövel", pos: "noun", meaning_zh: "靴子", meaning_en: "boot", forms: [{ type: "plural_indefinite", value: "stövlar" }],
+    collocations: [{ phrase: "gummistövlar", zh: "胶靴", en: "rubber boots", example: "Barnen sprang i sina gummistövlar." },
+      { phrase: "ett par stövlar", zh: "一双靴子", en: "a pair of boots", example: "Hon köpte ett par stövlar." }] });
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "stövel", nativeLanguage: "zh", pos: "noun", chargeQuota: false });
+  const sent = JSON.parse(checkPrompts[0].input.at(-1).content)[0].entry;
+  assert.deepEqual(sent.collocations.map((c) => c.phrase), ["ett par stövlar"]);
+  assert.ok(sent.related.some((r) => r.word === "gummistövel" && r.en === "rubber boots"));
+  assert.deepEqual(sense(d, entryId).detail.collocations_moved_to_related, ["gummistövlar"]);
 });

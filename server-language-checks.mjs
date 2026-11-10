@@ -9,7 +9,7 @@
 // Each check says what it found: confirmed, corrected, or not confirmed (no evidence
 // either way) — "the forms match SALDO" is never taken to mean the entry is right.
 
-import { formReadings, saldoPartsOfSpeech, saldoEntries, compoundRows, multiWordVerbRows, saldoHasExpression } from "./server-lexicon.mjs";
+import { formReadings, saldoPartsOfSpeech, saldoEntries, compoundRows, multiWordVerbRows, saldoHasExpression, lemmatize } from "./server-lexicon.mjs";
 import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
 import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { korpAttestation, judgeAttestation } from "./server-korp.mjs";
@@ -975,6 +975,24 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   for (const c of card.collocations || []) { c.phrase = latinLookalikes(c.phrase); c.example = latinLookalikes(c.example); }
   for (const r of card.related || []) r.word = latinLookalikes(r.word);
   card.swedish_explanation = latinLookalikes(card.swedish_explanation);
+  // One word is never a collocation (round G: 972 compounds such as "biljettautomat" stood among
+  // automat's collocations, kept by the check as "the headword's compound"). It goes to the related
+  // words, in its base form, and is checked as one of them; nothing is lost.
+  const movedToRelated = [];
+  if (!isPhrase) {
+    const kept = [];
+    for (const c of card.collocations || []) {
+      const w = String(c.phrase || "").replace(/\u00ad/g, "").trim();
+      if (!w || /\s/.test(w)) { kept.push(c); continue; }
+      const reading = (await lemmatize(supabaseAdmin, w.toLowerCase()))[0];
+      const word = reading && reading.lemma.toLowerCase() !== lemma.toLowerCase() ? reading.lemma : w;
+      movedToRelated.push(c.phrase);
+      card.related ||= [];
+      if (word.toLowerCase() === String(lemma).toLowerCase() || card.related.some((r) => String(r.word).toLowerCase() === word.toLowerCase())) continue;
+      card.related.push({ word, zh: c.zh, en: c.en, pos: reading?.pos || (w.toLowerCase().endsWith(String(lemma).toLowerCase()) ? pos : "other") });
+    }
+    card.collocations = kept;
+  }
   const wordForms = [lemma, ...forms.map((f) => f.value), ...(isPhrase ? await phraseForms(supabaseAdmin, lemma) : [])].filter(Boolean);
   // Every SALDO form of the word counts, the card's own and those it doesn't show: the s-passive
   // ("Skorna har slitits …" was dropped as not using slita, 2026-11-08), every homograph's.
@@ -1355,7 +1373,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   const detail = { check_version: CHECK_VERSION, verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits, ...ungrammatical], note: check.note, wiktionary: page.status, en_reference: enReference,
     ...(removedSenses.length ? { removed_senses: removedSenses } : {}), ...(ungrammatical.length ? { ungrammatical } : {}), ...(repeated.length ? { repeated_collocation_examples: repeated } : {}), ...(droppedCollocationExamples.length ? { dropped_collocation_examples: droppedCollocationExamples } : {}), ...(relatedMeaningNotes.length ? { related_meaning_notes: relatedMeaningNotes } : {}), ...(commonKept.length ? { common_combinations: commonKept } : {}),
     ...(droppedCollocations.length ? { dropped_collocations: droppedCollocations } : {}), ...(droppedRelated.length ? { dropped_related: droppedRelated } : {}), ...(foreign.length ? { foreign_script: foreign } : {}),
-    ...(missingSenses.length ? { missing_senses: missingSenses } : {}), ...(open.length ? { open_items: open } : {}) };
+    ...(missingSenses.length ? { missing_senses: missingSenses } : {}), ...(movedToRelated.length ? { collocations_moved_to_related: movedToRelated } : {}), ...(open.length ? { open_items: open } : {}) };
   const sources = ["ai_check", page.status === "found" && "sv-wiktionary", item.references.lexin && LEXIN_SV_SOURCE_ID].filter(Boolean).join("+");
   return {
     ok: true, result: card, pos: corrected ? { ...posCheck, corrected } : posCheck, usage,
