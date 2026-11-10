@@ -104,3 +104,22 @@ test("regression L4: a part of the card's English no sense has → no link (only
   assert.equal(r.linked, false);
   assert.equal(r.reason, "english_part_unmatched");
 });
+
+// V — valency (round G, 2026-11-11): "lova någon något" was a collocation, removed as a free
+// combination; it is Lexin's construction of the sense the card teaches, shown as usage.
+test("regression V1: lova's constructions come from Lexin's 'promise' sense (old: a collocation, then removed)", async () => {
+  const { constructionsOf } = await import("../server-evidence.mjs");
+  const c = constructionsOf(await referenceEntries(null, "lova"), "verb", "promise", ["lova", "lovar", "lovade", "lovat"]);
+  assert.deepEqual(c.map((x) => x.pattern), ["ngn lovar ngn ngt/att+VERB/SATS", "ngt lovar ngt"]);
+  assert.equal(c[0].source, "lexin-sv-2020");
+});
+test("regression V2: a sense the card does not teach brings no construction (älska 'love' ≠ 'make love')", async () => {
+  const { constructionsOf } = await import("../server-evidence.mjs");
+  const c = constructionsOf(await referenceEntries(null, "älska"), "verb", "to love", ["älska", "älskar", "älskade", "älskat"]);
+  assert.deepEqual(c.map((x) => x.pattern), ["ngn älskar ngn/ngt/att+VERB"]);
+});
+test("regression V3: a particle verb's sense (säga upp) is not the simplex verb's construction", async () => {
+  const { constructionsOf } = await import("../server-evidence.mjs");
+  const c = constructionsOf(await referenceEntries(null, "säga"), "verb", "say; tell", ["säga", "säger", "sa", "sagt"]);
+  assert.ok(c.every((x) => !/ upp\b/.test(x.pattern)));
+});

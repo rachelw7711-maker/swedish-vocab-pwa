@@ -648,3 +648,31 @@ export function evidenceOfSource(source = "") {
   if (/ai_check|audit-2026-11-02|fix/.test(s)) return { kind: "ai", grade: "ai_consistent", why: "AI check only" };
   return { kind: "unknown", grade: null, why: "source not understood: left as it is" };
 }
+
+// ---------------------------------------------------------------------------
+// Constructions (valency) of the senses a card teaches (round G, 2026-11-11)
+// ---------------------------------------------------------------------------
+/**
+ * Pure: the Lexin constructions ("ngn lovar ngn ngt") of the senses a card teaches — usage
+ * knowledge shown under Fördjupning, never a collocation. The card's own Lexin word (not a
+ * homograph's), not a particle verb's sense; with several senses the first its English covers and
+ * any other one of whose English equivalents is one of the card's English parts exactly (word
+ * overlap alone is a candidate: "love" ↔ "make love"). → [{ pattern, source, variant }]
+ */
+export function constructionsOf(refs, pos, meaningEn, forms) {
+  const { words, own } = lexinWordsOf(refs, pos, forms);
+  const lexemes = words.filter((_, j) => own.has(j)).flatMap((w) => w.lexemes || []).filter((x) => !particleVerbSense(x, forms));
+  let chosen = lexemes;
+  if (lexemes.length > 1) {
+    // Word overlap alone is a candidate ("love" ↔ "make love"): the first covered sense, and another
+    // only when one of the card's English parts is one of its English equivalents exactly.
+    const parts = new Set(String(meaningEn || "").toLowerCase().split(/[;,]/).map((p) => p.trim().replace(/^to /, "")).filter(Boolean));
+    const cov = senseCoverage(refs, pos, meaningEn, forms).filter((s) => s.covered && !s.otherWord && !s.particleVerb);
+    const exact = new Set(cov.filter((s) => s.english.some((e) => String(e).toLowerCase().split(/[;,]/).some((x) => parts.has(x.trim().replace(/^to /, ""))))).map((s) => s.variant));
+    const first = lexemes.find((x) => cov.some((s) => s.variant === x.variant));
+    chosen = lexemes.filter((x) => x === first || exact.has(x.variant));
+  }
+  const out = [];
+  for (const x of chosen) for (const p of x.constructions || []) if (!out.some((o) => o.pattern === p)) out.push({ pattern: p, source: "lexin-sv-2020", variant: x.variant || null });
+  return out;
+}

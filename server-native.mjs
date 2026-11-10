@@ -14,7 +14,7 @@ import { openaiCost, ttsCost, assessmentCost, usageSource, PRICE_VERSION } from 
 import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters, CHECK_VERSION } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
 import { lemmatize, saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms, cardFieldsFromSaldo } from "./server-lexicon.mjs";
-import { multiwordEvidence, classifyMultiword } from "./server-evidence.mjs";
+import { multiwordEvidence, classifyMultiword, constructionsOf } from "./server-evidence.mjs";
 import { referenceEntries, referencePos, lexinPromptLine, expressionReferenceLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
@@ -269,6 +269,7 @@ export async function callOpenAIJson({ schemaName, schema, system, user, maxOutp
   return { result: JSON.parse(text), usage: data.usage || {} };
 }
 
+const nonEmpty = (a) => (a?.length ? a : null);
 const normalizeKey = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
 
 // With a part of speech, only that headword + part of speech counts: a same-spelling
@@ -564,6 +565,8 @@ If the input names a part of speech and the sense a text uses, write the entry f
         transitivity: result.transitivity || null,
         passiv_s: passive,
         countability: grammar?.countability || null,
+        // Lexin's constructions of the senses the card teaches (round G): usage, not collocations.
+        constructions: !isPhrase && refs ? nonEmpty(constructionsOf(refs, pos, result.meaning_en, [lemma, ...forms.map((f) => f.value)])) : null,
         source,
         status: noExample || (classified && classified.placement !== "own_entry") ? "draft" : "ai_generated",
       });

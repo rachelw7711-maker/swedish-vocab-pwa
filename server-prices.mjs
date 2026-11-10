@@ -8,7 +8,9 @@
 //   ElevenLabs is a subscription with character credits (the fallback voice only): characters are
 //   recorded, no USD.
 export const PRICE_VERSION = "2026-11-09";
-const OPENAI = { "gpt-5.4-mini": { input: 0.75, cached: 0.075, output: 4.5 } };
+// gpt-6.1-terra: round G script batches only (2026-11-11, owner-approved, 12 USD cap); production
+// generation stays on gpt-5.4-mini. Official price page, as in round-f/ai-cost-audit-2026-11-09.md.
+const OPENAI = { "gpt-5.4-mini": { input: 0.75, cached: 0.075, output: 4.5 }, "gpt-6.1-terra": { input: 1.0, cached: 0.05, output: 5.0 } };
 const AZURE_TTS_PER_CHAR = 15 / 1e6;
 const AZURE_ASSESSMENT_PER_HOUR = 1.0 + 0.3;
 
