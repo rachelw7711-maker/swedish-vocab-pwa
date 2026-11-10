@@ -112,14 +112,21 @@ const LOOKUP_POS = { presens_particip: ["adjective", "verb"], perfekt_particip: 
 const posMatches = (entryPos, pos) => (LOOKUP_POS[pos] || [pos]).includes(entryPos);
 
 /** The parts of speech each dictionary gives the headword: { lexin_sv: [...], lexin_en, folkets, enwikt }. */
+// A Lexin svenska entry without a sense is a cross-reference ("gjord" verb → göra), not a listing,
+// unless Lexin swe–eng gives the headword a sense of that part of speech (mycket adj.: "much").
+// Round G: the stub "gjord, verb" verified a verb card of a participle.
+const lexinStub = (refs, e, source) => source === "lexin_sv" && Array.isArray(e.lexemes) && !e.lexemes.length
+  && !(refs.lexin_en || []).some((x) => x.pos === e.pos && x.english?.length);
+const listing = (refs, source) => (e) => (!e.formOf?.length || e.glosses?.length) && !lexinStub(refs, e, source);
+
 export function referencePos(refs) {
-  return Object.fromEntries(Object.entries(refs).map(([source, list]) => [source, [...new Set(list.filter((e) => !e.formOf?.length || e.glosses?.length).map((e) => e.pos))]]));
+  return Object.fromEntries(Object.entries(refs).map(([source, list]) => [source, [...new Set(list.filter(listing(refs, source)).map((e) => e.pos))]]));
 }
 
 /** The families whose dictionaries have this headword as this part of speech. */
 export function posFamilies(refs, pos) {
   const out = new Set();
-  for (const [source, list] of Object.entries(refs)) if (list.some((e) => posMatches(e.pos, pos) && (!e.formOf?.length || e.glosses?.length))) out.add(FAMILY[source]);
+  for (const [source, list] of Object.entries(refs)) if (list.some((e) => posMatches(e.pos, pos) && listing(refs, source)(e))) out.add(FAMILY[source]);
   return [...out];
 }
 

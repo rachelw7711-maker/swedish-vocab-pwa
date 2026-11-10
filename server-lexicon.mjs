@@ -479,6 +479,8 @@ export function normalizeGroup(value, kind) {
   if (!v) return "";
   if (/oregel|irregular|不规则/.test(v)) return kind === "verb_group" ? "4" : "irregular";
   if (/nollplural|zero/.test(v)) return "5";
+  // A word taught without a plural (SALDO's "0"): "uncountable", "ingen plural".
+  if (/uncountable|ingen plural|oräknebar|不可数/.test(v)) return "0";
   const digit = v.match(/[0-6]/)?.[0] || ({ första: "1", andra: "2", tredje: "3", fjärde: "4", femte: "5" })[v.match(/första|andra|tredje|fjärde|femte/)?.[0]] || "";
   const sub = v.match(/2\s*([ab])\b|typ\s*([ab])/i);
   return digit === "2" && sub ? `2${sub[1] || sub[2]}` : digit;
@@ -525,7 +527,10 @@ export function compareWithSaldo(entry, rows) {
     const name = `form:${formType}`;
     if (formType === "verb_group" || formType === "declension_group") {
       // SALDO's "0" (no plural) can't overrule a stored group: mass nouns are often taught with one.
-      const groups = refs.filter((r) => r !== "0").length ? refs.filter((r) => r !== "0") : refs;
+      // But a stored "0" agrees with a homograph SALDO lists without a plural (salt..nn.1, "salt"
+      // the substance, beside salt..nn.2 "salts"): round G, it was reported a mismatch.
+      const zeroStored = normalizeGroup(stored, formType) === "0" && refs.includes("0");
+      const groups = zeroStored ? ["0"] : refs.filter((r) => r !== "0").length ? refs.filter((r) => r !== "0") : refs;
       // An irregular word may also be labelled so ("irregular", for verbs group 4) — not when filling.
       const irregular = String(stored || "").trim() && candidates.some((c) => c.irregular) ? [formType === "verb_group" ? "4" : "irregular"] : [];
       check(name, stored, [...groups, ...irregular], {

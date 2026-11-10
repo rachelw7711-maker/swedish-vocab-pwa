@@ -425,6 +425,19 @@ export function posDecision({ pos, references = {}, glossaryPos = null, wiktiona
   return { pos, status: "rejected", reason: `references_say_${[...known].join("/")}` };
 }
 
+/**
+ * Pure (round G, 2026-11-11): whether a "mismatch" an AI wrote on a card's part of speech is answered
+ * by the dictionaries. An AI verdict (legacy_ai / ai_one, strength 1) never outweighs a dictionary
+ * listing (saldo_morphology / dictionary_listing, strength 5): SALDO — also by a compound's head or a
+ * participle's verb — or Lexin listing the word as this part of speech decides. Wiktionary alone
+ * (crowd-sourced, never verifies) does not. Mismatches a dictionary or a program wrote are not AI's.
+ */
+export const AI_VERDICT_SOURCES = /^(audit-2026-11-02|check-entries|reading_check|ai_check)/;
+export function aiObjectionAnswered({ field, source }, families = []) {
+  if (field !== "pos" || !AI_VERDICT_SOURCES.test(String(source || ""))) return false;
+  return families.some((f) => f === "saldo" || f === "saldo-compound" || f === "saldo-form" || f === "saldo-participle" || f === "lexin");
+}
+
 // ---------------------------------------------------------------------------
 // Reuse (R4, §5.3)
 // ---------------------------------------------------------------------------

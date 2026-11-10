@@ -348,6 +348,14 @@ export async function noteReuse(supabaseAdmin, entryId) {
   }
 }
 
+/** Every string in a value without soft hyphens (U+00AD). */
+export function withoutSoftHyphens(value) {
+  if (typeof value === "string") return value.replace(/\u00ad/g, "");
+  if (Array.isArray(value)) return value.map(withoutSoftHyphens);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withoutSoftHyphens(v)]));
+  return value;
+}
+
 export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLanguage, pos = null, sense = "", source = "ai search", chargeQuota = true, textResourceId = null }) {
   // Look-alike Cyrillic or Greek letters put back ("gällа"); any other letter of another script is not Swedish.
   const text = latinLookalikes(String(word || "").trim());
@@ -406,7 +414,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
 
   try {
     if (chargeQuota) await enforceQuota(supabaseAdmin, userId, CREDITS.word_generate);
-    const { result, usage } = await callOpenAIJson({
+    const { result: written, usage } = await callOpenAIJson({
       schemaName: "swedish_word_card_v2",
       schema: wordCardSchema(),
       system: `You are a careful Swedish lexicographer writing a learner's dictionary entry for Chinese- and English-speaking learners (the requested explanation language is ${languageName(lang)}). The UI is Swedish. Return exactly one entry for the Swedish input.
@@ -439,6 +447,9 @@ If the input names a part of speech and the sense a text uses, write the entry f
       usage, credits: chargeQuota ? CREDITS.word_generate : 0,
     });
 
+    // Lexin's text carries soft hyphens (U+00AD) the model copies into phrases and examples (round G:
+    // 19 stored, invisible, and they broke matching); none is ever stored.
+    const result = withoutSoftHyphens(written);
     if (!result.is_real_word || !String(result.lemma || "").trim() || !String(result[`meaning_${lang}`] || "").trim()) {
       throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
     }

@@ -123,3 +123,71 @@ test("regression V3: a particle verb's sense (säga upp) is not the simplex verb
   const c = constructionsOf(await referenceEntries(null, "säga"), "verb", "say; tell", ["säga", "säger", "sa", "sagt"]);
   assert.ok(c.every((x) => !/ upp\b/.test(x.pattern)));
 });
+
+// Round G (withheld-card review): a card storing no plural (group 0) agrees with the homograph SALDO
+// lists without one — salt, aga, pop were reported "mismatch" against the other homograph.
+test("F1: a stored group 0 matches SALDO's uncountable homograph", async () => {
+  const { useSaldoFiles, saldoEntries, compareWithSaldo } = await import("../server-lexicon.mjs");
+  await useSaldoFiles();
+  for (const [w, g] of [["salt", "0"], ["aga", "0"], ["pop", "uncountable"]]) {
+    const r = compareWithSaldo({ pos: "noun", forms: { singular_indefinite: w, declension_group: g } }, await saldoEntries(null, w, "noun"));
+    assert.equal(r.fields["form:declension_group"].status, "verified", w);
+  }
+  // Still caught: a group no homograph has.
+  const wrong = compareWithSaldo({ pos: "noun", forms: { singular_indefinite: "salt", declension_group: "2" } }, await saldoEntries(null, "salt", "noun"));
+  assert.equal(wrong.fields["form:declension_group"].status, "mismatch");
+  // A stored group is still not overruled by SALDO's "0" alone (bil..: group 2 with no zero row).
+  const bil = compareWithSaldo({ pos: "noun", forms: { singular_indefinite: "bil", declension_group: "2" } }, await saldoEntries(null, "bil", "noun"));
+  assert.equal(bil.fields["form:declension_group"].status, "verified");
+});
+
+// Round G: an AI's part-of-speech objection does not outweigh a dictionary listing (it-ingenjör,
+// a SALDO compound noun, and i åratal, a Lexin/SALDO adverbial, were held "needs_review" by it).
+test("F2: an AI part-of-speech objection is answered by SALDO or Lexin, not by Wiktionary", async () => {
+  const { aiObjectionAnswered } = await import("../server-evidence.mjs");
+  assert.equal(aiObjectionAnswered({ field: "pos", source: "audit-2026-11-02" }, ["saldo-compound"]), true);
+  assert.equal(aiObjectionAnswered({ field: "pos", source: "check-entries" }, ["lexin"]), true);
+  assert.equal(aiObjectionAnswered({ field: "pos", source: "audit-2026-11-02" }, ["wiktionary"]), false);
+  assert.equal(aiObjectionAnswered({ field: "pos", source: "audit-2026-11-02" }, []), false);
+  // A dictionary's or a program's mismatch is not an AI verdict; a sense objection is not settled by a listing.
+  assert.equal(aiObjectionAnswered({ field: "pos", source: "saldo-morphology-2017" }, ["saldo"]), false);
+  assert.equal(aiObjectionAnswered({ field: "sense", source: "audit-2026-11-02" }, ["saldo"]), false);
+});
+
+// Round G: Lexin's sense-less cross-reference ("gjord, verb" → göra) is not a listing of the verb.
+test("F3: a Lexin cross-reference stub lists no part of speech", async () => {
+  const { useReferenceFiles, referenceEntries, posFamilies, referencePos } = await import("../server-references.mjs");
+  await useReferenceFiles("data/reference");
+  assert.ok(!posFamilies(await referenceEntries(null, "gjord"), "verb").includes("lexin"));
+  assert.ok(!referencePos(await referenceEntries(null, "gjord")).lexin_sv.includes("verb"));
+  // A sense-less svenska entry Lexin swe–eng gives a sense of that part of speech still counts.
+  assert.ok(posFamilies(await referenceEntries(null, "mycket"), "adjective").includes("lexin"));
+  assert.ok(posFamilies(await referenceEntries(null, "ifrån"), "adverb").includes("lexin"));
+});
+
+// Round G, withheld-card review: the historical cards with an inflected headword (made before the
+// lemma rule) — a new card for any of them is made under its lemma.
+test("G1: an inflected headword resolves to its lemma (real historical cases)", async () => {
+  const { useSaldoFiles } = await import("../server-lexicon.mjs");
+  const { resolveWord } = await import("../server-resources.mjs");
+  const { fakeSupabase } = await import("./fake-supabase.mjs");
+  await useSaldoFiles();
+  const d = fakeSupabase({ learning_objects: [], word_forms: [] });
+  const cases = [["äldst", "adjective", "gammal"], ["förändras", "verb", "förändra"], ["bör", "verb", "böra"], ["norske", "adjective", "norsk"],
+    ["gjord", "verb", "göra"], ["trosor", "noun", "trosa"], ["stan", "noun", "stad"], ["honom", "pronoun", "han"], ["friteras", null, "fritera"], ["multimedia", "noun", "multimedium"]];
+  for (const [text, pos, lemma] of cases) assert.equal((await resolveWord(d, text, pos)).lemma, lemma, text);
+  // A word that is a headword of its own stays itself (boundary: noggrann, visa).
+  assert.equal((await resolveWord(d, "noggrann", "adjective")).lemma, "noggrann");
+  assert.equal((await resolveWord(d, "visa", "noun")).lemma, "visa");
+});
+
+// Round G: soft hyphens from Lexin's text are never stored (19 were, invisibly).
+test("S1: a generated entry is stored without soft hyphens", async () => {
+  const { withoutSoftHyphens } = await import("../server-native.mjs");
+  const r = withoutSoftHyphens({ lemma: "auto­mat", collocations: [{ phrase: "biljett­automat", example: "Köp en biljett i auto­maten." }], n: 2, ok: true });
+  assert.equal(r.lemma, "automat");
+  assert.equal(r.collocations[0].phrase, "biljettautomat");
+  assert.equal(r.collocations[0].example, "Köp en biljett i automaten.");
+  assert.equal(r.n, 2);
+  assert.equal(r.ok, true);
+});

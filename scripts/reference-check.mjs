@@ -25,6 +25,7 @@
 // --write upserts the changed resource_field_status rows (old rows archived in
 // content_audit_archive under one batch) and refreshes nothing else.
 import { createClient } from "@supabase/supabase-js";
+import { aiObjectionAnswered } from "../server-evidence.mjs";
 import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { useSaldoFiles, saldoEntries, compoundRows, multiWordVerbRows, participleRows, compareWithSaldo, cardFieldsFromSaldo, lemmatize, saldoHasExpression } from "../server-lexicon.mjs";
@@ -115,6 +116,11 @@ for (const o of objs) {
   out.posFamilies = posFam;
   if (posFam.length && st.pos?.status !== "verified" && st.pos?.status !== "mismatch") {
     put(o, "pos", { status: "verified", source: `references:${posFam.join("+")}`, detail: { families: posFam } }, st.pos);
+  } else if (!expression && st.pos?.status === "mismatch" && aiObjectionAnswered({ field: "pos", source: st.pos.source }, posFam)) {
+    // An AI's "part of speech not supported" against a dictionary listing (round G): the listing
+    // decides. Not for an expression: its listing shows it exists, not which part of speech it is.
+    put(o, "pos", { status: "verified", source: `references:${posFam.join("+")}`, detail: { families: posFam, overrules: `${st.pos.source}:${JSON.stringify(st.pos.detail || {}).slice(0, 200)}` } }, st.pos);
+    conflicts.push({ id: o.id, lemma, pos, ai: st.pos.source, references: posFam, field: "pos" });
   }
 
   // Forms for a word SALDO doesn't have.
