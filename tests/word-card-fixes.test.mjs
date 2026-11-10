@@ -653,3 +653,23 @@ test("MULTIWORD_SEARCH_CLASSIFY=on before deploy: no duplicate, no skipped check
     assert.equal(p.tables.learning_objects[0].status, "human_reviewed");
   } finally { delete process.env.MULTIWORD_SEARCH_CLASSIFY; }
 });
+
+// Round G regression R1: a free-combination review (2026-11-03) removed dictionary-listed
+// collocations; generation must keep one whatever both checks say (the dictionary vouches), and
+// still drop a combination nothing vouches for.
+test("round G R1: a collocation a dictionary lists survives two 'free_combination' verdicts", async () => {
+  const d = fakeSupabase();
+  card = baseCard({ lemma: "lova", pos: "verb", meaning_zh: "答应；承诺", meaning_en: "promise", countability: "",
+    examples: [{ swedish: "Jag lovar att komma.", zh: "我答应来。", en: "I promise to come." }],
+    collocations: [
+      { phrase: "lova guld och gröna skogar", zh: "许下空头承诺", en: "promise the moon", example: "Politikern lovade guld och gröna skogar." },
+      { phrase: "lova i en park", zh: "在公园里答应", en: "promise in a park", example: "Han lovade i en park." },
+    ] });
+  // (Lexin lists "lovar guld och gröna skogar"; "lova dyrt och heligt" it doesn't: that one is the corpus's case.)
+  check = okCheck({ collocation: { "lova guld och gröna skogar": { verdict: "free_combination" }, "lova i en park": { verdict: "free_combination" } } });
+  detail2 = { collocation: { "lova guld och gröna skogar": { verdict: "free_combination" }, "lova i en park": { verdict: "free_combination" } } };
+  const { entryId } = await generateWordEntry({ supabaseAdmin: d, userId: "u", word: "lova", nativeLanguage: "zh", pos: "verb", chargeQuota: false });
+  const colls = translation(d, entryId, "en").collocations;
+  assert.match(colls, /lova guld och gröna skogar/);
+  assert.doesNotMatch(colls, /lova i en park/);
+});
