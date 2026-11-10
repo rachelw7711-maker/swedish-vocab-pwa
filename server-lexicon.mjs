@@ -134,6 +134,56 @@ export function pickSaldoRow(rows, pos, modelForms = []) {
 }
 
 /**
+ * Whether two SALDO homographs are two words for a learner: they give conflicting values for a
+ * form both have (regel: regler / reglar; lag: lagen / laget). A form one of them lacks decides
+ * nothing — lukta..vb.1 / vb.2 differ only by a perfect participle, fyrkantig..av.1 / av.2 by
+ * comparison, värme..nn.1 / nn.2 share "värmen": one word each (round G, 2026-11-11).
+ */
+export function lexemesConflict(a, b, pos) {
+  const fa = cardFieldsFromSaldo(a, pos).forms, fb = cardFieldsFromSaldo(b, pos).forms;
+  return Object.keys(fa).some((t) => !/group$/.test(t) && fb[t] && !variants(fa[t]).some((v) => variants(fb[t]).includes(v)));
+}
+
+/**
+ * The lexeme key of a word card (round G, 2026-11-11): its SALDO lemgram when SALDO has words of
+ * this spelling and part of speech that are different words (lexemesConflict) — regel..nn.1
+ * (regler, "rule") and regel..nn.2 (reglar, "bolt") get a card each; null when the spelling is one
+ * word. The card's own forms decide, and only against the rows they conflict with; forms that fit
+ * no word better than its rivals decide nothing (null), so a card is never keyed as the wrong word.
+ * Among rows that are one word the lowest homograph number is the key.
+ */
+export async function lexemeKeyOf(supabaseAdmin, lemma, pos, forms = []) {
+  const rows = [...await saldoEntries(supabaseAdmin, lemma, pos)].sort((a, b) => homographNumber(a) - homographNumber(b));
+  if (!rows.some((a, i) => rows.slice(i + 1).some((b) => lexemesConflict(a, b, pos)))) return null;
+  const given = new Set((forms || []).flatMap((f) => variants(typeof f === "string" ? f : f?.value)));
+  // Against each rival only the forms the two disagree on count, and only values the rival has
+  // nowhere (fot: fötter / fot — the plural "fot" is also both words' headword, so it says nothing).
+  const all = (f) => new Set(Object.entries(f).filter(([t]) => !/group$/.test(t)).flatMap(([, v]) => variants(v)));
+  const beats = (r, x) => {
+    const fr = cardFieldsFromSaldo(r, pos).forms, fx = cardFieldsFromSaldo(x, pos).forms;
+    const types = Object.keys(fr).filter((t) => !/group$/.test(t) && fx[t] && !variants(fr[t]).some((v) => variants(fx[t]).includes(v)));
+    const hits = (own, other) => types.filter((t) => variants(own[t]).some((v) => given.has(v) && !all(other).has(v))).length;
+    return hits(fr, fx) > hits(fx, fr);
+  };
+  const winner = rows.find((r) => rows.some((x) => lexemesConflict(r, x, pos)) && rows.every((x) => !lexemesConflict(r, x, pos) || beats(r, x)));
+  return winner ? winner.lemgram : null;
+}
+
+/** Whether two lexeme keys of one spelling name the same word (equal, or rows that don't conflict). */
+export async function sameLexeme(supabaseAdmin, lemma, pos, a, b) {
+  if (!a || !b || a === b) return true;
+  const rows = await saldoEntries(supabaseAdmin, lemma, pos);
+  const ra = rows.find((r) => r.lemgram === a), rb = rows.find((r) => r.lemgram === b);
+  return !(ra && rb && lexemesConflict(ra, rb, pos));
+}
+
+/** The lexeme a written form names when it rules the rival words out ("reglar" → regel..nn.2). */
+export async function lexemeKeyOfForm(supabaseAdmin, lemma, pos, form) {
+  const f = key(form);
+  return lexemeKeyOf(supabaseAdmin, lemma, pos, [f]);
+}
+
+/**
  * SALDO rows for a compound SALDO doesn't list, built from its last part: "chokladask" is
  * choklad + ask and inflects as ask (chokladasken, chokladaskar). The head is the longest
  * final part of at least three letters that SALDO has as this part of speech; the first part

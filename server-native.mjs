@@ -13,7 +13,7 @@ import { openaiCost, ttsCost, assessmentCost, usageSource, PRICE_VERSION } from 
 
 import { checkNewWordCard, recordCheck, cleanCollocations, nounGrammar, latinLookalikes, foreignLetters, CHECK_VERSION } from "./server-language-checks.mjs";
 import { resolveWord, findExistingExpression, expressionMatchKey, saldoPromptLine, saldoCardFields, recordEntryStatus, setMatchKey, completeNounForms } from "./server-resources.mjs";
-import { lemmatize, saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms, cardFieldsFromSaldo } from "./server-lexicon.mjs";
+import { lemmatize, saldoEntries, pickSaldoRow, perfectParticipleDeclension, compoundRows, multiWordVerbForms, cardFieldsFromSaldo, lexemeKeyOf } from "./server-lexicon.mjs";
 import { multiwordEvidence, classifyMultiword, constructionsOf } from "./server-evidence.mjs";
 import { referenceEntries, referencePos, lexinPromptLine, expressionReferenceLine, lexinCountability, compareWithLexin, lexinForms, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 
@@ -539,9 +539,12 @@ If the input names a part of speech and the sense a text uses, write the entry f
     // Re-check before saving: the lemma may exist even if the input didn't match —
     // as the same part of speech (a same-spelling word of another class gets its own
     // entry), or as a phrase / expression in either module.
+    // Which word of a spelling the card is, when SALDO has several that inflect differently
+    // (regel: regler "rule" / reglar "bolt"): by the forms it got (round G). Null otherwise.
+    const lexemeKey = isPhrase ? null : await lexemeKeyOf(supabaseAdmin, lemma, pos, [lemma, ...forms.map((f) => f.value)]);
     let entryId = isPhrase
       ? (await findExistingExpression(supabaseAdmin, lemma, matchKey))?.id || null
-      : (await resolveWord(supabaseAdmin, lemma, pos)).entryId;
+      : (await resolveWord(supabaseAdmin, lemma, pos, lexemeKey)).entryId;
     // A new multi-word card from search (knowledge v2, decision 1): with MULTIWORD_SEARCH_CLASSIFY=on
     // it is public only when a dictionary lists the combination (a fixed phrase or idiom); any other
     // — a typical or free combination, or one nothing decides — is written for the reader who asked
@@ -555,6 +558,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         id: entryId,
         swedish: lemma,
         part_of_speech: isPhrase ? "other" : pos,
+        lexeme_key: lexemeKey,
         pos_detail: grammar ? grammar.posDetail : (pos === "noun" ? "" : result.pos_detail || ""),
         object_type: isPhrase ? (classified?.cls === "F3" ? "expression" : "phrase") : "word",
         category: isPhrase ? (classified?.cls === "F3" ? "everyday_expression" : "common_phrase") : null,
@@ -572,7 +576,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
       });
       if (insertError) {
         // Lost a race with another insert of the same (swedish, pos): reuse it.
-        const raced = isPhrase ? (await findExistingExpression(supabaseAdmin, lemma, matchKey))?.id : await findExistingEntry(supabaseAdmin, lemma, pos);
+        const raced = isPhrase ? (await findExistingExpression(supabaseAdmin, lemma, matchKey))?.id : (await resolveWord(supabaseAdmin, lemma, pos, lexemeKey)).entryId;
         if (!raced) throw insertError;
         entryId = raced;
       } else {

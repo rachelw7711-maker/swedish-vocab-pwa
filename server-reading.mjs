@@ -1529,7 +1529,7 @@ export async function resolveExpressionEntries(supabaseAdmin, items, { objectTyp
       status: "draft",
       updated_at: now,
     }));
-    const { data: inserted, error: insertError } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech", ignoreDuplicates: true }).select("id, swedish");
+    const { data: inserted, error: insertError } = await supabaseAdmin.from("learning_objects").upsert(rows, { onConflict: "swedish,part_of_speech,lexeme_key_nn", ignoreDuplicates: true }).select("id, swedish");
     const newRows = [];
     if (!insertError && inserted) {
       for (const row of inserted) {

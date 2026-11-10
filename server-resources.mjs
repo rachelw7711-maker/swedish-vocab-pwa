@@ -9,7 +9,7 @@
 //      from dedup),
 //   2. SALDO (local reference: lemma, part of speech, forms),
 //   3. AI only for the learning content that is still missing.
-import { lemmatize, saldoEntries, compareWithSaldo, cardFieldsFromSaldo, saldoFormsDiffer, SALDO_SOURCE_ID } from "./server-lexicon.mjs";
+import { lemmatize, saldoEntries, compareWithSaldo, cardFieldsFromSaldo, saldoFormsDiffer, lexemeKeyOf, lexemeKeyOfForm, sameLexeme, SALDO_SOURCE_ID } from "./server-lexicon.mjs";
 
 export const AI_SOURCE_ID = "openai-generated";
 
@@ -103,11 +103,26 @@ export async function findExistingExpression(supabaseAdmin, text, matchKey = nul
   return plain?.[0] || null;
 }
 
-async function wordRow(supabaseAdmin, lemma, pos) {
-  let query = supabaseAdmin.from("learning_objects").select("id, swedish, part_of_speech").eq("object_type", "word")
+async function wordRow(supabaseAdmin, lemma, pos, lexemeKey = null) {
+  let query = supabaseAdmin.from("learning_objects").select("id, swedish, part_of_speech, lexeme_key").eq("object_type", "word")
     .neq("status", "retired").ilike("swedish", normalizeText(lemma));
   if (pos) query = query.eq("part_of_speech", pos);
-  const { data } = await query.limit(1);
+  const { data } = await query.limit(10);
+  // A homograph asked for as one word (regel..nn.2, "bolt") is only that word's card: one keyed so,
+  // or an unkeyed card whose own forms make it that word — never the other word's (round G).
+  if (lexemeKey) {
+    for (const r of (data || []).filter((r) => r.lexeme_key)) {
+      if (await sameLexeme(supabaseAdmin, r.swedish, r.part_of_speech, r.lexeme_key, lexemeKey)) return r;
+    }
+    // An unkeyed card is that word unless its own forms show it is the other one: forms that
+    // decide nothing (none, or shared ones) never let a second card of the word be made.
+    for (const r of (data || []).filter((r) => !r.lexeme_key)) {
+      const { data: forms } = await supabaseAdmin.from("word_forms").select("form_value").eq("learning_object_id", r.id);
+      const own = await lexemeKeyOf(supabaseAdmin, r.swedish, r.part_of_speech, [r.swedish, ...(forms || []).map((f) => f.form_value)]);
+      if (await sameLexeme(supabaseAdmin, r.swedish, r.part_of_speech, own, lexemeKey)) return r;
+    }
+    return null;
+  }
   return data?.[0] || null;
 }
 
@@ -120,8 +135,8 @@ async function wordRow(supabaseAdmin, lemma, pos) {
  * An inflected form is never a new word; a same-spelling word of another part of
  * speech is never the same entry.
  */
-export async function resolveWord(supabaseAdmin, text, pos = null) {
-  const direct = await wordRow(supabaseAdmin, text, pos);
+export async function resolveWord(supabaseAdmin, text, pos = null, lexemeKey = null) {
+  const direct = await wordRow(supabaseAdmin, text, pos, lexemeKey);
   if (direct) return { entryId: direct.id, lemma: direct.swedish, pos: direct.part_of_speech, saldo: null };
 
   const candidates = (await lemmatize(supabaseAdmin, text)).filter((c) => !pos || c.pos === pos);
@@ -129,7 +144,8 @@ export async function resolveWord(supabaseAdmin, text, pos = null) {
   // is also visum's plural, and the noun asked for got the entry of visum (2026-11-09).
   const own = candidates.filter((c) => normalizeText(c.lemma) === normalizeText(text));
   for (const c of own.length ? own : candidates) {
-    const row = await wordRow(supabaseAdmin, c.lemma, c.pos);
+    // An inflected form can name one homograph ("reglar": regel, the bolt).
+    const row = await wordRow(supabaseAdmin, c.lemma, c.pos, lexemeKey || await lexemeKeyOfForm(supabaseAdmin, c.lemma, c.pos, text));
     if (row) return { entryId: row.id, lemma: row.swedish, pos: row.part_of_speech, saldo: null };
   }
   // Prefer the reading of the text itself as a headword ("fast" → fast), then the first lemma.
