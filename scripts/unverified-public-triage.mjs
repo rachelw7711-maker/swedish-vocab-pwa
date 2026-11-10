@@ -21,7 +21,8 @@ for (const r of rows) {
   const inRefs = w.includes(" ") ? await expressionInReferences(null, w).catch(() => null) : null;
   const lem = (await lemmatize(null, w.toLowerCase())).filter((x) => x.lemma.toLowerCase() !== w.toLowerCase()).map((x) => x.lemma);
   const users = (await db.from("user_words").select("user_id", { count: "exact", head: true }).eq("word_id", r.id)).count;
-  out.push({ ...r, saldo, saldoExpr, lexin, inRefs: inRefs ? (inRefs.listed ?? inRefs.kind ?? true) : null, lemmaOf: lem[0] || null, users });
+  out.push({ ...r, saldo, saldoExpr, lexin, // An empty hit list is "not listed" (it counted as listed: 157 reported, 8 real — round G).
+    inRefs: inRefs ? inRefs.length > 0 : null, lemmaOf: lem[0] || null, users });
 }
 writeFileSync("data/reports/round-g/unverified-public-triage.json", JSON.stringify(out, null, 1));
 const c = (f) => out.filter(f).length;
