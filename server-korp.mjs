@@ -325,7 +325,12 @@ export function groupFromForms(sing, pl, genus) {
 // occurrences, so per-corpus values add up to an approximation of the whole).
 export const KORP_RELATION_CORPORA = ["GP2012", "GP2013", "WEBBNYHETER2012", "WEBBNYHETER2013", "SUC3", "ROMI", "ROMII", "BLOGGMIX2012", "BLOGGMIX2013", "ATTASIDOR"];
 const relationRows = (d) => (d.relations || []).map((r) => ({ head: r.head, rel: r.rel, dep: r.dep, freq: r.freq, mi: r.mi }));
+// A lemgram Korp can't answer across corpora at once (a "collation" error) is summed per corpus; the
+// sum is cached under its own key, so the failing combined question is asked once, not on every call.
 export async function korpRelations(lemgram, { corpora = KORP_RELATION_CORPORA } = {}) {
+  const sumKey = `relations-sum:${corpora.join(",")}:${lemgram}`;
+  const kept = await cached(sumKey);
+  if (kept) return kept.rows;
   try {
     return relationRows(await korpJson("relations", { corpus: corpora.join(","), word: lemgram, type: "lemgram" }, { tries: 1 }));
   } catch (error) {
@@ -338,6 +343,8 @@ export async function korpRelations(lemgram, { corpora = KORP_RELATION_CORPORA }
         x.freq += r.freq; x.mi += r.mi;
       }
     }
-    return [...sum.values()];
+    const rows = [...sum.values()];
+    await store(sumKey, { rows });
+    return rows;
   }
 }

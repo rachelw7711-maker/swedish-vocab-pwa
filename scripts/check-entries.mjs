@@ -21,6 +21,8 @@
 // the entry's "reuse_check" mark is closed, and drafts whose sense is verified are promoted.
 //   node --env-file=.env scripts/check-entries.mjs --reading|--drafts-only|--reused|--ids f [--recheck] [--limit N] [--write]
 import { createClient } from "@supabase/supabase-js";
+import { senseGrade } from "../server-language-checks.mjs";
+import { RULE_VERSION } from "../server-evidence.mjs";
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { useSaldoFiles } from "../server-lexicon.mjs";
 import { useReferenceFiles } from "../server-references.mjs";
@@ -114,7 +116,8 @@ const started = Date.now();
 const promotable = (e) => e.status === "draft" && e.content_origin === "reading_expression";
 // Only a sense the references confirm is shown: "present" (the AI check alone, or open items) is
 // not verified, and a draft stays a draft (the owner, 2026-11-09).
-const passes = (r) => r.ok && !r.failed && !r.changes.length && r.sense?.status === "verified";
+// A draft is shown only on independent evidence (knowledge v2): an AI check alone is ai_consistent.
+const passes = (r) => r.ok && !r.failed && !r.changes.length && r.sense?.status === "verified" && r.sense?.grade === "verified";
 // An earlier run's results, recorded as they are (its entries changed since are left out).
 if (earlier) for (const e of todo) {
   const r = earlier.find((x) => x.id === e.id);
@@ -180,7 +183,7 @@ for (const r of done) {
     ? { ...r.sense, detail: { ...r.sense.detail, check_version: VERSION, checked_by: "check-entries", ...(r.changes.length ? { proposed_changes: r.changes, open: "content_unverified" } : {}) } }
     : { status: "mismatch", source: "check-entries", detail: { check_version: VERSION, reason: r.reason } };
   if (r.changes.length && sense.status === "verified") sense.status = "present";
-  const { error: e1 } = await db.from("resource_field_status").upsert({ learning_object_id: r.id, field: "sense", status: sense.status, source: sense.source, detail: sense.detail, updated_at: now }, { onConflict: "learning_object_id,field" });
+  const { error: e1 } = await db.from("resource_field_status").upsert({ learning_object_id: r.id, field: "sense", status: sense.status, source: sense.source, detail: sense.detail, grade: senseGrade(sense.status, sense.grade), rule_version: RULE_VERSION, updated_at: now }, { onConflict: "learning_object_id,field" });
   if (e1) throw e1;
   await db.from("resource_field_status").update({ status: "not_applicable", detail: { check_version: VERSION, checked_at: now }, updated_at: now }).eq("learning_object_id", r.id).eq("field", "reuse_check");
   if (r.promote) {

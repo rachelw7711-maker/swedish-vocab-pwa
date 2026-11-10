@@ -13,7 +13,7 @@ import { formReadings, saldoPartsOfSpeech, saldoEntries, compoundRows, multiWord
 import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
 import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { korpAttestation, judgeAttestation } from "./server-korp.mjs";
-import { posDecision, phraseSlots, lexinListings, senseCoverage } from "./server-evidence.mjs";
+import { posDecision, phraseSlots, lexinListings, senseCoverage, RULE_VERSION } from "./server-evidence.mjs";
 import { callOpenAIJson, logUsage } from "./server-native.mjs";
 import { openaiCost } from "./server-prices.mjs";
 
@@ -596,10 +596,18 @@ export function wiktionaryEvidence(page) {
 }
 
 /** Records a check on an entry (resource_field_status "pos" / "sense") and refreshes its summary. */
-export async function recordCheck(supabaseAdmin, entryId, field, status, source, detail = null) {
+// A sense row always carries its evidence grade (knowledge v2, 2026-11-10): the summary takes a row
+// without one by its source, which is how AI-checked senses were still counted "verified" (the
+// AI check plus an English word overlap is ai_consistent, never verified). Unless the caller has
+// independent evidence, a verified sense is ai_consistent, a mismatch disputed, anything else unverified.
+export function senseGrade(status, grade = null) {
+  return grade || (status === "verified" ? "ai_consistent" : status === "mismatch" ? "disputed" : "unverified");
+}
+export async function recordCheck(supabaseAdmin, entryId, field, status, source, detail = null, { grade = null } = {}) {
   try {
     await supabaseAdmin.from("resource_field_status").upsert(
-      { learning_object_id: entryId, field, status, source, detail, updated_at: new Date().toISOString() },
+      { learning_object_id: entryId, field, status, source, detail, updated_at: new Date().toISOString(),
+        ...(field === "sense" ? { grade: senseGrade(status, grade), rule_version: RULE_VERSION } : {}) },
       { onConflict: "learning_object_id,field" },
     );
     await supabaseAdmin.rpc("refresh_resource_summary", { p_ids: [entryId] });
@@ -1324,7 +1332,8 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
       : enReference === "none" ? { status: "present", source: `${sources};no_dictionary_english`, detail: { ...detail, open: "no_dictionary_english" } }
       // Something kept although a check doubts it: not verified until it is looked at.
       : open.length ? { status: "present", source: `${sources};open_items`, detail: { ...detail, open: "content_unverified" } }
-      : { status: "verified", source: sources, detail },
+      // The AI check passed and the English shares a word with Lexin: consistent, not proven.
+      : { status: "verified", source: sources, detail, grade: "ai_consistent" },
   };
 }
 

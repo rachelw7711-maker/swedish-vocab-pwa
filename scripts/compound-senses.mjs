@@ -74,7 +74,7 @@ if (WRITE) {
   for (const x of out) {
     const compound = { first: x.first, first_lemma: x.firstLemma, head: x.head, first_equivalents: x.firstEq, head_equivalents: x.headEq, existence: x.existence };
     must(await db.from("content_audit_archive").insert({ batch_id: batch, learning_object_id: x.id, table_name: "resource_field_status", field: "sense", old_value: JSON.stringify(x.prev), new_value: "verified", reason: "compound_meaning_from_parts" }));
-    must(await db.from("resource_field_status").update({ status: "verified", source: `${x.prev.source};compound-rule`, detail: { ...(x.prev.detail || {}), open: undefined, compound }, updated_at: at })
+    must(await db.from("resource_field_status").update({ status: "verified", grade: "verified", source: `${x.prev.source};compound-rule`, detail: { ...(x.prev.detail || {}), open: undefined, compound }, updated_at: at })
       .eq("learning_object_id", x.id).eq("field", "sense").eq("status", "present"));
   }
   const touched = out.map((x) => x.id);

@@ -579,3 +579,19 @@ export async function recordEvidence(supabaseAdmin, learningObjectId, itemType, 
     return { written: 0, error: error.message };
   }
 }
+
+// The evidence behind a sense row written before grades existed (2026-11-02 … 11-05), read from its
+// source string. Only a Korp sense check or the compound rule (SALDO split, each part's dictionary
+// English, Korp existence) is independent; an English word overlap with Lexin is a candidate, a
+// "manual_review" was the assistant reading an AI check (no person), Lexin in an AI check's source
+// only shows that the word exists. Unknown sources are left alone (grade null).
+export function evidenceOfSource(source = "") {
+  const s = String(source);
+  if (/(^|[;+])korp\b/.test(s) || /;korp$/.test(s)) return { kind: "korp_sense", grade: "verified", why: "Korp sense check" };
+  if (/compound-rule/.test(s)) return { kind: "program_compound", grade: "verified", why: "compound rule: SALDO split, each part's dictionary English, Korp existence" };
+  if (/dictionary-en|dictionary-english/.test(s)) return { kind: "english_overlap", grade: "ai_consistent", why: "English word overlap with Lexin: a candidate, not a sense link" };
+  if (/manual_review/.test(s)) return { kind: "assistant_review", grade: "ai_consistent", why: "the assistant's review of an AI check, no person" };
+  if (/lexin-sv-2020/.test(s)) return { kind: "ai_plus_existence", grade: "ai_consistent", why: "AI check; Lexin only shows the word exists" };
+  if (/ai_check|audit-2026-11-02|fix/.test(s)) return { kind: "ai", grade: "ai_consistent", why: "AI check only" };
+  return { kind: "unknown", grade: null, why: "source not understood: left as it is" };
+}

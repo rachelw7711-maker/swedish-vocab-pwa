@@ -602,7 +602,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
           : compound.length ? { saldoRows: compound, formSource: "saldo-compound" }
           : { referenceFields: lexinFields, formSource: LEXIN_SV_SOURCE_ID });
         if (!isPhrase) await recordCheck(supabaseAdmin, entryId, "pos", checked.pos.status, checked.pos.source, checked.pos.detail || null);
-        await recordCheck(supabaseAdmin, entryId, "sense", checked.sense.status, checked.sense.source, checked.sense.detail);
+        await recordCheck(supabaseAdmin, entryId, "sense", checked.sense.status, checked.sense.source, checked.sense.detail, { grade: checked.sense.grade });
       }
     }
 

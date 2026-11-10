@@ -19,8 +19,9 @@ for (let i = 0; i < ids.length; i += 100) {
   const part = ids.slice(i, i + 100);
   const { data: lo, error } = await db.from("learning_objects").select("id, swedish, status, content_origin, updated_at").in("id", part);
   if (error) throw error;
-  const { data: st } = await db.from("resource_field_status").select("learning_object_id, status").eq("field", "sense").in("learning_object_id", part);
-  for (const o of lo) rows.push({ ...o, sense: st.find((s) => s.learning_object_id === o.id)?.status });
+  const { data: st } = await db.from("resource_field_status").select("learning_object_id, status, grade").eq("field", "sense").in("learning_object_id", part);
+  // Shown only on independent evidence (Korp's sense check: grade verified), never an AI check alone.
+  for (const o of lo) { const s = st.find((x) => x.learning_object_id === o.id); rows.push({ ...o, sense: s?.status === "verified" && s.grade === "verified" ? "verified" : s?.status }); }
 }
 const ready = rows.filter((r) => r.status === "draft" && r.sense === "verified").slice(0, LIMIT);
 const done = rows.filter((r) => r.status === "ai_generated").length;

@@ -18,7 +18,7 @@ import { openaiCost } from "../server-prices.mjs";
 import { fakeSupabase } from "../tests/fake-supabase.mjs";
 
 const STOP_USD = 5;
-const LIMIT = Number(process.argv[process.argv.indexOf("--limit") + 1]) || Infinity;
+const LIMIT = process.argv.includes("--limit") ? Number(process.argv[process.argv.indexOf("--limit") + 1]) : Infinity;
 process.env.MULTIWORD_SEARCH_CLASSIFY = "on";
 process.env.KNOWLEDGE_SENSE_COVERAGE = "on";
 delete process.env.KORP_OFFLINE;

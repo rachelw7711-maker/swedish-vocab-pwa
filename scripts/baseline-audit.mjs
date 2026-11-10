@@ -65,7 +65,7 @@ for (const o of live) if (o.object_type !== "word" && o.match_key) (byKey.get(o.
 const collocationLines = (text) => String(text || "").split("\n").map((l) => l.split("|").map((x) => x.trim())).filter((p) => p[0]).map(([phrase, meaning, example]) => ({ phrase, meaning, example }));
 const parts = (m) => String(m || "").split(/[;；]/).map((x) => x.trim()).filter(Boolean);
 
-const LIMIT = Number(process.argv[process.argv.indexOf("--limit") + 1]) || Infinity;
+const LIMIT = process.argv.includes("--limit") ? Number(process.argv[process.argv.indexOf("--limit") + 1]) : Infinity;
 let n = 0;
 for (const o of live) {
   if (done.has(o.id)) continue;

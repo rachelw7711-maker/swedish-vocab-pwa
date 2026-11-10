@@ -81,7 +81,7 @@ const writes = [], report = [], tally = {}, conflicts = [];
 const inc = (k) => (tally[k] = (tally[k] || 0) + 1);
 const put = (o, field, next, prev) => {
   if (prev && prev.status === next.status && prev.source === next.source) return;
-  writes.push({ row: { learning_object_id: o.id, field, status: next.status, source: next.source, detail: next.detail ?? null, updated_at: now }, prev: prev || null });
+  writes.push({ row: { learning_object_id: o.id, field, status: next.status, source: next.source, detail: next.detail ?? null, ...(next.grade ? { grade: next.grade } : {}), updated_at: now }, prev: prev || null });
   inc(`${field.startsWith("form:") ? "form" : field}:${prev?.status || "none"}→${next.status}`);
 };
 
@@ -169,9 +169,9 @@ for (const o of objs) {
   // The audit's finding when its sense status isn't stored yet (it is written with the verified migration).
   const sense = st.sense || (a ? { status: a.sense, source: "audit-2026-11-02", detail: a.issues?.length ? { issues: a.issues } : null } : null);
   if (support.length && sense?.status === "present") {
-    put(o, "sense", { status: "verified", source: `${sense.source}+dictionary-en`, detail: { ...(sense.detail || {}), en_support: out.enSupport } }, st.sense);
+    put(o, "sense", { status: "verified", grade: "ai_consistent", source: `${sense.source}+dictionary-en`, detail: { ...(sense.detail || {}), en_support: out.enSupport } }, st.sense);
   } else if (support.length && sense?.status === "mismatch" && a?.issues?.length === 1 && a.issues[0] === "pos_not_supported" && posFam.length) {
-    put(o, "sense", { status: "verified", source: `${sense.source}+dictionary-en`, detail: { ...(sense.detail || {}), en_support: out.enSupport, overrules: "ai:pos_not_supported", families: posFam } }, st.sense);
+    put(o, "sense", { status: "verified", grade: "ai_consistent", source: `${sense.source}+dictionary-en`, detail: { ...(sense.detail || {}), en_support: out.enSupport, overrules: "ai:pos_not_supported", families: posFam } }, st.sense);
     conflicts.push({ id: o.id, lemma, pos, ai: "pos_not_supported", references: posFam, en_support: out.enSupport });
   } else if (sense?.status === "mismatch" && a?.issues?.includes("pos_not_supported") && posFam.length) {
     conflicts.push({ id: o.id, lemma, pos, ai: a.issues.join(","), references: posFam, en_support: out.enSupport, kept: "mismatch" });

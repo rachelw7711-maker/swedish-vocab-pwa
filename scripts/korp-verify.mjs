@@ -175,6 +175,8 @@ if (WRITE) {
     if (cur?.status !== s.status || cur.detail?.open !== s.detail?.open) continue;
     must(await db.from("content_audit_archive").insert({ batch_id: batch, learning_object_id: s.learning_object_id, table_name: "resource_field_status", field: s.field,
       old_value: JSON.stringify({ status: s.status, source: s.source, open: s.detail?.open }), new_value: JSON.stringify({ status: next.status, open: next.detail.open || null }), reason: MISMATCH ? "korp_evidence_on_audit_finding" : "korp_evidence" }));
+    // A Korp sense check is independent evidence: the grade says so (the summary never reads sources).
+    if (s.field === "sense") next.grade = next.status === "verified" ? "verified" : next.status === "mismatch" ? "disputed" : "unverified";
     must(await db.from("resource_field_status").update({ ...next, updated_at: at }).eq("learning_object_id", s.learning_object_id).eq("field", s.field));
     written++;
   }
