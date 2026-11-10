@@ -274,6 +274,22 @@ export function lexinSenses(refs, pos, { limit = 6 } = {}) {
  * and 时不时 for av (compare_g1, 2026-11-09).
  */
 const OWN_SENSES = " A sense whose Lexin phrases show the word only with a particle (\"har sagts upp\") belongs to that particle verb (säga upp), and an idiom's meaning (after =) to the idiom: never write either as a meaning of this word.";
+// The forms that tell Lexin's words of one spelling apart.
+const formSignature = (forms = {}) => ["singular_definite", "plural_indefinite", "plural_definite", "present", "preterite", "supine"].map((k) => key(forms[k] || "")).join("|");
+/**
+ * Which of Lexin's entries (words) of this spelling and part of speech a card is, by its forms:
+ * { words: [entry], own: Set of indexes } — own is every entry whose listed forms are all among the
+ * card's forms; when the card's forms fit no entry or all of them, every entry is own (nothing told apart).
+ */
+export function lexinWordsOf(refs, pos, forms = []) {
+  const words = (refs?.lexin_sv || []).filter((x) => posMatches(x.pos, pos));
+  const all = new Set(words.map((_, j) => j));
+  if (words.length < 2 || new Set(words.map((w) => formSignature(w.forms))).size < 2) return { words, own: all };
+  const have = new Set(forms.map((f) => key(f)));
+  const own = new Set(words.map((w, j) => (Object.values(w.forms || {}).filter((f) => f && f !== "–").every((f) => have.has(key(f))) ? j : -1)).filter((j) => j >= 0));
+  return { words, own: own.size && own.size < words.length ? own : all };
+}
+
 export function lexinPromptLine(refs, pos, { forms = null } = {}) {
   const english = (refs.lexin_en || []).filter((e) => posMatches(e.pos, pos));
   const words = (refs.lexin_sv || []).filter((x) => posMatches(x.pos, pos)).map((e) => ({
@@ -310,11 +326,15 @@ export function lexinPromptLine(refs, pos, { forms = null } = {}) {
     s.compounds.length && `compounds: ${s.compounds.join(", ")}`,
   ].filter(Boolean).join(" ");
   const label = (w) => [w.forms.singular_definite, w.forms.plural_indefinite].filter((f) => f && f !== "–").join(", ");
+  // Separate words: entries whose forms differ anywhere — en lag/lagen vs ett lag/laget, and also
+  // regel/regler "rule" vs regel/reglar "bolt" (same singular: round G found the two merged).
   const plural = pos === "noun" && lexinCountability(refs) === "uncountable" ? " Lexin gives this noun no plural." : "";
   const use = ` Prefer Lexin's own idioms, phrases and constructions for the collocations and its compounds for the related words where they fit the sense; add your own only where Lexin has none.${OWN_SENSES}`;
-  const separate = pos === "noun" && words.length > 1 && new Set(words.map((w) => key(w.forms.singular_definite))).size > 1;
+  const separate = words.length > 1 && new Set(words.map((w) => formSignature(w.forms))).size > 1;
   if (!separate) return `Reference (Lexin, Isof): senses of this ${pos}: ${words.flatMap((w) => w.senses).slice(0, 6).map(sense).join(" ")}.${plural} Cover these senses (the common ones first); don't add senses of other parts of speech.${use}`;
-  const chosen = forms?.singular_definite ? words.findIndex((w) => key(w.forms.singular_definite) === key(forms.singular_definite)) : -1;
+  const given = Object.entries(forms || {}).filter(([k, v]) => ["singular_definite", "plural_indefinite"].includes(k) && v);
+  const fits = words.map((w, j) => (given.length && given.every(([k, v]) => !w.forms[k] || w.forms[k] === "–" || key(w.forms[k]) === key(v)) ? j : -1)).filter((j) => j >= 0);
+  const chosen = fits.length === 1 ? fits[0] : -1;
   const list = words.map((w, j) => `(${String.fromCharCode(65 + j)}) ${label(w)}: ${w.senses.slice(0, 4).map(sense).join(" ")}`).join(" | ");
   return `Reference (Lexin, Isof): these are ${words.length} separate words with this spelling, each its own entry: ${list}. ${chosen >= 0 ? `Write the entry for word (${String.fromCharCode(65 + chosen)}) only — the one SALDO's forms are of` : "Write the entry for one of these words only (the one the request or its sense means, else the most common), with that word's forms"}: only its senses, collocations and examples — never a sense of another of these words.${use}`;
 }

@@ -10,7 +10,7 @@
 // the strongest; one AI answer the weakest. Word overlap between an English meaning and a
 // dictionary's English is a candidate only — it never verifies a sense by itself (§13.5).
 import { lemmatize, saldoEntries } from "./server-lexicon.mjs";
-import { referenceEntries, expressionInReferences, meaningSupport } from "./server-references.mjs";
+import { referenceEntries, expressionInReferences, meaningSupport, lexinWordsOf } from "./server-references.mjs";
 import { korpAttestation, korpRelations, judgeAttestation, useKorpCacheTable } from "./server-korp.mjs";
 
 export const RESULTS = ["supports", "refutes", "not_found", "lookup_failed", "disputed"];
@@ -508,14 +508,18 @@ export function senseCoverage(refs, pos, meaningEn, forms = []) {
   const english = (refs?.lexin_en || []).filter((e) => e.pos === pos);
   const parts = String(meaningEn || "").split(";").map((p) => p.trim()).filter(Boolean);
   const out = [];
-  for (const e of (refs?.lexin_sv || []).filter((x) => x.pos === pos)) {
+  // Another word of the same spelling (regel "bolt", plural reglar, for regel "rule", regler) is not
+  // a sense the card lacks: it is that word's (otherWord; round G).
+  const { words, own } = lexinWordsOf(refs, pos, forms);
+  for (const [j, e] of words.entries()) {
+    if (e.pos !== pos) continue;
     for (const x of e.lexemes || []) {
       // The two Lexin dictionaries share sense ids (VariantID), else the same definition.
       const def = (t) => String(t || "").trim().toLowerCase();
       const en = english.find((y) => (x.variant && y.variant === x.variant) || def(y.definition) === def(x.definition))?.english || [];
       if (!en.length) continue;
       const eqs = en.map((text) => ({ source: "lexin_en", text }));
-      out.push({ variant: x.variant || null, definition: x.definition, english: en.slice(0, 4), covered: parts.some((p) => meaningSupport(p, eqs).length > 0), particleVerb: particleVerbSense(x, forms) });
+      out.push({ variant: x.variant || null, definition: x.definition, english: en.slice(0, 4), covered: parts.some((p) => meaningSupport(p, eqs).length > 0), particleVerb: particleVerbSense(x, forms), ...(own.has(j) ? {} : { otherWord: true }) });
     }
   }
   // Only Lexin's English dictionary has the word: its senses, with their own examples and idioms.

@@ -60,8 +60,16 @@ test("G1/G2: separate words of one spelling kept apart, Lexin's idioms and compo
   assert.match(line, /fotbollslag/, "Lexin's compound of that word");
   assert.match(lexinPromptLine(lag, "noun"), /Write the entry for one of these words only/);
   const fil = lexinPromptLine(await referenceEntries(null, "fil"), "noun");
-  assert.doesNotMatch(fil, /separate words/, "one word, several senses");
+  // Round G: fil is three words in Lexin — the tool (filar), the lane (filer), sour milk (no plural);
+  // the old rule (singular only) merged them into one card with mixed plurals.
+  assert.match(fil, /these are 3 separate words/);
   assert.match(fil, /fil och flingor/);
+  // Round G: one singular, two plurals — regel "rule" (regler) and "bolt" (reglar) are two words too.
+  const regel = await referenceEntries(null, "regel");
+  const rule = lexinPromptLine(regel, "noun", { forms: { singular_definite: "regeln", plural_indefinite: "regler" } });
+  assert.match(rule, /separate words/);
+  assert.match(rule, /Write the entry for word \(A\) only/);
+  assert.match(lexinPromptLine(regel, "noun"), /Write the entry for one of these words only/);
 });
 
 test("G3: a multi-word expression's reference — its own entry, its particle verb, its head word's idiom", async () => {

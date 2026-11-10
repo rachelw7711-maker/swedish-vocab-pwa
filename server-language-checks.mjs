@@ -1334,7 +1334,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
   // Lexin senses the card's meaning doesn't cover (R7), a particle verb's sense apart: recorded
   // always (free); an open item — the card then not verified — only with KNOWLEDGE_SENSE_COVERAGE=on.
-  const missingSenses = !isPhrase && refs ? senseCoverage(refs, pos, card.meaning_en, allForms).filter((s) => !s.covered && !s.particleVerb).map(({ variant, definition, english: en }) => ({ variant, definition, english: en })) : [];
+  const missingSenses = !isPhrase && refs ? senseCoverage(refs, pos, card.meaning_en, allForms).filter((s) => !s.covered && !s.particleVerb && !s.otherWord).map(({ variant, definition, english: en }) => ({ variant, definition, english: en })) : [];
   if (missingSenses.length && process.env.KNOWLEDGE_SENSE_COVERAGE === "on") open.push({ kind: "missing_senses", senses: missingSenses });
   const detail = { check_version: CHECK_VERSION, verdict: check.verdict, other_pos_senses: check.other_pos_senses, unsupported_senses: check.unsupported_senses, dropped: [...dropped, ...misfits, ...ungrammatical], note: check.note, wiktionary: page.status, en_reference: enReference,
     ...(removedSenses.length ? { removed_senses: removedSenses } : {}), ...(ungrammatical.length ? { ungrammatical } : {}), ...(repeated.length ? { repeated_collocation_examples: repeated } : {}), ...(droppedCollocationExamples.length ? { dropped_collocation_examples: droppedCollocationExamples } : {}), ...(relatedMeaningNotes.length ? { related_meaning_notes: relatedMeaningNotes } : {}), ...(commonKept.length ? { common_combinations: commonKept } : {}),

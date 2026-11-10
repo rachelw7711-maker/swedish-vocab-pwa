@@ -16,6 +16,10 @@ import { multiwordEvidence } from "../server-evidence.mjs";
 
 const arg = (n, d) => (process.argv.includes(n) ? process.argv[process.argv.indexOf(n) + 1] : d);
 const CONCURRENCY = Number(arg("--concurrency", 4));
+// --mode count (default): the sequence count only, one Korp request a phrase (existence; ~6 h for the
+// library). --mode full: also the association of the content words (Korp relations: typicality),
+// several requests a new lemma — 30 h for the library, so only for a subset afterwards.
+const MODE = arg("--mode", "count");
 // --limit N: at most N phrases this run (0 is zero, not "all": an inventory without asking Korp).
 const LIMIT = process.argv.includes("--limit") ? Number(arg("--limit")) : Infinity;
 const OUT = "data/reports/round-g/korp-collocations.ndjson";
@@ -64,14 +68,20 @@ async function worker() {
     // Two steps: the association first (Korp relations, cached per lemma: fast); a pair Korp
     // lists together is attested by co-occurrence and needs no sequence count. Otherwise the count
     // (several seconds) says whether the sequence occurs at all.
-    let ev = await multiwordEvidence(null, phrase, { timeout: 120000, need: "for", verdict: "fixed" }).catch((e) => ({ error: String(e.message || e) }));
-    const paired = !ev.error && ev.association?.status === "ok" && ev.association.rank != null;
-    if (!paired && !ev.dictionary?.listing) ev = await multiwordEvidence(null, phrase, { timeout: 120000 }).catch((e) => ({ error: String(e.message || e) }));
-    if (paired) ev.attestation = { status: "by_association" };
+    let ev, paired = false;
+    if (MODE === "count") {
+      ev = await multiwordEvidence(null, phrase, { timeout: 120000, korp: { relations: async () => { throw new Error("not asked"); } } }).catch((e) => ({ error: String(e.message || e) }));
+      if (ev.association) ev.association = { status: "not_asked" };
+    } else {
+      ev = await multiwordEvidence(null, phrase, { timeout: 120000, need: "for", verdict: "fixed" }).catch((e) => ({ error: String(e.message || e) }));
+      paired = !ev.error && ev.association?.status === "ok" && ev.association.rank != null;
+      if (!paired && !ev.dictionary?.listing) ev = await multiwordEvidence(null, phrase, { timeout: 120000 }).catch((e) => ({ error: String(e.message || e) }));
+      if (paired) ev.attestation = { status: "by_association" };
+    }
     const a = ev.attestation, as = ev.association;
     const result = ev.dictionary?.listing ? "dictionary_listed" : a?.status === "by_association" ? "associated" : ev.error || a?.status === "failed" ? "failed" : a?.status === "not_applicable" ? "form_n/a" : a?.ok ? "attested" : "not_found";
     const row = { key, phrase, entries: entries.length, result, total: a?.total ?? null, association: as ? { status: as.status, rank: as.rank ?? null, lmi: as.lmi ?? null } : null,
-      listing: ev.dictionary?.listing ? ev.dictionary.listing.kind : null, error: ev.error || null, ms: Date.now() - s };
+      listing: ev.dictionary?.listing ? ev.dictionary.listing.kind : null, mode: MODE, error: ev.error || null, ms: Date.now() - s };
     appendFileSync(OUT, JSON.stringify(row) + "\n");
     stats.phrases++; stats.results[result] = (stats.results[result] || 0) + 1;
     if (stats.phrases % 200 === 0) { stats.ms += Date.now() - t0; writeFileSync(STATS, JSON.stringify(stats, null, 1)); console.log(stats.phrases, JSON.stringify(stats.results), `requests ${stats.requests}`); }

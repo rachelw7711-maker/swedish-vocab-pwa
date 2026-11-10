@@ -14,7 +14,7 @@ const FIX = {
   no_reference_entry: "human", pos_not_in_any_reference: "human", pos_only_in_wiktionary_or_folkets: "none",
   no_dictionary_english: "none", meaning_unmatched_by_dictionary: "ai_judgement", meaning_part_unmatched: "none",
   only_in_dictionary_example: "none", no_dictionary_evidence: "korp", headword_form_not_found: "ai_judgement", headword_only_in_compound: "none",
-  single_word_as_collocation: "rule", dictionary_expression_of_other_word: "rule", example_repeats_collocation_example: "rule",
+  single_word_as_collocation: "rule", dictionary_expression_of_other_word: "rule", homograph_without_own_card: "human", example_repeats_collocation_example: "rule",
   verified_without_independent_sense_evidence: "rule", verified_without_dictionary_listing: "rule", human_reviewed_label_on_ai_only_evidence: "rule",
   not_classified_yet: "korp", korp_lookup_failed: "korp", idiom_by_ai_and_corpus_only: "human", typical_combination_as_own_entry: "human",
   public_without_entry_evidence: "human", undecided_draft: "human", no_corpus_hits: "none", match_key_shared: "human",

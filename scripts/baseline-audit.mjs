@@ -116,8 +116,10 @@ for (const o of live) {
         const unmatched = parts(meaningEn).filter((p) => !meaningSupport(p, eqs).length);
         if (unmatched.length) add(4, "sense", "meaning_part_unmatched", { parts: unmatched, strength: 0 });
       }
-      const missing = senseCoverage(refs, o.part_of_speech, meaningEn, ownForms).filter((s) => !s.covered && !s.particleVerb);
-      for (const s of missing) add(2, "sense", "lexin_sense_not_covered", { variant: s.variant, definition: s.definition, english: s.english, strength: 5 });
+      const coverage = senseCoverage(refs, o.part_of_speech, meaningEn, ownForms);
+      for (const s of coverage.filter((s) => !s.covered && !s.particleVerb && !s.otherWord)) add(2, "sense", "lexin_sense_not_covered", { variant: s.variant, definition: s.definition, english: s.english, strength: 5 });
+      // Another Lexin word of this spelling (same part of speech, other forms): a card of its own, not a gap.
+      for (const s of coverage.filter((s) => s.otherWord && !s.covered)) add(6, "entry", "homograph_without_own_card", { variant: s.variant, definition: s.definition, english: s.english, strength: 5 });
     }
     // History: verified needs non-AI evidence for the sense (grade verified, Korp, Lexin sense link).
     if (o.verification_status === "verified" && sense && sense.grade !== "verified" && !/korp/.test(sense.source || "")) add(7, "verification_status", "verified_without_independent_sense_evidence", { senseSource: sense.source, grade: sense.grade });

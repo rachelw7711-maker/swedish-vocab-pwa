@@ -189,8 +189,14 @@ test("word card collocations: strict listing — the phrase itself, not any cons
 test("sense coverage (R7): Lexin senses the card's English misses; a particle verb's sense is not missing", async () => {
   const { saldoEntries } = await import("../server-lexicon.mjs");
   const forms = async (w, p) => (await saldoEntries(null, w, p)).flatMap((r) => Object.values(r.forms || {}).flat());
-  const regel = senseCoverage(await referenceEntries(null, "regel"), "noun", "rule; regulation", await forms("regel", "noun"));
-  assert.deepEqual(regel.filter((s) => !s.covered).map((s) => s.english[0]), ["bolt"]);
+  // regel "bolt" (plural reglar) is another word of this spelling, not a sense the "rule" card
+  // (regler) lacks (round G: it used to be reported missing, and the generation prompt merged them).
+  const regel = senseCoverage(await referenceEntries(null, "regel"), "noun", "rule; regulation", ["regel", "regeln", "regler", "reglerna"]);
+  assert.deepEqual(regel.filter((s) => !s.covered && !s.otherWord).map((s) => s.english[0]), []);
+  assert.deepEqual(regel.filter((s) => s.otherWord).map((s) => s.english[0]), ["bolt"]);
+  // One word, several senses: a sense the card lacks is missing (mål "tongue").
+  const mål = senseCoverage(await referenceEntries(null, "mål"), "noun", "goal; target; meal; case", ["mål", "målet", "målen"]);
+  assert.deepEqual(mål.filter((s) => !s.covered && !s.otherWord).map((s) => s.english[0]), ["dialect, tongue"]);
   const säga = senseCoverage(await referenceEntries(null, "säga"), "verb", "say; tell", await forms("säga", "verb"));
   const dismiss = säga.find((s) => s.english.includes("dismiss"));
   assert.equal(dismiss.covered, false);
