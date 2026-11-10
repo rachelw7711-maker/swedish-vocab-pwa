@@ -534,6 +534,51 @@ export function senseCoverage(refs, pos, meaningEn, forms = []) {
 }
 
 // ---------------------------------------------------------------------------
+// A card's sense tied to Lexin's senses without AI (round G, 2026-11-10)
+// ---------------------------------------------------------------------------
+// English overlap alone is a candidate (one shared word: "goal" for both mål senses). A link needs
+// two independent signals on the same Lexin sense (VariantID) of the card's own word: every part of
+// the card's English matches some sense's English, and the card's Swedish explanation shares most
+// content words of one of those senses' Swedish definition (lemmas, at least two). Pure but for
+// lemmatising (SALDO).
+const SV_STOP = new Set("och att det som en ett för med till av på är i om den de man kan har inte från eller när sig så vid ut upp in där än ngn ngt någon något slags sorts viss vissa olika mycket mer gör göra gjort vara ha bli blir får få tar ta sätt".split(" "));
+async function contentLemmas(supabaseAdmin, text) {
+  const out = new Set();
+  for (const w of String(text || "").toLowerCase().match(/\p{L}+/gu) || []) {
+    if (w.length < 3 || SV_STOP.has(w)) continue;
+    out.add(w);
+    for (const c of await lemmatize(supabaseAdmin, w)) out.add(c.lemma.toLowerCase());
+  }
+  return out;
+}
+export async function lexinSenseLink(supabaseAdmin, refs, pos, { meaningEn = "", swedishExplanation = "", forms = [] } = {}) {
+  const parts = String(meaningEn || "").split(/[;；]/).map((p) => p.trim()).filter(Boolean);
+  const english = (refs?.lexin_en || []).filter((e) => e.pos === pos);
+  const { words, own } = lexinWordsOf(refs, pos, forms);
+  const senses = [];
+  for (const [j, e] of words.entries()) {
+    if (e.pos !== pos || !own.has(j)) continue;
+    for (const x of e.lexemes || []) {
+      const en = english.find((y) => (x.variant && y.variant === x.variant))?.english || [];
+      if (en.length) senses.push({ variant: x.variant, definition: x.definition, eqs: en.map((text) => ({ source: "lexin_en", text })) });
+    }
+  }
+  if (!parts.length || !senses.length) return { linked: false, reason: "nothing to compare" };
+  const byPart = parts.map((p) => senses.filter((s) => meaningSupport(p, s.eqs).length).map((s) => s.variant));
+  const matched = [...new Set(byPart.flat())];
+  if (byPart.some((v) => !v.length)) return { linked: false, reason: "english_part_unmatched", matched };
+  const card = await contentLemmas(supabaseAdmin, swedishExplanation);
+  for (const s of senses.filter((x) => matched.includes(x.variant))) {
+    // Each word of the definition counts once (its lemmas are only ways to find it on the card).
+    const defWords = [...new Set((String(s.definition).toLowerCase().match(/\p{L}+/gu) || []).filter((w) => w.length >= 3 && !SV_STOP.has(w)))];
+    const shared = [];
+    for (const w of defWords) if ([...(await contentLemmas(supabaseAdmin, w))].some((l) => card.has(l))) shared.push(w);
+    if (defWords.length && shared.length >= Math.max(2, Math.ceil(defWords.length * 0.6))) return { linked: true, variant: s.variant, matched, shared };
+  }
+  return { linked: false, reason: "swedish_definition_differs", matched };
+}
+
+// ---------------------------------------------------------------------------
 // Protected content (R8, §7): what a later check may do to an item already confirmed
 // ---------------------------------------------------------------------------
 /**

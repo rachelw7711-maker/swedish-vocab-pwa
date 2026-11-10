@@ -81,3 +81,26 @@ for (const c of C) {
     assert.equal(ev.kind, c.expected);
   });
 }
+
+// L — a card's sense tied to a Lexin sense without AI (dictionary_sense_link): two signals on one sense.
+test("regression L1: English and Swedish definition agree on one Lexin sense → linked (skum)", async () => {
+  const { lexinSenseLink } = await import("../server-evidence.mjs");
+  const r = await lexinSenseLink(null, await referenceEntries(null, "skum"), "noun", { meaningEn: "foam; froth; lather", swedishExplanation: "en vit massa av små bubblor på ytan av en vätska", forms: ["skum", "skummet"] });
+  assert.equal(r.linked, true);
+});
+test("regression L2: one generic shared verb is no link (ljus: 'gör' only, the old count made it two)", async () => {
+  const { lexinSenseLink } = await import("../server-evidence.mjs");
+  const r = await lexinSenseLink(null, await referenceEntries(null, "ljus"), "noun", { meaningEn: "light", swedishExplanation: "Det som gör att vi kan se, eller den belysning som finns i ett rum eller utomhus.", forms: ["ljus", "ljuset"] });
+  assert.equal(r.linked, false);
+});
+test("regression L3: a wrong sense with an English word of another sense is no link (fart 'a part of a journey')", async () => {
+  const { lexinSenseLink } = await import("../server-evidence.mjs");
+  const r = await lexinSenseLink(null, await referenceEntries(null, "fart"), "noun", { meaningEn: "a part of a journey", swedishExplanation: "en del av en resa", forms: ["fart", "farten"] });
+  assert.equal(r.linked, false);
+});
+test("regression L4: a part of the card's English no sense has → no link (only some parts verified)", async () => {
+  const { lexinSenseLink } = await import("../server-evidence.mjs");
+  const r = await lexinSenseLink(null, await referenceEntries(null, "skum"), "noun", { meaningEn: "foam; a kind of cake", swedishExplanation: "en vit massa av små bubblor på ytan av en vätska", forms: ["skum"] });
+  assert.equal(r.linked, false);
+  assert.equal(r.reason, "english_part_unmatched");
+});
