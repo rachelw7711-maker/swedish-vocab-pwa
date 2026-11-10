@@ -435,7 +435,8 @@ export function posDecision({ pos, references = {}, glossaryPos = null, wiktiona
 export const AI_VERDICT_SOURCES = /^(audit-2026-11-02|check-entries|reading_check|ai_check)/;
 export function aiObjectionAnswered({ field, source }, families = []) {
   if (field !== "pos" || !AI_VERDICT_SOURCES.test(String(source || ""))) return false;
-  return families.some((f) => f === "saldo" || f === "saldo-compound" || f === "saldo-form" || f === "saldo-participle" || f === "lexin");
+  // "korp": Korp's part-of-speech verdict passed its thresholds (judgeAttestation; korp_attestation, strength 4).
+  return families.some((f) => f === "saldo" || f === "saldo-compound" || f === "saldo-form" || f === "saldo-participle" || f === "lexin" || f === "korp");
 }
 
 // ---------------------------------------------------------------------------

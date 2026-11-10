@@ -149,6 +149,8 @@ test("F2: an AI part-of-speech objection is answered by SALDO or Lexin, not by W
   assert.equal(aiObjectionAnswered({ field: "pos", source: "check-entries" }, ["lexin"]), true);
   assert.equal(aiObjectionAnswered({ field: "pos", source: "audit-2026-11-02" }, ["wiktionary"]), false);
   assert.equal(aiObjectionAnswered({ field: "pos", source: "audit-2026-11-02" }, []), false);
+  // Korp's part-of-speech verdict (rosenblad: 56 hits, all NN, 8 corpora) also outweighs an AI's.
+  assert.equal(aiObjectionAnswered({ field: "pos", source: "audit-2026-11-02" }, ["korp"]), true);
   // A dictionary's or a program's mismatch is not an AI verdict; a sense objection is not settled by a listing.
   assert.equal(aiObjectionAnswered({ field: "pos", source: "saldo-morphology-2017" }, ["saldo"]), false);
   assert.equal(aiObjectionAnswered({ field: "sense", source: "audit-2026-11-02" }, ["saldo"]), false);

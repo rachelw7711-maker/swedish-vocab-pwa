@@ -59,7 +59,7 @@ for (const w of withheld) {
   const expression = c.object_type !== "word" || /\s/.test(lemma);
   const own = [lemma, ...(forms.get(c.id) || []).map((f) => f.form_value)];
   const refs = await referenceEntries(null, lemma);
-  const row = { id: c.id, swedish: lemma, pos, type: c.object_type, source: c.source, wasStatus: w.status, why: w.verification_status, meaningEn: en.get(c.id) || "", meaningZh: zh.get(c.id) || "" };
+  const row = { id: c.id, swedish: lemma, pos, type: c.object_type, source: c.source, wasStatus: w.status, why: w.verification_status, nowStatus: c.status, nowVerification: c.verification_status, meaningEn: en.get(c.id) || "", meaningZh: zh.get(c.id) || "" };
 
   // Headword: an inflected form of another lemma (and not a lemma of its own of this part of speech).
   if (!expression) {
@@ -105,7 +105,8 @@ for (const w of withheld) {
     const ai = AI_SOURCES.test(r.source || "");
     // The same rule as reference-check (aiObjectionAnswered): a word's part of speech only — an
     // expression's listing shows it exists, not its part of speech.
-    const answered = !expression && aiObjectionAnswered({ field: r.field, source: r.source }, fam);
+    const korpPos = rows.find((x) => x.field === "sense")?.detail?.korp?.pos?.ok === true ? ["korp"] : [];
+    const answered = !expression && aiObjectionAnswered({ field: r.field, source: r.source }, [...fam, ...korpPos]);
     return { field: r.field, source: r.source, kind: ai ? (answered ? "ai_vs_dictionary" : "ai_only") : "dictionary", detail: r.detail };
   });
   row.verified = rows.filter((r) => r.status === "verified").map((r) => `${r.field}${r.grade ? `(${r.grade})` : ""}`);
@@ -114,12 +115,16 @@ for (const w of withheld) {
   // Proposed outcome.
   const dictConflict = row.conflicts.filter((x) => x.kind === "dictionary");
   const aiOnly = row.conflicts.filter((x) => x.kind === "ai_only");
-  const coreSense = /^dictionary_(sense_link|idiom_english)/.test(row.senseEvidence);
+  // Core sense: a dictionary tie found now, or a sense row already graded verified by evidence that
+  // can verify (Korp sense sentences, a dictionary link or listing, the compound rule).
+  const senseRow = rows.find((r) => r.field === "sense" && r.status === "verified" && r.grade === "verified");
+  if (senseRow && !/^dictionary_(sense_link|idiom_english)/.test(row.senseEvidence)) row.senseEvidence = `stored:${senseRow.source}`;
+  const coreSense = /^(dictionary_(sense_link|idiom_english)|stored:)/.test(row.senseEvidence);
   if (row.headword) row.outcome = { decision: "fix", reason: `headword is an inflected form of ${row.headword.inflectedOf} (${row.headword.pos})${row.headword.lemmaCard ? ", which has a card" : ""}` };
   else if (dictConflict.length) row.outcome = { decision: "fix", reason: `dictionary disagrees: ${dictConflict.map((x) => `${x.field} stored ${x.detail?.stored} / ${x.source} ${x.detail?.reference}`).join("; ")}` };
   else if (!expression && !fam.length && row.otherPos?.length && row.conflicts.some((x) => x.field === "pos")) row.outcome = { decision: "fix", reason: `no dictionary has it as ${pos}; SALDO has it as ${(row.otherPos || []).join("/") || "nothing"}` };
   else if (aiOnly.length) row.outcome = { decision: "draft", reason: `AI-only objection no dictionary answers: ${aiOnly.map((x) => x.field).join(", ")}` };
-  else if (fam.length && coreSense) row.outcome = { decision: "restore", reason: `listed (${fam.join("+")}), core sense ${row.senseEvidence}` };
+  else if ((fam.length || rows.some((r) => r.field === "pos" && r.status === "verified")) && coreSense) row.outcome = { decision: "restore", reason: `part of speech ${fam.length ? `listed (${fam.join("+")})` : `verified (${rows.find((r) => r.field === "pos").source})`}, core sense ${row.senseEvidence}` };
   else if (fam.length) row.outcome = { decision: "draft", reason: `listed (${fam.join("+")}) but the core sense has only ${row.senseEvidence}`, needs: "a sense check (Korp sense sentences or a second independent source)" };
   else row.outcome = { decision: "draft", reason: expression ? "no dictionary lists the expression (not an error by itself)" : "no dictionary lists the word", needs: expression ? "Korp attestation of the sequence + a sense check" : "SALDO/Lexin or Korp attestation" };
   out.push(row);
@@ -129,7 +134,7 @@ for (const r of out) tally[r.outcome?.decision || "missing"] = (tally[r.outcome?
 writeFileSync("data/reports/round-g/withheld-ledger.json", JSON.stringify({ batch, tally, cards: out }, null, 1));
 const cell = (s) => String(s ?? "").replace(/\|/g, "/").replace(/\n/g, " ");
 const md = [`# 287 张撤回卡逐张台账（batch ${batch}，零 AI，${new Date().toISOString().slice(0, 10)}）`, "", `结果：${JSON.stringify(tally)}`, "",
-  "| id | 词条 | 词性 | 类型 | 原状态 | 撤回原因 | 词性证据 | 义项证据 | 冲突 | 学习者 | 处理 | 依据 |", "|---|---|---|---|---|---|---|---|---|---|---|---|",
-  ...out.map((r) => `| ${r.id.slice(0, 8)} | ${cell(r.swedish)} | ${r.pos} | ${r.type} | ${r.wasStatus} | ${r.why} | ${cell((r.posFamilies || []).join("+") || "—")} | ${cell(r.senseEvidence)} | ${cell((r.conflicts || []).map((x) => `${x.field}:${x.kind}`).join(", ") || "—")} | ${r.learners} | ${r.outcome?.decision} | ${cell(r.outcome?.reason)} |`)];
+  "| id | 词条 | 词性 | 类型 | 原状态 | 撤回原因 | 词性证据 | 义项证据 | 冲突 | 学习者 | 处理 | 依据 | 现状态 |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+  ...out.map((r) => `| ${r.id.slice(0, 8)} | ${cell(r.swedish)} | ${r.pos} | ${r.type} | ${r.wasStatus} | ${r.why} | ${cell((r.posFamilies || []).join("+") || "—")} | ${cell(r.senseEvidence)} | ${cell((r.conflicts || []).map((x) => `${x.field}:${x.kind}`).join(", ") || "—")} | ${r.learners} | ${r.outcome?.decision} | ${cell(r.outcome?.reason)} | ${r.nowStatus}/${r.nowVerification} |`)];
 writeFileSync("data/reports/round-g/withheld-ledger.md", md.join("\n") + "\n");
 console.log(tally);
