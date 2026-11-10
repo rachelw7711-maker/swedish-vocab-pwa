@@ -537,12 +537,18 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
     if (supabaseAdmin) await logUsage(supabaseAdmin, { userId, textResourceId, feature, model: MODEL, usage: u, details: { items: group.length, ...(retry ? { retry: true } : {}) } });
     return result.items || [];
   };
+  // An answer whose only fault is that it left out some examples, collocations or related words
+  // keeps what it answered; only the missing parts are asked again (round G: one missing key used
+  // to cost the whole item a second time).
+  const MISSING = /^(example|collocation|related)_missing:/;
+  const partials = new Map();
   const settle = (group, answers, final) => {
     const retry = [];
     for (const g of group) {
       const mine = answers.filter((c) => c.key === g.prompt.key);
       const c = mine.length === 1 ? mine[0] : null;
       const problems = mine.length > 1 ? ["duplicate_item"] : checkProblems(g.prompt, c);
+      if (!final && c && problems.length && problems.every((p) => MISSING.test(p))) partials.set(g.item.id, { c, missing: new Set(problems.map((p) => p.split(":")[1])) });
       if (!problems.length) {
         c.examples = c.examples.map((x) => ({ ...x, index: g.prompt.entry.examples.findIndex((e) => e.key === x.key) }));
         checks.set(g.item.id, { ...c, id: g.item.id });
@@ -576,7 +582,17 @@ export async function aiSenseCheck(supabaseAdmin, items, { userId = null, textRe
     for (const g of retry) {
       usage.retries += 1;
       try {
-        settle([g], await ask([g], true), true);
+        const part = partials.get(g.item.id);
+        if (!part) { settle([g], await ask([g], true), true); continue; }
+        // Only the missing parts, then the whole answer is checked against the whole item.
+        const only = (list) => (list || []).filter((x) => part.missing.has(x.key));
+        const entry = g.prompt.entry;
+        const small = { ...g, prompt: { ...g.prompt, entry: { ...entry, examples: only(entry.examples), ...(entry.collocations ? { collocations: only(entry.collocations) } : {}), ...(entry.related ? { related: only(entry.related) } : {}) } } };
+        const again = (await ask([small], true)).filter((c) => c.key === g.prompt.key);
+        const merged = { ...part.c };
+        for (const f of ["examples", "collocations", "related"]) if (again.length === 1) merged[f] = [...(part.c[f] || []), ...only(again[0][f])];
+        settle([{ ...g }], [merged], true);
+        partials.delete(g.item.id);
       } catch (error) {
         usage.failed_calls += 1;
         failures.set(g.item.id, [...(failures.get(g.item.id) || []), `call_failed:${error.message}`]);

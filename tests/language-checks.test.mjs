@@ -91,6 +91,25 @@ test("an answer that leaves out an example, or is empty, is not a pass", async (
   });
 });
 
+test("round G: an answer missing one example keeps the rest; only the missing example is asked again", async () => {
+  const { aiSenseCheck } = await import("../server-language-checks.mjs");
+  const sent = [];
+  await withModel((items, n) => {
+    sent.push(items.map((i) => i.entry.examples.map((e) => e.key)));
+    // First answer leaves out bete's second example; the second call is asked about it alone.
+    if (n === 1) return items.map((i) => answer(i, i.lemma === "bete" ? { examples: answer(i).examples.slice(0, 1) } : {}));
+    return items.map((i) => answer(i));
+  }, async (requests) => {
+    const { checks, failures, usage } = await aiSenseCheck(null, [vuxen, bete]);
+    assert.deepEqual(requests, [["vuxen", "bete"], ["bete"]]);
+    assert.deepEqual(sent[1], [["i2.e1"]], "only the missing example");
+    assert.equal(failures.size, 0);
+    assert.deepEqual(checks.get("id-bete").examples.map((x) => x.key), ["i2.e0", "i2.e1"]);
+    assert.deepEqual(checks.get("id-bete").examples.map((x) => x.index), [0, 1]);
+    assert.equal(usage.retries, 1);
+  });
+});
+
 test("an example answered twice, or with another sentence's words, is not used", async () => {
   const { checkProblems } = await import("../server-language-checks.mjs");
   const item = { key: "i1", lemma: "bete", pos: "verb", entry: { examples: [{ key: "i1.e0", sv: "Han kan bete sig konstigt.", zh: "x" }, { key: "i1.e1", sv: "Man måste bete sig artigt.", zh: "y" }] } };
