@@ -81,8 +81,28 @@ for (const m of folkets.matchAll(/<word ([^>]*)>([\s\S]*?)<\/word>/g)) {
   }
 }
 
+const meaningEn = new Map((await all("learning_object_translations", "learning_object_id, meaning", (q) => q.eq("native_language", "en"))).map((t) => [t.learning_object_id, t.meaning]));
+const EN_STOP = new Set("the a an of to in on for and or with by at as be is someone something one's oneself who that from not very".split(" "));
+const enWords = (t) => String(t || "").toLowerCase().match(/[a-z]+/g)?.filter((w) => w.length >= 3 && !EN_STOP.has(w)) || [];
+const stemOf = (w) => w.replace(/^(un|in|im|il|ir|dis|non|mis)(?=[a-z]{4})/, "");
+// One English word is the other's stem (pay / payment, luck / bad luck), or they share most of the
+// shorter one (publish / publication).
+const sameStem = (a, b) => {
+  const [x, y] = a.length <= b.length ? [a, b] : [b, a];
+  const s = x.replace(/e$/, "");
+  if (s.length >= 3 && y.startsWith(s.slice(0, Math.max(3, s.length - 1)))) return true;
+  let n = 0; while (n < x.length && x[n] === y[n]) n++;
+  return n >= 4 && n / x.length >= 0.6;
+};
+function englishShared(a, b) {
+  const A = enWords(a).map(stemOf), B = enWords(b).map(stemOf);
+  return A.some((x) => B.some((y) => sameStem(x, y)));
+}
+const dropped = [];
+
 // Wiktionary: etymology templates (derivations) and synonym / antonym lists.
 const WIKI_POS = { noun: "noun", verb: "verb", adj: "adjective", adv: "adverb" };
+const TRANSPARENT_PREFIXES = new Set(["o", "miss", "åter", "sam", "icke", "själv", "van"]);
 const rl = createInterface({ input: createReadStream("data/reference/enwiktionary/sv.jsonl") });
 for await (const line of rl) {
   const w0 = line.match(/"word": "([^"]*)"/)?.[1];
@@ -90,18 +110,28 @@ for await (const line of rl) {
   const e = JSON.parse(line);
   const head = one(e.word, WIKI_POS[e.pos]);
   if (!head) continue;
+  // A word inherited or borrowed whole (betala ← Middle Low German betalen = be- + talen) has its
+  // affix analysis from the source language: history, not a Swedish word family a learner can see.
+  const fromElsewhere = (e.etymology_templates || []).some((t) => ["inh", "der", "bor", "lbor", "inh+", "der+", "bor+"].includes(t.name) && t.args?.["2"] && t.args["2"] !== "sv");
   for (const t of e.etymology_templates || []) {
-    if (!["suffix", "prefix", "af", "affix"].includes(t.name)) continue;
+    if (!["suffix", "prefix", "af", "affix"].includes(t.name) || fromElsewhere) continue;
     const parts = Object.entries(t.args || {}).filter(([k]) => /^\d+$/.test(k) && k !== "1").map(([, v]) => String(v));
     // suffix|base|suf, prefix|pre|base; af/affix mark affixes with a hyphen.
     const affixes = t.name === "suffix" ? [parts[1]] : t.name === "prefix" ? [parts[0]] : parts.filter((p) => /^-|-$/.test(p));
     const bases = t.name === "suffix" ? [parts[0]] : t.name === "prefix" ? [parts[1]] : parts.filter((p) => !/^-|-$/.test(p));
     if (bases.length !== 1 || !affixes.filter(Boolean).length) continue;
+    // Prefixes: only the transparent ones (o-fördelaktig, miss-lyckas, åter-vända); be-, för-, an-
+    // and the like make a new word whose sense a learner does not read off the base (anföra, bero).
+    const prefixes = affixes.filter((a) => /-$/.test(a) || t.name === "prefix").map((a) => a.replace(/-$/, ""));
+    if (prefixes.some((p) => !TRANSPARENT_PREFIXES.has(p))) continue;
     const base = one(bases[0]);
     if (!base || base.id === head.id) continue;
     // SALDO has both words in these parts of speech: the second signal.
     if (!(await saldoEntries(null, head.swedish, head.part_of_speech)).length || !(await saldoEntries(null, base.swedish, base.part_of_speech)).length) continue;
-    derivation(head, base, { source: "en-wiktionary", kind: "wiktionary_etymology+saldo", ref: `${t.name}: ${parts.join(" + ")}` });
+    // The meaning carries over (a learner sees betalning in betala): the two cards' English share a
+    // stem (payment / pay, unknown / known, bad luck / luck) — orolig "worried" is not o- + rolig "fun".
+    if (!englishShared(meaningEn.get(head.id), meaningEn.get(base.id))) { dropped.push(`${head.swedish} ← ${base.swedish} (${meaningEn.get(head.id)} | ${meaningEn.get(base.id)})`); continue; }
+    derivation(head, base, { source: "en-wiktionary", kind: "wiktionary_etymology+saldo+english", ref: `${t.name}: ${parts.join(" + ")}` });
   }
   const lists = { synonym: [...(e.synonyms || []), ...(e.senses || []).flatMap((s) => s.synonyms || [])], antonym: [...(e.antonyms || []), ...(e.senses || []).flatMap((s) => s.antonyms || [])] };
   for (const [type, l] of Object.entries(lists)) for (const s of l) {
@@ -114,7 +144,7 @@ for await (const line of rl) {
 const rows = await all("learning_object_relationships", "id, from_object_id, to_object_id, relationship_type, grade");
 const rowKey = (r) => `${r.from_object_id}>${r.to_object_id}>${r.relationship_type}`;
 const have = new Map(rows.map((r) => [rowKey(r), r]));
-const strong = (x) => x.evidence.some((e) => e.kind === "dictionary_listing" || e.kind === "wiktionary_etymology+saldo");
+const strong = (x) => x.evidence.some((e) => e.kind === "dictionary_listing" || e.kind === "wiktionary_etymology+saldo+english");
 const verify = [], add = [], tally = {};
 const inc = (k) => (tally[k] = (tally[k] || 0) + 1);
 for (const x of found.values()) {
@@ -133,10 +163,21 @@ const typed = rows.filter((r) => ["synonym", "antonym", "derived_from", "word_fa
 const verifiedIds = new Set(verify.map((v) => v.row.id));
 for (const t of ["synonym", "antonym", "derived_from", "word_family"]) tally[`typed ${t}: backed / all`] = `${typed.filter((r) => r.relationship_type === t && verifiedIds.has(r.id)).length} / ${typed.filter((r) => r.relationship_type === t).length}`;
 const show = (x) => `${x.from.swedish} (${x.from.part_of_speech}) → ${x.to.swedish} (${x.to.part_of_speech}) ${x.type} [${x.evidence.map((e) => e.ref ? `${e.source}: ${e.ref}` : e.source).join("; ")}]`;
-writeFileSync("data/reports/round-g/relations-verify.json", JSON.stringify({ tally, verify: verify.map((v) => ({ id: v.row.id, rowType: v.row.relationship_type, line: show(v.x), evidence: v.x.evidence })), add: add.map((x) => ({ line: show(x), from: x.from.id, to: x.to.id, type: x.type, evidence: x.evidence })) }, null, 1));
+writeFileSync("data/reports/round-g/relations-verify.json", JSON.stringify({ tally, dropped, verify: verify.map((v) => ({ id: v.row.id, rowType: v.row.relationship_type, line: show(v.x), evidence: v.x.evidence })), add: add.map((x) => ({ line: show(x), from: x.from.id, to: x.to.id, type: x.type, evidence: x.evidence })) }, null, 1));
 console.log(JSON.stringify(tally, null, 1));
 
 if (APPLY) {
+  // Rows an earlier run of this batch verified or added that the rules no longer back: withdrawn
+  // (a verified grade cleared; an added row removed — it was only ever this batch's).
+  const keep = new Set([...verify.map((v) => v.row.id)]);
+  const addKeys = new Set(add.map((x) => `${x.from.id}>${x.to.id}>${x.type}`));
+  const mine = (await all("learning_object_relationships", "id, from_object_id, to_object_id, relationship_type, evidence")).filter((r) => r.evidence?.batch === BATCH);
+  let withdrawn = 0;
+  for (const r of mine) {
+    if (r.evidence.added_by) { if (!addKeys.has(rowKey(r)) && !keep.has(r.id)) { const { error } = await db.from("learning_object_relationships").delete().eq("id", r.id); if (error) throw error; withdrawn++; } }
+    else if (!keep.has(r.id)) { const { error } = await db.from("learning_object_relationships").update({ grade: null, evidence: null }).eq("id", r.id); if (error) throw error; withdrawn++; }
+  }
+  console.log({ withdrawn });
   // Typed rows a dictionary backs: grade + evidence; then the new rows (removed again by the rollback).
   for (let i = 0; i < verify.length; i += 200) {
     for (const v of verify.slice(i, i + 200)) {
