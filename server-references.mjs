@@ -225,6 +225,18 @@ export function meaningSupport(meaningEn, equivalents) {
  * yogastudio → "yoga studio"). A compound whose meaning is not its parts' (jordgubbe,
  * "strawberry") does not pass: its sense needs other evidence.
  */
+/**
+ * One part of a card's meaning supported by dictionary English (round G, 2026-11-11): a short part
+ * (≤ 3 content words, a gloss) needs each of its words among the equivalents' — "hand fan" is not
+ * "fan, admirer"; a longer part (an explanation) needs the overlap meaningSupport finds.
+ */
+export function meaningPartSupported(part, equivalents) {
+  const mine = glossWords(part).map(stem);
+  if (mine.length > 3) return meaningSupport(part, equivalents).length > 0;
+  const theirs = new Set(equivalents.flatMap((e) => glossWords(e.text).map(stem)));
+  return mine.length > 0 && mine.every((w) => theirs.has(w));
+}
+
 // strict (round G, for writing a sense verified): every content word of every part comes from the
 // parts' equivalents — "summer high season; the busiest…" (sommarsäsong) or "red-green coalition"
 // say more than their parts and need other evidence.

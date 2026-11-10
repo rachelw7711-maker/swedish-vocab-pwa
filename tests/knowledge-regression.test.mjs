@@ -242,3 +242,13 @@ test("C1: strict compound meaning — sommarsäsong 'busiest' and rödgrön 'coa
   assert.equal(compoundMeaningSupport("summer high season", sommar), true);   // the loose rule (generation evidence) unchanged
   assert.equal(compoundMeaningSupport("red-green coalition", { first: "röd", firstEquivalents: eq("red"), headEquivalents: eq("green"), strict: true }), false);
 });
+
+// Round G: an English false friend passed the generation check on one shared word.
+test("E2: every part of the meaning needs dictionary English (fan; hand fan)", async () => {
+  const { englishReference } = await import("../server-language-checks.mjs");
+  const eq = (...t) => t.map((text) => ({ source: "lexin_en", text }));
+  assert.equal(englishReference("fan; hand fan", eq("fan, admirer")), "unmatched");
+  assert.equal(englishReference("fan; admirer", eq("fan, admirer")), "lexin");
+  assert.equal(englishReference("return", eq("return(s)")), "lexin");
+  assert.equal(englishReference("anything", []), "none");
+});

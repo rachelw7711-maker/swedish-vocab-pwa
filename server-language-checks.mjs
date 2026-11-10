@@ -11,7 +11,7 @@
 
 import { formReadings, saldoPartsOfSpeech, saldoEntries, compoundRows, multiWordVerbRows, saldoHasExpression, lemmatize } from "./server-lexicon.mjs";
 import { lookupWiktionary, wiktionaryReadings } from "./server-wiktionary.mjs";
-import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
+import { referenceEntries, referencePos, lexinSenses, englishEquivalents, meaningSupport, meaningPartSupported, expressionInReferences, homographEquivalents, LEXIN_SV_SOURCE_ID } from "./server-references.mjs";
 import { korpAttestation, judgeAttestation } from "./server-korp.mjs";
 import { posDecision, phraseSlots, lexinListings, senseCoverage, RULE_VERSION } from "./server-evidence.mjs";
 import { callOpenAIJson, logUsage } from "./server-native.mjs";
@@ -623,6 +623,14 @@ export function senseGrade(status, grade = null) {
 // a human) is not replaced by a later AI check (round G, 2026-11-11: re-checks had overwritten
 // Korp-verified senses with "present"). Only an objection is recorded — as a mismatch, the
 // evidence kept in detail.previous so the conflict is visible. → the row to write, or null to keep.
+// Every part of the meaning needs the dictionaries' English, not just one word of it (round G,
+// 2026-11-11: "fan; hand fan" / 风扇 passed on "fan" — Swedish fan is an admirer, a false friend).
+// A part no equivalent supports leaves the sense open (dictionary_english_differs).
+export function englishReference(meaningEn, english) {
+  if (!english.length) return "none";
+  const parts = String(meaningEn || "").split(/[;；]/).map((p) => p.trim()).filter(Boolean);
+  return parts.length && parts.every((p) => meaningPartSupported(p, english)) ? "lexin" : "unmatched";
+}
 export function senseRowOver(prev, next) {
   if (!(prev?.status === "verified" && prev?.grade === "verified")) return next;
   if (next.status !== "mismatch") return null;
@@ -1380,7 +1388,7 @@ export async function checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos = 
   // rather than checked — the AI's judgement alone never makes it verified. detail.open marks it
   // for scripts/korp-verify.mjs, where corpus use can still verify it (2026-11-04).
   const english = !isPhrase && refs ? englishEquivalents(refs, pos) : [];
-  const enReference = !english.length ? "none" : meaningSupport(card.meaning_en, english).length ? "lexin" : "unmatched";
+  const enReference = englishReference(card.meaning_en, english);
   // Lexin senses the card's meaning doesn't cover (R7), a particle verb's sense apart: recorded
   // always (free); an open item — the card then not verified — only with KNOWLEDGE_SENSE_COVERAGE=on.
   const missingSenses = !isPhrase && refs ? senseCoverage(refs, pos, card.meaning_en, allForms).filter((s) => !s.covered && !s.particleVerb && !s.otherWord).map(({ variant, definition, english: en }) => ({ variant, definition, english: en })) : [];

@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { useSaldoFiles } from "../server-lexicon.mjs";
 import { useReferenceFiles } from "../server-references.mjs";
 import { checkNewWordCard, CHECK_VERSION } from "../server-language-checks.mjs";
+import { ledgeredCheck } from "../server-check-ledger.mjs";
 
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null; };
@@ -131,9 +132,17 @@ await Promise.all(Array.from({ length: 4 }, async () => {
     const isPhrase = /\s/.test(e.swedish.trim());
     const t0 = Date.now();
     let checked;
+    // Through the check ledger (round G): the same card content under this check version is never
+    // paid for twice, and each answer is kept in public.knowledge_checks as soon as it arrives.
+    const input = { lemma: e.swedish, pos: isPhrase ? "other" : e.part_of_speech, result, isPhrase,
+      forms: forms.filter((f) => f.learning_object_id === e.id).map((f) => ({ type: f.form_type, value: f.form_value })) };
     try {
-      checked = await checkNewWordCard(db, { lemma: e.swedish, pos: isPhrase ? "other" : e.part_of_speech, result, isPhrase,
-        forms: forms.filter((f) => f.learning_object_id === e.id).map((f) => ({ type: f.form_type, value: f.form_value })) });
+      const r = await ledgeredCheck(db, { learningObjectId: e.id, headword: e.swedish, pos: input.pos, field: "sense", target: "word_card_check", input,
+        checkVersion: CHECK_VERSION, ruleVersion: RULE_VERSION, model: process.env.OPENAI_MODEL || "gpt-5.4-mini" }, async () => {
+        const c = await checkNewWordCard(db, input);
+        return { result: c, costUsd: c.usage?.cost || 0, calls: c.usage?.calls || 0, usage: c.usage || null };
+      });
+      checked = r.skipped ? { ok: false, reason: "check_failed: checked elsewhere right now" } : r.reused ? { ...r.row.result, usage: {} } : r.row.result;
     } catch (err) { checked = { ok: false, reason: `check_failed: ${err.message}` }; }
     const u = checked.usage || {};
     usage.calls += u.calls || 0; usage.input += u.input_tokens || 0; usage.output += u.output_tokens || 0; usage.cost += u.cost || 0;

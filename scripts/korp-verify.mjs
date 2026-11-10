@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { korpAttestation, judgeAttestation, korpCqp, korpSentences, judgeSenseFromSentences, meaningParts } from "../server-korp.mjs";
+import { ledgeredCheck } from "../server-check-ledger.mjs";
 import { callOpenAIJson } from "../server-native.mjs";
 
 const opt = (name, d = null) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : d; };
@@ -97,8 +98,20 @@ async function check(id) {
       const m = Object.fromEntries(o.learning_object_translations.map((t) => [t.native_language, t.meaning]));
       const cqp = attestation.match === "multiword" ? attestation.cqp : korpCqp(o.swedish, pos, { spelling: attestation.match === "spelling", forms });
       const sentences = await korpSentences(cqp, { count: 12 });
-      const judged = await judgeSenseFromSentences({ word: o.swedish, pos, meaningZh: m.zh || "", meaningEn: m.en || "", sentences }, ai);
-      out.sense = senseResult(judged, cqp, sentences);
+      // Through the check ledger (round G): the same meaning and query are never paid for twice, and
+      // the whole result is kept in public.knowledge_checks, not only in the local cache.
+      const parts = meaningParts(m.en || "");
+      const r = await ledgeredCheck(db, { learningObjectId: id, headword: o.swedish, pos, field: "sense", senseRef: "meaning_en", target: "korp_sense_parts",
+        identity: { meaning_en: m.en, meaning_zh: m.zh, parts, cqp }, input: { meaning_en: m.en, meaning_zh: m.zh, parts, cqp, sentences },
+        referencesUsed: { korp: verdict }, checkVersion: "korp-sense-parts-2026-11-04", ruleVersion: "korp-verify", model: "gpt-5.4-mini" }, async () => {
+        const before = spend.usd, calls = spend.calls;
+        try {
+          const judged = await judgeSenseFromSentences({ word: o.swedish, pos, meaningZh: m.zh || "", meaningEn: m.en || "", sentences }, ai);
+          return { result: { ok: judged.ok, reason: judged.reason, parts: judged.parts, unattested: judged.unattested, corpora: judged.corpora, readings: judged.readings }, costUsd: spend.usd - before, calls: spend.calls - calls };
+        } catch (e) { e.costUsd = spend.usd - before; e.calls = spend.calls - calls; throw e; }
+      });
+      if (r.skipped) throw new Error("checked elsewhere right now");
+      out.sense = senseResult({ ...r.row.result, method: "parts", readings: r.row.result.readings || [] }, cqp, sentences);
     }
   }
   return out;
