@@ -64,7 +64,7 @@ for (let i = 0; i < sim.length && results.filter((r) => r.linked).length < LIMIT
       else {
         const [first, head] = [comp[0].compound.first.split("..")[0], comp[0].compound.head.split("..")[0]];
         const fr = await referenceEntries(null, first);
-        const meaning = compoundMeaningSupport(opts.meaningEn, { first, firstEquivalents: [...englishEquivalents(fr, "noun"), ...englishEquivalents(fr, c.part_of_speech)], headEquivalents: englishEquivalents(await referenceEntries(null, head), c.part_of_speech) });
+        const meaning = compoundMeaningSupport(opts.meaningEn, { first, firstEquivalents: [...englishEquivalents(fr, "noun"), ...englishEquivalents(fr, c.part_of_speech)], headEquivalents: englishEquivalents(await referenceEntries(null, head), c.part_of_speech), strict: true });
         if (!meaning) r = { linked: false, reason: "meaning_not_its_parts" };
         else {
           const a = await korpAttestation(c.swedish, { forms: opts.forms }).catch((e) => ({ error: e.message }));

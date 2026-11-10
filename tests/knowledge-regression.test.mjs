@@ -231,3 +231,14 @@ test("E1: independent sense evidence survives an AI re-check; an objection becom
   assert.equal(senseRowOver(ai, { status: "present", source: "ai_check" }).status, "present");
   assert.equal(senseRowOver(null, { status: "present", source: "ai_check" }).status, "present");
 });
+
+// Round G: a compound's sense is written verified only when its meaning says nothing beyond its parts.
+test("C1: strict compound meaning — sommarsäsong 'busiest' and rödgrön 'coalition' need other evidence", async () => {
+  const { compoundMeaningSupport } = await import("../server-references.mjs");
+  const eq = (...t) => t.map((text) => ({ source: "lexin_en", text }));
+  const sommar = { first: "sommar", firstEquivalents: eq("summer"), headEquivalents: eq("season") };
+  assert.equal(compoundMeaningSupport("summer season", { ...sommar, strict: true }), true);
+  assert.equal(compoundMeaningSupport("summer high season; the busiest summer season", { ...sommar, strict: true }), false);
+  assert.equal(compoundMeaningSupport("summer high season", sommar), true);   // the loose rule (generation evidence) unchanged
+  assert.equal(compoundMeaningSupport("red-green coalition", { first: "röd", firstEquivalents: eq("red"), headEquivalents: eq("green"), strict: true }), false);
+});

@@ -225,7 +225,10 @@ export function meaningSupport(meaningEn, equivalents) {
  * yogastudio → "yoga studio"). A compound whose meaning is not its parts' (jordgubbe,
  * "strawberry") does not pass: its sense needs other evidence.
  */
-export function compoundMeaningSupport(meaningEn, { first, firstEquivalents, headEquivalents }) {
+// strict (round G, for writing a sense verified): every content word of every part comes from the
+// parts' equivalents — "summer high season; the busiest…" (sommarsäsong) or "red-green coalition"
+// say more than their parts and need other evidence.
+export function compoundMeaningSupport(meaningEn, { first, firstEquivalents, headEquivalents, strict = false }) {
   const parts = String(meaningEn || "").split(";").map((x) => x.trim()).filter(Boolean);
   const words = (texts) => new Set(texts.flatMap((t) => glossWords(t).map(stem)));
   const head = words(headEquivalents.map((e) => e.text)), firstSet = words(firstEquivalents.map((e) => e.text));
@@ -234,7 +237,7 @@ export function compoundMeaningSupport(meaningEn, { first, firstEquivalents, hea
     const mine = glossWords(part).map(stem);
     const h = mine.filter((w) => head.has(w));
     const f = mine.filter((w) => firstSet.has(w) || w === loan || w === stem(key(first)));
-    return h.some((x) => f.some((y) => y !== x));
+    return h.some((x) => f.some((y) => y !== x)) && (!strict || mine.every((w) => head.has(w) || firstSet.has(w) || w === loan || w === stem(key(first))));
   });
 }
 
