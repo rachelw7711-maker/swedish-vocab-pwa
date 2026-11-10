@@ -169,3 +169,4 @@ test("an optional part in brackets need not be in the example", async () => {
   assert.ok(exampleUsesWord("Han höll med föregående talare.", ["hålla med (någon)", "höll med (någon)"]));
   assert.ok(!exampleUsesWord("Han höll fast vid sin åsikt.", ["hålla med (någon)", "höll med (någon)"]));
 });
+

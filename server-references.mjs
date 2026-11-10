@@ -16,6 +16,10 @@ import { expressionMatchKey } from "./server-resources.mjs";
 
 export const LEXIN_SV_SOURCE_ID = "lexin-sv-2020";
 export const LEXIN_EN_SOURCE_ID = "lexin-sv-en";
+// Folkets lexikon (KTH, CC BY-SA 2.5): auxiliary evidence only (round G, decision 7) — the same
+// family as Lexin (built from it), never counted beside it, never shown; read only by a caller
+// asking for it ({ aux: true }), so the generation's and the checks' gates are unchanged.
+export const FOLKETS_SOURCE_ID = "folkets-sv-en";
 export const FAMILY = { saldo: "saldo", lexin_sv: "lexin", lexin_en: "lexin", folkets: "lexin", enwikt: "wiktionary", svwikt: "wiktionary" };
 
 const key = (s) => String(s || "").trim().toLowerCase();
@@ -38,17 +42,19 @@ export function referenceFilesLoaded() {
 }
 
 /** What the dictionaries have under this headword: { lexin_sv, lexin_en, folkets, enwikt } (lists of entries). */
-export async function referenceEntries(supabaseAdmin, lemma) {
+export async function referenceEntries(supabaseAdmin, lemma, { aux = false } = {}) {
   const k = key(lemma);
   if (!k) return { ...EMPTY };
   if (files) return { lexin_sv: files.lexin_sv[k] || [], lexin_en: files.lexin_en[k] || [], folkets: files.folkets[k] || [], enwikt: files.enwikt[k] || [] };
   try {
-    const { data, error } = await supabaseAdmin.from("reference_entries").select("source, data").eq("headword", k).in("source", [LEXIN_SV_SOURCE_ID, LEXIN_EN_SOURCE_ID]);
+    const sources = aux ? [LEXIN_SV_SOURCE_ID, LEXIN_EN_SOURCE_ID, FOLKETS_SOURCE_ID] : [LEXIN_SV_SOURCE_ID, LEXIN_EN_SOURCE_ID];
+    const { data, error } = await supabaseAdmin.from("reference_entries").select("source, data").eq("headword", k).in("source", sources);
     if (error) return { ...EMPTY };   // reference table not there: nothing known
     return {
       ...EMPTY,
       lexin_sv: data.filter((r) => r.source === LEXIN_SV_SOURCE_ID).map((r) => r.data),
       lexin_en: data.filter((r) => r.source === LEXIN_EN_SOURCE_ID).map((r) => r.data),
+      folkets: data.filter((r) => r.source === FOLKETS_SOURCE_ID).map((r) => r.data),
     };
   } catch {
     return { ...EMPTY };
