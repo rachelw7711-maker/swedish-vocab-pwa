@@ -139,7 +139,8 @@ for (const o of live) {
     // Collocations: a dictionary listing supports one; a Lexin example only shows it exists; none: insufficient.
     for (const c of colls) {
       const ev = await collocationEvidence(null, refs, c.phrase, ownForms, { pos: o.part_of_speech });
-      if (ev.kind === "dictionary" && ev.listing !== false) add(1, "collocation", "dictionary_listed", { phrase: c.phrase, strength: 5 });
+      if (ev.kind === "elsewhere") add(6, "collocation", "dictionary_expression_of_other_word", { phrase: c.phrase, strength: 4 });
+      else if (ev.kind === "dictionary" && ev.listing !== false) add(1, "collocation", "dictionary_listed", { phrase: c.phrase, strength: 5 });
       else if (ev.kind === "dictionary") add(4, "collocation", "only_in_dictionary_example", { phrase: c.phrase, strength: 3 });
       else add(4, "collocation", "no_dictionary_evidence", { phrase: c.phrase, strength: 0 });
       if (!/\s/.test(c.phrase)) add(6, "collocation", "single_word_as_collocation", { phrase: c.phrase });

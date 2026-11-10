@@ -1,11 +1,15 @@
 // Knowledge v2 regression set (round G, 2026-11-10): real problems the baseline audit found in the
 // library, each with the expected result, what the old rule did and what the rule does now. A case is
 // added whenever a problem class is fixed; none is removed. Cases are real entries (ids in the audit).
-import test from "node:test";
+import test, { before } from "node:test";
 import assert from "node:assert/strict";
 import { fakeSupabase } from "./fake-supabase.mjs";
 import { evidenceOfSource } from "../server-evidence.mjs";
-import { recordCheck, senseGrade } from "../server-language-checks.mjs";
+import { recordCheck, senseGrade, collocationEvidence } from "../server-language-checks.mjs";
+import { useSaldoFiles } from "../server-lexicon.mjs";
+import { useReferenceFiles, referenceEntries } from "../server-references.mjs";
+
+before(async () => { await useSaldoFiles(); await useReferenceFiles(); });
 
 // The summary rule before 2026-11-10 (migration 20261110130000): a row without a grade was graded by
 // its source, and only the bare source "audit-2026-11-02" counted as AI. Kept here as the old rule.
@@ -54,3 +58,26 @@ test("regression H11: only independent evidence grades a sense verified", () => 
   assert.equal(senseGrade("verified", "verified"), "verified");
   assert.equal(senseGrade("present"), "unverified");
 });
+
+// C — collocation identity: dictionary evidence must belong to this headword (removed or kept
+// collocations were judged by listings of other words). Real cards of the audit.
+const C = [
+  // old: dictionary (an expression of anda counted as andetag's collocation, flagged "wrongly removed")
+  { id: "C1", headword: "andetag", pos: "noun", forms: ["andetag", "andetaget", "andetagen"], phrase: "hämta andan", expected: "elsewhere", old: "dictionary" },
+  { id: "C2", headword: "skratt", pos: "noun", forms: ["skratt", "skrattet", "skratten"], phrase: "dra på munnen", expected: "elsewhere", old: "dictionary" },
+  { id: "C3", headword: "legitimation", pos: "noun", forms: ["legitimation", "legitimationen"], phrase: "legitimera sig", expected: "elsewhere", old: "dictionary" },
+  // old: dictionary ("utom mig" = except me matched "är utom sig", beside oneself): a free combination
+  { id: "C4", headword: "utom", pos: "preposition", forms: ["utom"], phrase: "utom mig", expected: "none", old: "dictionary" },
+  // must stay listed: the headword's own construction, a reflexive verb with its verb
+  { id: "C5", headword: "drömma", pos: "verb", forms: ["drömma", "drömmer"], phrase: "drömma om något", expected: "dictionary", old: "dictionary" },
+  // must stay the headword's: its genitive, the headword written apart (both were "elsewhere" in a first cut)
+  { id: "C7", headword: "nöje", pos: "noun", forms: ["nöje", "nöjet", "nöjen", "nöjena"], phrase: "för nöjes skull", expected: "dictionary", old: "dictionary" },
+  { id: "C8", headword: "istället", pos: "adverb", forms: ["istället"], phrase: "i stället för", expected: "dictionary", old: "dictionary" },
+  { id: "C6", headword: "utom", pos: "preposition", forms: ["utom"], phrase: "vara utom sig", expected: "dictionary", old: "dictionary" },
+];
+for (const c of C) {
+  test(`regression ${c.id}: ${c.headword} — "${c.phrase}" is ${c.expected} (old: ${c.old})`, async () => {
+    const ev = await collocationEvidence(null, await referenceEntries(null, c.headword), c.phrase, c.forms, { pos: c.pos });
+    assert.equal(ev.kind, c.expected);
+  });
+}

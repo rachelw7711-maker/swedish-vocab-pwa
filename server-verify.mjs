@@ -33,7 +33,8 @@ export async function verifyAgainstCorpus(supabaseAdmin, { card, refs = null, he
   const items = [];
   for (const [i, c] of (out.collocations || []).entries()) {
     if (!/\s/.test(String(c.phrase || "").trim())) continue;
-    if ((await collocationEvidence(supabaseAdmin, refs, c.phrase, headwordForms)).kind === "dictionary") continue;
+    // Listed (here or as another word's expression): it exists; the corpus and reader judge only the rest.
+    if ((await collocationEvidence(supabaseAdmin, refs, c.phrase, headwordForms)).kind !== "none") continue;
     items.push({ key: `c${i}`, kind: "collocation", text: c.phrase, meaning: [c.zh, c.en].filter(Boolean).join(" / ") });
   }
   for (const [i, r] of (out.related || []).entries()) {

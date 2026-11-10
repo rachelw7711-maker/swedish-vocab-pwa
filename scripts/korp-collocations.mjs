@@ -27,7 +27,7 @@ await useReferenceFiles("data/reference");
 // The phrases: collocations without a dictionary listing, expressions whose lookup failed.
 const WANT = new Set(["no_dictionary_evidence", "only_in_dictionary_example", "headword_form_not_found", "headword_only_in_compound", "korp_lookup_failed"]);
 const phrases = new Map();
-for (const line of readFileSync("data/reports/round-g/baseline-audit.ndjson", "utf8").split("\n")) {
+for (const line of readFileSync("data/reports/round-g/baseline-audit-before.ndjson", "utf8").split("\n")) {
   if (!line) continue;
   const r = JSON.parse(line);
   for (const f of r.findings) if (WANT.has(f.code)) {

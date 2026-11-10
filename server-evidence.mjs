@@ -115,9 +115,13 @@ export function phraseInListing(slots, listing) {
   const core = slots.filter((s, k) => !(s.slot && (k === 0 || k === slots.length - 1)));
   for (const variant of listingVariants(listing)) {
     const toks = listingTokens(variant);
+    // "mig", "dig" … stand for a listing's "sig" only with its verb ("sätta mig" in "ngn sätter sig"):
+    // alone they are objects ("utom mig" = except me is not "är utom sig", beside oneself; round G).
+    const first = toks.findIndex((t) => !t.slot);
     for (const list of [slots, core]) {
       if (!list.length || list.every((s) => s.slot)) continue;
-      for (let j = 0; j < toks.length; j++) if (matchWith(list, toks, 0, j)) return true;
+      const personal = list.some((s) => s.reflexive && s.word !== "sig" && s.word !== "sej");
+      for (let j = 0; j < toks.length; j++) if ((!personal || j === first) && matchWith(list, toks, 0, j)) return true;
     }
   }
   return false;
@@ -145,7 +149,7 @@ export async function phraseSlots(supabaseAdmin, phrase) {
   for (const w of words) {
     const parts = w.split("/");
     if (parts.every((p) => PLACEHOLDER_WORDS.has(p))) { slots.push({ slot: true }); continue; }
-    if (REFLEXIVE_WORDS.has(w)) { slots.push({ reflexive: true }); continue; }
+    if (REFLEXIVE_WORDS.has(w)) { slots.push({ reflexive: true, word: w }); continue; }
     const forms = new Set([w]);
     for (const c of await lemmatize(supabaseAdmin, w)) {
       forms.add(c.lemma.toLowerCase());

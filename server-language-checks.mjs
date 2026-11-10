@@ -700,13 +700,29 @@ export async function relatedEvidence(supabaseAdmin, word, pos = "noun", { askWi
  * example sentence with it (existence only: listing false), or a SALDO or Lexin expression.
  * pos: the headword's part of speech (a construction of another part of speech is another word).
  */
+// Whether a phrase uses the headword: one of its forms, its genitive ("för nöjes skull", "Guds son",
+// SALDO lists no genitives), or the headword written apart ("i stället för" for istället).
+export function phraseHasHeadword(phrase, forms) {
+  const own = forms.map((f) => String(f).toLowerCase());
+  const genitive = own.filter((f) => !/\s/.test(f)).map((f) => (/[sxz]$/.test(f) ? f : `${f}s`));
+  if (exampleUsesWord(phrase, [...own, ...genitive])) return true;
+  const toks = String(phrase).toLowerCase().match(/\p{L}+/gu) || [];
+  return toks.some((t, i) => i + 1 < toks.length && own.includes(t + toks[i + 1]));
+}
+
 export async function collocationEvidence(supabaseAdmin, refs, phrase, headwordForms = [], { pos = null } = {}) {
   const hits = refs ? lexinListings(refs, await phraseSlots(supabaseAdmin, phrase), { pos }) : [];
   const listed = hits.find((h) => h.kind !== "example");
   if (listed) return { kind: "dictionary", listing: true, text: listed.text };
   if (hits.length) return { kind: "dictionary", listing: false, text: hits[0].text };
   const p = String(phrase || "").trim().toLowerCase();
-  if (/\s/.test(p) && ((await saldoHasExpression(supabaseAdmin, [p])) || (await expressionInReferences(supabaseAdmin, p)).length)) return { kind: "dictionary", text: p };
+  if (/\s/.test(p) && ((await saldoHasExpression(supabaseAdmin, [p])) || (await expressionInReferences(supabaseAdmin, p)).length)) {
+    // An expression the dictionaries have, but not under this headword and without it ("hämta andan"
+    // on andetag, "från topp till tå" on fot): real, yet no evidence that it is this word's
+    // collocation (round G, 2026-11-10: it was counted as one and kept or restored as such).
+    if (headwordForms.length && !phraseHasHeadword(p, headwordForms)) return { kind: "elsewhere", text: p };
+    return { kind: "dictionary", text: p };
+  }
   return { kind: "none" };
 }
 
@@ -756,7 +772,7 @@ collocations: what each combination with the headword is:
 - wrong_form: the right expression in a wrong form (wrong gender, article, number or inflection: "ett plan över området" → "en plan", "ögat för ögat" → "öga för öga"); correct_form = the right one;
 - wrong_meaning: real, but its zh or en meaning is wrong ("enkel säng" is a simple bed, not a single bed);
 - bad_example: the combination is fine but its example sentence is ungrammatical or unidiomatic.
-A collocation with "dictionary" evidence is listed in a dictionary: it is not made up (but may still be wrong_form, wrong_meaning or bad_example). correct_form is "" unless wrong_form.
+A collocation with "dictionary" evidence is listed in a dictionary: it is not made up (but may still be wrong_form, wrong_meaning or bad_example). "elsewhere" evidence: a dictionary has it as an expression of another word, without this headword: it is real, but not this word's collocation unless it uses the headword. correct_form is "" unless wrong_form.
 
 related: only the related words no dictionary or only a compound analysis has: "exists" (a word in use in Swedish today with roughly the meaning given), "not_a_word" (made up, misspelt, a derivation that merely follows a Swedish pattern — "slagig", "görelse", "musig", "befoga" — or an expression nobody uses), "unsure".`;
 
