@@ -31,6 +31,8 @@ await useReferenceFiles("data/reference");
 // The phrases: collocations without a dictionary listing, expressions whose lookup failed.
 const WANT = new Set(["no_dictionary_evidence", "only_in_dictionary_example", "headword_form_not_found", "headword_only_in_compound", "korp_lookup_failed"]);
 const phrases = new Map();
+// What learners see first: public cards, then AI-generated, then drafts.
+const STATUS_RANK = { published: 0, human_reviewed: 1, ai_generated: 2, draft: 3 };
 for (const line of readFileSync("data/reports/round-g/baseline-audit-before.ndjson", "utf8").split("\n")) {
   if (!line) continue;
   const r = JSON.parse(line);
@@ -38,13 +40,15 @@ for (const line of readFileSync("data/reports/round-g/baseline-audit-before.ndjs
     const p = f.code === "korp_lookup_failed" ? r.swedish : f.phrase;
     if (!p || !/\s/.test(p.trim())) continue;
     const k = p.trim().toLowerCase();
-    (phrases.get(k) || phrases.set(k, { phrase: p.trim(), entries: [] }).get(k)).entries.push(r.id);
+    const x = phrases.get(k) || phrases.set(k, { phrase: p.trim(), entries: [], rank: 9 }).get(k);
+    x.entries.push(r.id);
+    x.rank = Math.min(x.rank, STATUS_RANK[r.status] ?? 5);
   }
 }
 if (!existsSync(OUT)) writeFileSync(OUT, "");
 const done = new Set(readFileSync(OUT, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).key));
-// Phrases shared by more entries first: a run stopped early has covered the most cards.
-const todo = [...phrases].filter(([k]) => !done.has(k)).sort((a, b) => b[1].entries.length - a[1].entries.length).slice(0, LIMIT);
+// Public cards first (learners see them), then phrases shared by more entries.
+const todo = [...phrases].filter(([k]) => !done.has(k)).sort((a, b) => a[1].rank - b[1].rank || b[1].entries.length - a[1].entries.length).slice(0, LIMIT);
 
 // Every request to Korp, cached or not (the cache answers before fetch is called).
 const stats = existsSync(STATS) ? JSON.parse(readFileSync(STATS, "utf8")) : { runs: 0, requests: 0, failedRequests: 0, phrases: 0, ms: 0, results: {} };

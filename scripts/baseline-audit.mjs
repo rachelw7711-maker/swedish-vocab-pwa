@@ -18,7 +18,7 @@ import { createClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { useSaldoFiles, saldoEntries } from "../server-lexicon.mjs";
 import { useReferenceFiles, referenceEntries, referencePos, englishEquivalents, meaningSupport } from "../server-references.mjs";
-import { senseCoverage } from "../server-evidence.mjs";
+import { senseCoverage, posDecision } from "../server-evidence.mjs";
 import { exampleUsesWord, collocationEvidence } from "../server-language-checks.mjs";
 import { expressionMatchKey } from "../server-resources.mjs";
 import { ordered } from "./page-order.mjs";
@@ -97,7 +97,13 @@ for (const o of live) {
     if (!anyRef) add(4, "entry", "no_reference_entry", { strength: 0 });
     else if (CHECKED_POS.has(o.part_of_speech)) {
       const inSaldo = saldoPos.has(o.part_of_speech), inLexin = lexinPos.has(o.part_of_speech), inOther = otherPos.has(o.part_of_speech);
-      if (!inSaldo && !inLexin && !inOther && (saldoPos.size || lexinPos.size)) add(6, "pos", "pos_not_in_any_reference", { reference: { saldo: [...saldoPos], lexin: [...lexinPos], other: [...otherPos] }, strength: saldoPos.size && lexinPos.size ? 5 : 4 });
+      // The generation's own rule (posDecision): a regular conversion — an adjective's -t form as an
+      // adverb, an adjective or participle as a noun (en anställd) — is not a conflict.
+      const decided = posDecision({ pos: o.part_of_speech, references: { all: [...saldoPos, ...lexinPos, ...otherPos] } });
+      if (!inSaldo && !inLexin && !inOther && (saldoPos.size || lexinPos.size)) {
+        if (/^derived_from/.test(decided.reason)) add(4, "pos", "pos_regular_conversion", { reference: { saldo: [...saldoPos], lexin: [...lexinPos] }, strength: 3 });
+        else add(6, "pos", "pos_not_in_any_reference", { reference: { saldo: [...saldoPos], lexin: [...lexinPos], other: [...otherPos] }, strength: saldoPos.size && lexinPos.size ? 5 : 4 });
+      }
       else if (!inSaldo && !inLexin && inOther) add(4, "pos", "pos_only_in_wiktionary_or_folkets", { strength: 3 });
     }
     // Sense: the English meaning against Lexin's English (a candidate overlap, never a sense link).
