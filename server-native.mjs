@@ -211,6 +211,11 @@ export async function ownWordFormsOf(supabaseAdmin, related, pos) {
   return words;
 }
 
+// A conjugation or declension group belongs to one word: a particle verb keeps its verb's (gå ut på:
+// gå, group 4), any other multi-word headword drops it — an idiom showed a lone "grupp 4" (gå som på
+// räls, round G, 2026-11-12).
+export const withoutGroupOfPhrase = (forms, drop) => (drop ? forms.filter((f) => f.type !== "verb_group" && f.type !== "declension_group") : forms);
+
 export function relatedLines(related, { lemma, forms = [], words = [] }, lang) {
   // `words`: forms that are words of their own too, kept (säkert, eventuellt: SALDO's adverbs,
   // not only the adjective's neuter — dropped as its inflection before, 2026-11-09).
@@ -318,7 +323,7 @@ async function ensureTranslation(supabaseAdmin, entryId, nativeLanguage) {
 const PLACEHOLDER_WORD = /^(någon|något|någons|ngn|ngt|ngns)(\/(någon|något|ngn|ngt))?$/;
 const PARTICLES = new Set(["upp", "ut", "in", "av", "på", "till", "med", "om", "fram", "över", "igenom", "bort", "ner", "ned", "hem", "iväg", "tillbaka", "undan", "efter", "vid", "för", "åt", "sig", "emot", "mot", "ihop", "isär", "förbi", "runt", "kvar", "fast", "an", "loss", "överens", "ifrån", "från"]);
 /** "gå ut på", "komma fram till": a SALDO verb followed only by particles, prepositions or sig. */
-async function particleVerb(supabaseAdmin, phrase) {
+export async function particleVerb(supabaseAdmin, phrase) {
   const [verb, ...rest] = normalizeKey(phrase).split(/\s+/);
   if (!rest.length || rest.length > 3 || !rest.every((w) => PARTICLES.has(w))) return false;
   return (await saldoEntries(supabaseAdmin, verb, "verb")).some((r) => normalizeKey(r.baseform) === verb);
@@ -507,7 +512,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
     // model's impossible ones (group 1 for gifta sig, "lärd sig", "tagande upp"), 2026-11-08.
     const modelForms = (result.forms || []).filter((f) => f.value && ALL_FORM_TYPES.includes(f.type));
     const phraseVerb = isPhrase && pos === "verb" ? await multiWordVerbForms(supabaseAdmin, lemma, modelForms) : null;
-    const forms = fromSaldo?.forms.length ? fromSaldo.forms : phraseVerb ? phraseVerb.forms : modelForms;
+    const forms = withoutGroupOfPhrase(fromSaldo?.forms.length ? fromSaldo.forms : phraseVerb ? phraseVerb.forms : modelForms, isPhrase && !(await particleVerb(supabaseAdmin, lemma)));
     // Without SALDO: Lexin's forms of this very word replace the model's where they differ, and a
     // compound SALDO doesn't list is checked against its last part (chokladask → ask).
     const refs = isPhrase ? null : normalizeKey(lemma) === normalizeKey(headword) && headwordRefs ? headwordRefs : await referenceEntries(supabaseAdmin, lemma);
@@ -587,9 +592,12 @@ If the input names a part of speech and the sense a text uses, write the entry f
     // it is public only when a dictionary lists the combination (a fixed phrase or idiom); any other
     // — a typical or free combination, or one nothing decides — is written for the reader who asked
     // but kept a draft (pending), out of the shared library. Off (default): as before.
+    // Only the dictionaries are asked here (round G, 2026-11-12): with no AI verdict the corpus decided
+    // nothing and took 21 s of the searcher's wait; whether an unlisted combination is worth a shared
+    // entry is decided later, in the background review (scripts/expression-review.mjs).
     t.mark("lookup_again");
     const classified = isPhrase && !entryId && process.env.MULTIWORD_SEARCH_CLASSIFY === "on"
-      ? classifyMultiword({ ...(await multiwordEvidence(supabaseAdmin, lemma, { timeout: Number(process.env.MULTIWORD_KORP_TIMEOUT_MS) || 15000 }).catch(() => ({}))), ai: {} })
+      ? classifyMultiword({ ...(await multiwordEvidence(supabaseAdmin, lemma, { need: "dictionary" }).catch(() => ({}))), ai: {} })
       : null;
     t.mark("korp_multiword");
     if (!entryId) {

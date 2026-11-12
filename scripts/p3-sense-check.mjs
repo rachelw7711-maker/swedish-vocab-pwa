@@ -50,7 +50,8 @@ const DRY = process.argv.includes("--dry");
 const { mkdirSync } = await import("node:fs"); mkdirSync(OUT, { recursive: true });
 console.log({ recoveredFromFallback: await recoverFallback(db) });
 const all = async (t, c, f) => { const o = []; for (let i = 0; ; i += 1000) { const d = must(await ordered(f(db.from(t).select(c)), t).range(i, i + 999)); o.push(...d); if (d.length < 1000) return o; } };
-const spentSoFar = async () => (await all("knowledge_checks", "id, cost_usd", (q) => q.like("check_version", `${CHECK_VERSION}%`).eq("rule_version", TAG))).reduce((s, r) => s + Number(r.cost_usd), 0);
+// Every paid check under the batch tag counts, whatever its kind: one cap for the whole round.
+const spentSoFar = async () => (await all("knowledge_checks", "id, cost_usd", (q) => q.eq("rule_version", TAG))).reduce((s, r) => s + Number(r.cost_usd), 0);
 
 // ---- the order ----
 const PUBLIC = ["published", "human_reviewed", "ai_generated"];

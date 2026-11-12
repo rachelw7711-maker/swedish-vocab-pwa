@@ -10,22 +10,22 @@
 // Exit simulation, never applied: a sense is an exit candidate only when it is not the first, no
 // dictionary supports it, Korp was asked and did not show it, and the model calls it doubtful; any
 // other unconfirmed sense is "targeted_check".
-//   node --env-file=.env scripts/sense-pairing.mjs --ids <file.json> --out <name> --max-usd <n>
+//   node --env-file=.env scripts/sense-pairing.mjs --ids <file.json> --out <name> --max-usd <n> [--tag t]
+// --tag books the pairings under another batch tag; --max-usd caps everything paid under that tag.
 import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { useReferenceFiles, referenceEntries, englishEquivalents, meaningPartSupported } from "../server-references.mjs";
 import { callOpenAIJson } from "../server-native.mjs";
 import { openaiCost } from "../server-prices.mjs";
 import { ledgeredCheck } from "../server-check-ledger.mjs";
+import { enPieces, zhPieces } from "../server-senses.mjs";
 
 const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const must = ({ data, error }) => { if (error) throw error; return data; };
 const opt = (n) => (process.argv.includes(n) ? process.argv[process.argv.indexOf(n) + 1] : null);
-const MAX_USD = Number(opt("--max-usd") || 0), TAG = "round_g_validate";
+const MAX_USD = Number(opt("--max-usd") || 0), TAG = opt("--tag") || "round_g_validate";
 await useReferenceFiles("data/reference", { extra: true });
 
-const enPieces = (s) => String(s || "").split(/;\s*|(?<=\.)\s+(?=[A-Z])/).map((x) => x.trim()).filter(Boolean);
-const zhPieces = (s) => String(s || "").split(/[；;]|(?<=。)/).map((x) => x.trim()).filter((x) => x && x !== "。");
 const key = (s) => s.toLowerCase().replace(/[.!?。]+$/, "").trim();
 const spent = async () => must(await db.from("knowledge_checks").select("cost_usd").eq("rule_version", TAG)).reduce((a, r) => a + Number(r.cost_usd), 0);
 

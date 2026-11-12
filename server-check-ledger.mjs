@@ -44,9 +44,17 @@ export async function ledgeredCheck(db, spec, run) {
   if (readError) throw readError;
   if (prev?.status === "done") return { reused: true, row: prev };
   if (prev?.status === "running" && Date.now() - Date.parse(prev.started_at) < LEASE_MS) return { skipped: "running" };
+  // A new key for an entry already checked this way: say why it is paid for again (round G, 2026-11-12) —
+  // its content changed or the method did; a caller's own reason wins.
+  let recheckReason = spec.recheckReason || null;
+  if (!prev && !recheckReason) {
+    const { data: earlier } = await db.from("knowledge_checks").select("check_version, input_hash").eq("learning_object_id", spec.learningObjectId)
+      .eq("field", spec.field).eq("target", spec.target).eq("status", "done").order("finished_at", { ascending: false }).limit(1);
+    if (earlier?.length) recheckReason = earlier[0].check_version !== spec.checkVersion ? `new_check_version:${earlier[0].check_version}` : "content_changed";
+  }
   const base = { task_key: key, learning_object_id: spec.learningObjectId, headword: spec.headword, part_of_speech: spec.pos || null, field: spec.field, sense_ref: spec.senseRef || null,
     target: spec.target, input_hash: inputHash, input: spec.input, references_used: spec.referencesUsed || null, check_version: spec.checkVersion, rule_version: spec.ruleVersion || null,
-    model: spec.model || null, batch_id: spec.batchId || null, recheck_reason: spec.recheckReason || null };
+    model: spec.model || null, batch_id: spec.batchId || null, recheck_reason: recheckReason };
   if (prev) {   // failed, or a lease that ran out: taken over, only while it is still that row
     const { data: took, error } = await db.from("knowledge_checks").update({ ...base, status: "running", attempts: prev.attempts + 1, started_at: new Date().toISOString(), error: null })
       .eq("task_key", key).eq("status", prev.status).eq("started_at", prev.started_at).select("id");

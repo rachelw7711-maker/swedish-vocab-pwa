@@ -351,7 +351,9 @@ const withTimeout = (p, ms) => { let t; return Promise.race([p, new Promise((_, 
  */
 // need: "all" (scripts) asks everything; "for" + an AI verdict (a reading, where time counts) only
 // what can change the class: nothing more once a dictionary lists it, the association for a fixed
-// phrase (about half a second), the corpus count (several seconds) for an idiom.
+// phrase (about half a second), the corpus count (several seconds) for an idiom; "dictionary" (a
+// search, round G 2026-11-12) only the dictionaries — local, no Korp: without an AI verdict nothing
+// else can change the class, and the corpus took a searcher's 21 seconds for no decision.
 export async function multiwordEvidence(supabaseAdmin, phrase, { korp = {}, timeout = 15000, need = "all", verdict = null } = {}) {
   const attest = korp.attest || korpAttestation, relations = korp.relations || korpRelations;
   if (supabaseAdmin) useKorpCacheTable(supabaseAdmin);   // shared cache, with KORP_DB_CACHE=on
@@ -363,6 +365,7 @@ export async function multiwordEvidence(supabaseAdmin, phrase, { korp = {}, time
     const idiom = (await expressionInReferences(supabaseAdmin, phrase)).find((h) => h.idiom);
     if (idiom) dictionary.listing = { kind: "idiom", source: idiom.source, text: idiom.idiom, headword: idiom.headword };
   }
+  if (need === "dictionary") return { dictionary, attestation: null, association: null, content: content.map((u) => u.lemgram) };
   const lean = need !== "all";
   if (lean && dictionary.listing) return { dictionary, attestation: null, association: null, content: content.map((u) => u.lemgram) };
   // One word left without its slots ("beställa något") is a word: its count says nothing about a combination.
