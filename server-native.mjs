@@ -356,7 +356,28 @@ export function withoutSoftHyphens(value) {
   return value;
 }
 
-export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLanguage, pos = null, sense = "", source = "ai search", chargeQuota = true, textResourceId = null }) {
+// Timing of a word card request (round G, 2026-11-12): how long each step takes, logged as one
+// "generation_timing" usage row — the path (reused / generated / error), whether the request was
+// several words, the entry id and the milliseconds per step. Never the text asked for. Observation
+// only: the steps themselves are unchanged.
+function stepTimer() {
+  const start = Date.now(), ms = {};
+  let last = start;
+  return { mark(step) { const now = Date.now(); ms[step] = (ms[step] || 0) + now - last; last = now; }, done() { this.mark("rest"); return { ...ms, total: Date.now() - start }; } };
+}
+
+export async function generateWordEntry(args) {
+  const t = stepTimer();
+  let out = null, error = null;
+  try { out = await generateWordEntryTimed(args, t); return out; }
+  catch (e) { error = e; throw e; }
+  finally {
+    await logUsage(args.supabaseAdmin, { userId: args.userId, textResourceId: args.textResourceId, feature: "generation_timing",
+      details: { path: error ? "error" : out?.created ? "generated" : "reused", status: error?.status || null, multiword: /\s/.test(String(args.word || "").trim()), entry_id: out?.entryId || null, ms: t.done() } });
+  }
+}
+
+async function generateWordEntryTimed({ supabaseAdmin, userId, word, nativeLanguage, pos = null, sense = "", source = "ai search", chargeQuota = true, textResourceId = null }, t) {
   // Look-alike Cyrillic or Greek letters put back ("gällа"); any other letter of another script is not Swedish.
   const text = latinLookalikes(String(word || "").trim());
   if (!text || text.length > 60 || !/^[\p{L}\s-]+$/u.test(text) || foreignLetters(text, "sv").length) throw httpError(400, "Skriv ett svenskt ord eller uttryck.");
@@ -370,6 +391,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
   const existing = isMultiWord
     ? (await findExistingExpression(supabaseAdmin, text))?.id || null
     : resolved.entryId || (wantedPos ? null : await findExistingEntry(supabaseAdmin, text));
+  t.mark("lookup");
   if (existing && (await ensureTranslation(supabaseAdmin, existing, lang))) {
     await noteReuse(supabaseAdmin, existing);
     return { entryId: existing, created: false };
@@ -397,6 +419,7 @@ export async function generateWordEntry({ supabaseAdmin, userId, word, nativeLan
   // A multi-word expression's own Lexin entry, its particle verb's or its head word's idiom (G3).
   const expressionLine = isMultiWord ? await expressionReferenceLine(supabaseAdmin, text, (await saldoEntries(supabaseAdmin, text.trim().split(/\s+/)[0], "verb")).flatMap((r) => Object.values(r.forms || {}).flat())) : "";
 
+  t.mark("references");
   // Concurrency guard: one in-flight generation per (lemma, part of speech, language). With a
   // choice of parts of speech the model decides which word it writes, so the key names none:
   // a key naming one must only ever lead to an entry of that part of speech (2026-11-08).
@@ -449,6 +472,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
 
     // Lexin's text carries soft hyphens (U+00AD) the model copies into phrases and examples (round G:
     // 19 stored, invisible, and they broke matching); none is ever stored.
+    t.mark("generate");
     const result = withoutSoftHyphens(written);
     if (!result.is_real_word || !String(result.lemma || "").trim() || !String(result[`meaning_${lang}`] || "").trim()) {
       throw httpError(422, "Det verkar inte vara ett svenskt ord. Kontrollera stavningen.");
@@ -523,7 +547,9 @@ If the input names a part of speech and the sense a text uses, write the entry f
     // Checked before saving (2026-11-02): part of speech against the request and the
     // references, examples against the word's forms, meanings and translations by one AI
     // check. A card the references contradict is not saved.
+    t.mark("prepare");
     const checked = await checkNewWordCard(supabaseAdmin, { lemma, pos, wantedPos, sense, result, forms, isPhrase, userId, textResourceId });
+    t.mark("check");
     if (!checked.ok) {
       console.warn("[native] word card rejected", lemma, pos, checked.reason);
       throw httpError(422, "Ordkortet kunde inte bekräftas. Försök igen senare.");
@@ -545,6 +571,7 @@ If the input names a part of speech and the sense a text uses, write the entry f
         if (again.ok && (again.result.examples || []).length) { Object.assign(result, again.result); checked.sense = again.sense; }
       }
     }
+    t.mark("examples_retry");
     const noExample = !(result.examples || []).length;
 
     // Re-check before saving: the lemma may exist even if the input didn't match —
@@ -560,9 +587,11 @@ If the input names a part of speech and the sense a text uses, write the entry f
     // it is public only when a dictionary lists the combination (a fixed phrase or idiom); any other
     // — a typical or free combination, or one nothing decides — is written for the reader who asked
     // but kept a draft (pending), out of the shared library. Off (default): as before.
+    t.mark("lookup_again");
     const classified = isPhrase && !entryId && process.env.MULTIWORD_SEARCH_CLASSIFY === "on"
       ? classifyMultiword({ ...(await multiwordEvidence(supabaseAdmin, lemma, { timeout: Number(process.env.MULTIWORD_KORP_TIMEOUT_MS) || 15000 }).catch(() => ({}))), ai: {} })
       : null;
+    t.mark("korp_multiword");
     if (!entryId) {
       entryId = randomUUID();
       const { error: insertError } = await supabaseAdmin.from("learning_objects").insert({
