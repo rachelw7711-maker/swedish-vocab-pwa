@@ -37,7 +37,8 @@ exit_wrong_or_unnatural — not natural Swedish, or not what it claims to be.
 exit_duplicate — the same expression as another entry in another form.
 Judge from your knowledge of Swedish and the evidence given; when unsure between keep and exit, choose keep or fix.`;
 
-const spent = async () => must(await db.from("knowledge_checks").select("cost_usd").eq("rule_version", TAG)).reduce((a, r) => a + Number(r.cost_usd), 0);
+// Paged: one query stops at 1,000 rows, and a cap that counts only those is no cap.
+const spent = async () => { let s = 0; for (let i = 0; ; i += 1000) { const d = must(await db.from("knowledge_checks").select("cost_usd").eq("rule_version", TAG).order("id").range(i, i + 999)); s += d.reduce((a, r) => a + Number(r.cost_usd), 0); if (d.length < 1000) return s; } };
 const out = [];
 for (const r of sample) {
   if (MAX_USD && (await spent()) >= MAX_USD) { console.log("budget reached"); break; }

@@ -6,7 +6,8 @@
 //   3 AI        the owner's standard (expression-sample.mjs's prompt, check expr-class-1, ledgered — the
 //               40 sample answers are reused): keep / fix / exit, with its kind;
 //   4 decision  classifyMultiword on the evidence and the AI's kind, then:
-//     draft  keep, natural, meaning right, and a dictionary lists it or Korp has it → publish_candidate
+//     draft  keep, natural, meaning right, both meanings and an example, and a dictionary lists it or Korp
+//            has it → publish_candidate
 //            (published only once its sense passes the Korp sense check: --publish);
 //     public keep → keep (evidence recorded); fix → fix_list; exit → retire only when the program agrees
 //            it is a free combination (classifyMultiword retireable), nobody studies it, no person
@@ -16,7 +17,7 @@
 // archived: content_audit_archive reason round_g_expr_review). --publish <results.json of p3-sense-check>
 // makes public the candidates whose sense is now verified. Everything reversible by --rollback <batch>.
 //   node --env-file=.env scripts/expression-review.mjs --max-usd <cap> [--tag t] [--apply] [--limit n]
-//   node --env-file=.env scripts/expression-review.mjs --publish [--apply]
+//   node --env-file=.env scripts/expression-review.mjs --publish [--hold "a|b"] [--apply]
 //   node --env-file=.env scripts/expression-review.mjs --rollback <batch>
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -53,7 +54,8 @@ const batch = randomUUID();
 if (process.argv.includes("--publish")) {
   const review = JSON.parse(readFileSync(OUT, "utf8"));
   const out = [];
-  for (const r of review.filter((x) => x.decision === "publish_candidate")) {
+  const held = new Set((opt("--hold") || "").split("|").filter(Boolean));   // --hold "a|b": a person looks first
+  for (const r of review.filter((x) => x.decision === "publish_candidate" && !held.has(x.swedish))) {
     const o = must(await db.from("learning_objects").select("status").eq("id", r.id).maybeSingle());
     const s = must(await db.from("resource_field_status").select("status, grade").eq("learning_object_id", r.id).eq("field", "sense").maybeSingle());
     const ok = o?.status === "draft" && s?.status === "verified" && s?.grade === "verified";
@@ -118,7 +120,9 @@ async function one(o) {
   const studied = learners.has(o.id), reviewed = o.status === "human_reviewed";
   const real = !!ev.dictionary?.listing || ev.attestation?.ok === true;
   let decision;
-  if (o.status === "draft") decision = ai.verdict === "keep" && ai.natural && ai.meaning_ok && real ? "publish_candidate" : ai.verdict === "keep" || ai.verdict === "fix" ? "draft_kept" : "draft_exit_suggested";
+  // A public entry needs both meanings and an example, whatever the review says.
+  const complete = !!String(m.en || "").trim() && !!String(m.zh || "").trim() && !!String(o.example_sv || "").trim();
+  if (o.status === "draft") decision = ai.verdict === "keep" && ai.natural && ai.meaning_ok && real && complete ? "publish_candidate" : !complete ? "draft_incomplete" : ai.verdict === "keep" || ai.verdict === "fix" ? "draft_kept" : "draft_exit_suggested";
   else if (dup.length) decision = "human_review_duplicate";
   else if (ai.verdict === "keep") decision = "keep";
   else if (ai.verdict === "fix") decision = "fix_list";

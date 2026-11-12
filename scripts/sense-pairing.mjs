@@ -27,7 +27,8 @@ const MAX_USD = Number(opt("--max-usd") || 0), TAG = opt("--tag") || "round_g_va
 await useReferenceFiles("data/reference", { extra: true });
 
 const key = (s) => s.toLowerCase().replace(/[.!?。]+$/, "").trim();
-const spent = async () => must(await db.from("knowledge_checks").select("cost_usd").eq("rule_version", TAG)).reduce((a, r) => a + Number(r.cost_usd), 0);
+// Paged: one query stops at 1,000 rows, and a cap that counts only those is no cap.
+const spent = async () => { let s = 0; for (let i = 0; ; i += 1000) { const d = must(await db.from("knowledge_checks").select("cost_usd").eq("rule_version", TAG).order("id").range(i, i + 999)); s += d.reduce((a, r) => a + Number(r.cost_usd), 0); if (d.length < 1000) return s; } };
 
 const SCHEMA = { type: "object", additionalProperties: false, required: ["senses", "notes"], properties: {
   senses: { type: "array", items: { type: "object", additionalProperties: false, required: ["en", "zh", "label", "doubtful"], properties: {

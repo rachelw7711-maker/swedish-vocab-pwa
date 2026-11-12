@@ -112,3 +112,9 @@ test("C: a few lemma hits are no answer — Korp is asked for the spelling too (
     if (saved.dir === undefined) delete process.env.KORP_CACHE_DIR; else process.env.KORP_CACHE_DIR = saved.dir;
   }
 });
+
+test("C: '...' in a sentence pattern is a slot of 1–3 words for Korp, not nothing", async () => {
+  const { korpCqp } = await import("../server-korp.mjs");
+  assert.equal(korpCqp("Det blir ... kronor."), '[lemma contains "Det" | word="Det"%c] [lemma contains "blir" | word="blir"%c] []{1,3} [lemma contains "kronor" | word="kronor"%c]');
+  assert.equal(korpCqp("Den börjar klockan …"), '[lemma contains "Den" | word="Den"%c] [lemma contains "börjar" | word="börjar"%c] [lemma contains "klockan" | word="klockan"%c]', "a slot at the end is dropped");
+});
