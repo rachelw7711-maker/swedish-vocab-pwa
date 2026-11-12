@@ -16,6 +16,9 @@
 // (content_audit_archive, reason round_g_p3_korp); a failed check changes nothing on the card.
 //   node --env-file=.env scripts/p3-sense-check.mjs --max-usd 11.8 [--limit n] [--ids-first file] [--dry]
 //   node --env-file=.env scripts/p3-sense-check.mjs --rollback <batch>
+// Validation samples (2026-11-12): --sample <file.json> checks exactly those ids (in that order) and
+// --report-only records the checks in the ledger and the results file but never touches a card;
+// --tag <t> books them under another batch tag (and its own --max-usd).
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
@@ -28,8 +31,9 @@ import { ordered } from "./page-order.mjs";
 const db = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const must = ({ data, error }) => { if (error) throw error; return data; };
 const opt = (n, d = null) => (process.argv.includes(n) ? process.argv[process.argv.indexOf(n) + 1] : d);
-const MODEL = "gpt-5.4-mini", CHECK_VERSION = "korp-sense-parts-2026-11-04", TAG = "round_g_p3";
-const OUT = "data/reports/round-g/p3/";
+const MODEL = "gpt-5.4-mini", CHECK_VERSION = "korp-sense-parts-2026-11-04", TAG = opt("--tag") || "round_g_p3";
+const SAMPLE = opt("--sample") ? JSON.parse(readFileSync(opt("--sample"), "utf8")) : null, REPORT_ONLY = process.argv.includes("--report-only");
+const OUT = SAMPLE ? "data/reports/round-g/validate/" : "data/reports/round-g/p3/";
 
 if (process.argv.includes("--rollback")) {
   const batch = opt("--rollback");
@@ -67,7 +71,8 @@ const groups = [
   cards.filter((c) => isPublic(c) && c.verification_status === "partial" && needs(c)).sort((a, b) => rank(a)[0] - rank(b)[0] || rank(a)[1] - rank(b)[1]),
 ];
 const seen = new Set(), queue = [];
-groups.forEach((g, gi) => { for (const c of g) if (!seen.has(c.id)) { seen.add(c.id); queue.push({ ...c, group: gi + 1 }); } });
+if (SAMPLE) { const byId = new Map(cards.map((c) => [c.id, c])); for (const id of SAMPLE) if (byId.has(id)) queue.push({ ...byId.get(id), group: 0 }); }
+else groups.forEach((g, gi) => { for (const c of g) if (!seen.has(c.id)) { seen.add(c.id); queue.push({ ...c, group: gi + 1 }); } });
 console.log({ group1_learners: groups[0].length, group2_drafts: groups[1].length, group3_first: groups[2].length, group4_public: groups[3].length, queue_after_dedupe: queue.length });
 
 // ---- reuse of finished Korp checks ----
@@ -114,6 +119,7 @@ async function one(c) {
   if (r.skipped) return { outcome: "skipped_running" };
   if (!r.reused) spent += Number(r.row.cost_usd);
   const res = r.row.result;
+  if (REPORT_ONLY) return { outcome: res.ok ? "checked_pass" : "checked_fail", reason: res.reason, unattested: res.unattested, parts: res.parts, reused: !!r.reused, cost: r.reused ? 0 : Number(r.row.cost_usd), report_only: true };
   if (!res.ok) { await markAdopted(db, r.row.task_key, false, []); return { outcome: r.reused ? "reused_ledger_fail" : "checked_fail", reason: res.reason, unattested: res.unattested, cost: r.reused ? 0 : Number(r.row.cost_usd) }; }
   // the row is written only while it is still the one read
   const prev = must(await db.from("resource_field_status").select("status, grade, source, detail, rule_version").eq("learning_object_id", c.id).eq("field", "sense").maybeSingle());
