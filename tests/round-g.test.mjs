@@ -91,3 +91,24 @@ test("D: a search asks only the dictionaries about a multi-word card — no Korp
   assert.ok(asked.length > 0, "the background review still asks Korp");
   assert.equal(full.attestation.status, "ok");
 });
+
+test("C: a few lemma hits are no answer — Korp is asked for the spelling too (Stockholm, oerhört, skull)", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { korpAttestation, judgeAttestation } = await import("../server-korp.mjs");
+  const saved = { offline: process.env.KORP_OFFLINE, dir: process.env.KORP_CACHE_DIR, fetch: globalThis.fetch };
+  delete process.env.KORP_OFFLINE;
+  process.env.KORP_CACHE_DIR = mkdtempSync(`${tmpdir()}/korp-`);
+  const answer = (total, corpora) => ({ combined: { sums: { absolute: total }, rows: [{ value: { pos: ["PM"] }, absolute: total }] },
+    corpora: Object.fromEntries(corpora.map((c) => [c, { sums: { absolute: Math.floor(total / corpora.length) }, rows: [] }])) });
+  globalThis.fetch = async (url) => ({ json: async () => (decodeURIComponent(String(url).replace(/\+/g, " ")).includes("lemma contains") ? answer(6, ["GP2012", "ROMI"]) : answer(73000, ["GP2012", "GP2013", "ROMI", "SUC3"])) });
+  try {
+    const a = await korpAttestation("Stockholm");
+    assert.equal(a.match, "spelling");
+    assert.equal(judgeAttestation(a, null).exists.ok, true);
+  } finally {
+    globalThis.fetch = saved.fetch;
+    process.env.KORP_OFFLINE = saved.offline;
+    if (saved.dir === undefined) delete process.env.KORP_CACHE_DIR; else process.env.KORP_CACHE_DIR = saved.dir;
+  }
+});

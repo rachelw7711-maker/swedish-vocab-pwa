@@ -80,7 +80,7 @@ console.log({ group1_learners: groups[0].length, group2_drafts: groups[1].length
 const cache = existsSync("data/reports/korp-verify/results.json") ? JSON.parse(readFileSync("data/reports/korp-verify/results.json", "utf8")) : {};
 const norm = (a) => JSON.stringify((a || []).map((x) => x.toLowerCase().replace(/[.!?]+$/, "").trim()));
 
-const RES = OUT + (DRY ? "dry-results.json" : "results.json");
+const RES = OUT + (DRY ? "dry-results.json" : opt("--results") || "results.json");   // --results <name>: a run of its own
 const results = !DRY && existsSync(RES) ? JSON.parse(readFileSync(RES, "utf8")) : {};
 const save = () => writeFileSync(RES, JSON.stringify(results, null, 1));
 const batch = randomUUID();
@@ -93,7 +93,8 @@ async function one(c) {
   const parts = meaningParts(m.en || "");
   const cached = cache[c.id]?.sense;
   if (cached && cached.method === "parts" && norm(cached.parts) === norm(parts)) return { outcome: cached.ok ? "reused_korp_pass" : "reused_korp_fail", reason: cached.open || cached.reason };
-  if (cached?.open === "korp_not_attested") return { outcome: "reused_korp_fail", reason: "korp_not_attested" };
+  // "Not in Korp" from the 2026-11-04 run is not reused: its lemma query missed names, adverbs and bound
+  // words (round G, 2026-11-12, korpAttestation now asks the spelling too) — the count is free.
   if (!parts.length) return { outcome: "no_meaning" };
   const pos = c.object_type === "word" ? c.part_of_speech : null;
   const forms = must(await db.from("word_forms").select("form_value").eq("learning_object_id", c.id)).map((f) => f.form_value);

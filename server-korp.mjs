@@ -131,8 +131,14 @@ export async function korpAttestation(text, { forms = [], corpora = KORP_CORPORA
     return { cqp, total: d.combined?.sums?.absolute || 0, perCorpus, byPos, corpusPos };
   };
   const lemma = await run(korpCqp(text, null, { forms }));
-  if (lemma.total || multiword) return { ...lemma, match: multiword ? "multiword" : "lemma" };
-  return { ...(await run(korpCqp(text, null, { spelling: true, forms }))), match: "spelling" };
+  if (multiword) return { ...lemma, match: "multiword" };
+  const asLemma = { ...lemma, match: "lemma" };
+  if (judgeAttestation(asLemma, null).exists.ok) return asLemma;
+  // A few lemma hits are no answer: Korp's lemmas miss names (Stockholm: 6), adverbs of adjectives
+  // (oerhört) and bound words (skull) — the spelling, under its stricter threshold, is asked too
+  // (round G, 2026-11-12: 273 cards were "not in Korp" this way).
+  const spelled = { ...(await run(korpCqp(text, null, { spelling: true, forms }))), match: "spelling" };
+  return judgeAttestation(spelled, null).exists.ok || !lemma.total ? spelled : asLemma;
 }
 
 const corporaWith = (counts, min) => Object.entries(counts || {}).filter(([, n]) => n >= min).map(([c]) => c);
