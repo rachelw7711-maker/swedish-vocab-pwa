@@ -32,10 +32,12 @@ for (let i = 0; i < cards.length; i += 20) {
     else if (saldo.length > 1 && saldoFormsDiffer(saldo, c.part_of_speech)) cls = "homographs_differ";
     else {
       const want = cardFieldsFromSaldo(saldo[0], c.part_of_speech).forms;
-      const diff = Object.keys(shown).filter((t) => want[t] && norm(want[t]) !== norm(shown[t]));
+      // Strict: every form the card shows and nobody checked must be the form SALDO gives.
+      const openForms = r.filter((x) => x.field.startsWith("form:") && x.status === "present").map((x) => x.field.slice(5));
+      const diff = openForms.filter((t) => !want[t] || norm(want[t]) !== norm(shown[t]));
       const missing = Object.keys(want).filter((t) => !shown[t]);
       cls = diff.length ? "forms_differ" : missing.length ? "forms_missing_on_card" : "saldo_agrees";
-      c.diff = diff.map((t) => ({ t, card: shown[t], saldo: want[t] })); c.missing = missing;
+      c.diff = diff.map((t) => ({ t, card: shown[t], saldo: want[t] || null })); c.missing = missing;
     }
     tally[cls] = (tally[cls] || 0) + 1;
     out.push({ id: c.id, swedish: c.swedish, pos: c.part_of_speech, type: c.object_type, open, cls, diff: c.diff, missing: c.missing });
