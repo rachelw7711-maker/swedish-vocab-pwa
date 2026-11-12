@@ -84,7 +84,7 @@ const RES = OUT + (DRY ? "dry-results.json" : opt("--results") || "results.json"
 const results = !DRY && existsSync(RES) ? JSON.parse(readFileSync(RES, "utf8")) : {};
 const save = () => writeFileSync(RES, JSON.stringify(results, null, 1));
 const batch = randomUUID();
-let spent = await spentSoFar(), stop = false, checked = 0;
+let spent = await spentSoFar(), spentReadAt = Date.now(), stop = false, checked = 0;
 console.log({ spentBefore: +spent.toFixed(4), cap: MAX_USD, batch });
 
 async function one(c) {
@@ -106,6 +106,9 @@ async function one(c) {
   const sentences = await korpSentences(cqp, { count: 12 });
   if (!sentences.length) return { outcome: "korp_no_sentences" };
   if (DRY) return { outcome: "would_check" };
+  // The cap is for everything under the tag, other runs included: their spending is read again every
+  // half minute (round G: a run that only added its own saw $4.38 of $7.80).
+  if (Date.now() - spentReadAt > 30000) { spent = await spentSoFar(); spentReadAt = Date.now(); }
   if (spent >= MAX_USD) { stop = true; return { outcome: "budget_reached" }; }
   const spec = { learningObjectId: c.id, headword: c.swedish, pos, field: "sense", senseRef: "meaning_en", target: "korp_sense_parts",
     identity: { meaning_en: m.en, meaning_zh: m.zh, parts, cqp }, input: { meaning_en: m.en, meaning_zh: m.zh, parts, cqp, sentences, attestation: { total: attestation.total, perCorpus: attestation.perCorpus, byPos: attestation.byPos } },

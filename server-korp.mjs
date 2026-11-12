@@ -209,15 +209,16 @@ export function senseVerdict(parts, sentences, readings, confirmations) {
 }
 
 // Two independent readings of the sentences (ai: ({ schemaName, schema, system, user, maxOutputTokens }) → result).
-export async function judgeSenseFromSentences({ word, pos, meaningZh, meaningEn, sentences }, ai) {
+// tokens: the readers' output limits — more sentences need more (36 cut the answers short, round G).
+export async function judgeSenseFromSentences({ word, pos, meaningZh, meaningEn, sentences }, ai, { tokens = [1500, 2000] } = {}) {
   const parts = meaningParts(meaningEn);
   if (!sentences.length || !parts.length) return { ok: false, reason: !parts.length ? "no meaning" : "no sentences", parts, readings: [], method: "parts" };
-  const a = await ai({ schemaName: "korp_sense_read", schema: schemaA, system: READ_A, maxOutputTokens: 1500,
+  const a = await ai({ schemaName: "korp_sense_read", schema: schemaA, system: READ_A, maxOutputTokens: tokens[0],
     user: JSON.stringify({ word, part_of_speech: pos || "expression", meaning_zh: meaningZh, glosses: parts.map((p, i) => ({ number: i + 1, gloss: p })), sentences: sentences.map(({ n, text }) => ({ n, text })) }) });
   const claims = a.readings.flatMap((r) => (r.glosses || []).filter((g) => g >= 1 && g <= parts.length).map((g) => ({ n: r.n, g })));
   const confirmations = {}, notesB = {};
   if (claims.length) {
-    const b = await ai({ schemaName: "korp_sense_confirm", schema: schemaB, system: READ_B, maxOutputTokens: 2000,
+    const b = await ai({ schemaName: "korp_sense_confirm", schema: schemaB, system: READ_B, maxOutputTokens: tokens[1],
       user: JSON.stringify({ word, part_of_speech: pos || "expression", items: claims.map((c) => ({ key: `${c.n}:${c.g}`, sentence: sentences.find((s) => s.n === c.n)?.text, gloss: parts[c.g - 1] })) }) });
     for (const x of b.items) { confirmations[x.key] = x.yes; notesB[x.key] = x.note; }
   }

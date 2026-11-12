@@ -4,6 +4,7 @@
 //   the pairing   knowledge_checks target sense_pairing (sense-pair-1), for the meanings as they are now;
 //   Korp          the latest knowledge_checks korp_sense_parts check of the same English meaning, else the
 //                 2026-11-04 run (data/reports/korp-verify/results.json) when its parts are the meaning's;
+//                 a sense it missed counts when a targeted check of the same meaning showed it (korp_sense_targeted);
 //   dictionary    word overlap with Lexin/Folkets English for the card's part of speech (recorded, a
 //                 candidate only).
 // A card without a pairing or a Korp check of its meaning is left as it is ("needs_pairing" /
@@ -68,6 +69,16 @@ async function one(id) {
   const legacy = legacyKorp[id]?.sense;
   const korp = ledgered ? { parts: ledgered.result.parts, unattested: ledgered.result.unattested || [], ref: { check: ledgered.id } }
     : legacy?.method === "parts" && norm(legacy.parts) === norm(meaningParts(m.en)) ? { parts: legacy.parts, unattested: legacy.unattested || [], ref: { korp_verify: "2026-11-04" } } : null;
+  // A sense the first check missed, shown by a targeted check of the same meaning (sense-targeted.mjs).
+  if (korp) {
+    const targeted = must(await db.from("knowledge_checks").select("id, input, result").eq("learning_object_id", id).eq("target", "korp_sense_targeted").eq("status", "done"))
+      .filter((k) => k.input?.meaning_en === m.en);
+    for (const k of targeted) {
+      const still = new Set((k.result.unattested || []).map((x) => x.toLowerCase()));
+      const shown = (k.result.parts || []).filter((p) => !still.has(p.toLowerCase())).map((p) => p.toLowerCase());
+      if (shown.length) { korp.unattested = korp.unattested.filter((u) => !shown.includes(u.toLowerCase())); korp.ref = { ...korp.ref, targeted: [...(korp.ref.targeted || []), k.id] }; }
+    }
+  }
   const row = must(await db.from("resource_field_status").select("status, grade, source, detail, rule_version, updated_at").eq("learning_object_id", id).eq("field", "sense").maybeSingle());
   const eq = c.object_type === "word" && c.part_of_speech ? englishEquivalents(await referenceEntries(null, c.swedish), c.part_of_speech) : [];
   const graded = gradeCardSenses({ E, Z, pairing: pair.result, korp, dictionary: (en) => eq.length > 0 && en.some((x) => meaningPartSupported(x, eq)), legacy: row?.grade === "ai_consistent" || /audit|ai_check/.test(row?.source || "") });
