@@ -7,7 +7,7 @@
 // Report first (default), --apply writes the meanings (old ones archived: content_audit_archive reason
 // round_g_sense_complete). An added gloss is a sense without evidence: the card stays partial until
 // Korp or a dictionary confirms it.
-//   node --env-file=.env scripts/sense-complete.mjs --from <sense-apply results.json>[,<more>] --max-usd <cap> [--tag t] [--apply]
+//   node --env-file=.env scripts/sense-complete.mjs --from <sense-apply results.json>[,<more>] --max-usd <cap> [--tag t] [--hold "a|b"] [--apply]
 //   node --env-file=.env scripts/sense-complete.mjs --rollback <batch>
 import { readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -29,6 +29,8 @@ if (process.argv.includes("--rollback")) {
     if (r.field === "chinese") must(await db.from("learning_objects").update({ chinese: JSON.parse(r.old_value) }).eq("id", r.learning_object_id));
     else must(await db.from("learning_object_translations").update({ meaning: JSON.parse(r.old_value) }).eq("learning_object_id", r.learning_object_id).eq("native_language", r.field));
   }
+  // Kept for the record, marked so that these cards count as not completed.
+  must(await db.from("content_audit_archive").update({ reason: `${REASON}_rolled_back` }).eq("batch_id", batch).eq("reason", REASON));
   console.log({ batch, restored: rows.length });
   process.exit(0);
 }
@@ -48,8 +50,16 @@ remark — the piece is only a remark on use, register or grammar, not a sense: 
 not_a_meaning — the piece names something that is not a meaning of this Swedish word (as this part of speech): add nothing.
 Never rewrite or drop existing pieces.`;
 
+// A card completed once is not completed again from a stale results file: its meanings changed, the
+// findings read from that file no longer hold, and a second run appended the same senses twice (round G,
+// batch 859de7cb, rolled back). A rolled-back batch's rows are marked _rolled_back, so its cards come back.
+const done = new Set();
+for (let i = 0; ; i += 1000) { const d = must(await db.from("content_audit_archive").select("learning_object_id").eq("reason", REASON).order("id").range(i, i + 999)); d.forEach((r) => done.add(r.learning_object_id)); if (d.length < 1000) break; }
+const HOLD = new Set((opt("--hold") || "").split("|").filter(Boolean));   // --hold "a|b": a person looks first
 const batch = randomUUID(), out = [];
 for (const c of cards) {
+  if (done.has(c.id)) { out.push({ id: c.id, swedish: c.swedish, outcome: "completed_before" }); continue; }
+  if (HOLD.has(c.swedish)) { out.push({ id: c.id, swedish: c.swedish, outcome: "held_for_person" }); continue; }
   if ((await spent()) >= MAX_USD) { console.log("budget reached"); break; }
   const o = must(await db.from("learning_objects").select("swedish, part_of_speech").eq("id", c.id).single());
   const m = Object.fromEntries(must(await db.from("learning_object_translations").select("native_language, meaning").eq("learning_object_id", c.id)).map((x) => [x.native_language, x.meaning]));
@@ -61,8 +71,10 @@ for (const c of cards) {
   const items = findings.filter((f) => f.text).map((f, n) => ({ n, ...f }));
   if (!items.length) { out.push({ id: c.id, swedish: o.swedish, outcome: "changed_since" }); continue; }
   const input = { word: o.swedish, part_of_speech: o.part_of_speech, english: E.map((t, n) => ({ n, t })), chinese: Z.map((t, n) => ({ n, t })), findings: items };
-  const r = await ledgeredCheck(db, { learningObjectId: c.id, headword: o.swedish, pos: o.part_of_speech, field: "sense", target: "sense_completion", input, checkVersion: "sense-complete-1", ruleVersion: TAG, model: "gpt-5.4-mini", batchId: batch },
-    async () => { const { result, usage } = await callOpenAIJson({ schemaName: "sense_completion", schema: SCHEMA, system: SYSTEM, user: JSON.stringify(input), maxOutputTokens: 800 }); return { result, costUsd: openaiCost(usage).cost, calls: 1 }; });
+  let r;
+  try { r = await ledgeredCheck(db, { learningObjectId: c.id, headword: o.swedish, pos: o.part_of_speech, field: "sense", target: "sense_completion", input, checkVersion: "sense-complete-1", ruleVersion: TAG, model: "gpt-5.4-mini", batchId: batch },
+    async () => { const { result, usage } = await callOpenAIJson({ schemaName: "sense_completion", schema: SCHEMA, system: SYSTEM, user: JSON.stringify(input), maxOutputTokens: 2500 }); return { result, costUsd: openaiCost(usage).cost, calls: 1 }; }) }
+  catch (e) { out.push({ id: c.id, swedish: o.swedish, outcome: "error", error: String(e.message || e).slice(0, 200) }); continue; }
   if (r.skipped) continue;
   const answers = r.row.result.items || [];
   const addEn = answers.filter((a) => a.action === "add_counterpart" && items[a.n]?.lang === "zh" && a.add_en.trim()).map((a) => a.add_en.trim());

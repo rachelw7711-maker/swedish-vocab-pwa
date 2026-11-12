@@ -14,7 +14,7 @@
 // grade verified; the earlier rows archived (content_audit_archive, reason round_g_sense_level) and the
 // card's status recomputed. A card whose sense is already verified-grade, or open with a mismatch, keeps
 // its row. Nothing is removed from any card, no user table is touched.
-//   node --env-file=.env scripts/sense-apply.mjs --ids <file.json> [--apply] [--out name]
+//   node --env-file=.env scripts/sense-apply.mjs --ids <file.json> [--apply] [--out name] [--hold "a|b"]
 //   node --env-file=.env scripts/sense-apply.mjs --rollback <batch>
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -49,6 +49,7 @@ if (process.argv.includes("--rollback")) {
 }
 
 const APPLY = process.argv.includes("--apply");
+const HOLD = new Set((opt("--hold") || "").split("|").filter(Boolean));   // --hold "a|b": a person looks first
 await useReferenceFiles("data/reference", { extra: true });
 await useSaldoFiles();
 const legacyKorp = existsSync("data/reports/korp-verify/results.json") ? JSON.parse(readFileSync("data/reports/korp-verify/results.json", "utf8")) : {};
@@ -91,6 +92,7 @@ async function one(id) {
   const out = { swedish: c.swedish, verified: graded.verified, reasons: graded.reasons, senses: graded.senses.map((s) => ({ en: s.en, zh: s.zh, grade: s.grade, korp: s.korp })), notes: graded.notes,
     korp: korp ? (ledgered ? "ledger" : "korp_verify_2026_11_04") : "none" };
   if (!korp) return { outcome: "needs_korp", ...out };
+  if (HOLD.has(c.swedish)) return { outcome: "held_for_person", ...out };
   const already = row?.status === "verified" && row?.grade === "verified";
   const outcome = already ? "already_verified" : row?.status === "mismatch" ? "mismatch_open" : graded.verified ? "verified" : "partial_kept";
   if (!APPLY) return { outcome, ...out };
